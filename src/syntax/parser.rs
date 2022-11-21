@@ -1,17 +1,13 @@
 
 
-use crate::source_file::SourceFile;
 use crate::token::Token;
 use crate::token::TokenInfo;
 use crate::token::TokenData;
-use crate::tokenizer::tokenize;
-use crate::syntax::dictionary::Dictionary;
 use crate::syntax::dictionary::Definition;
+use crate::syntax::dictionary::Dictionary;
 use crate::syntax::dictionary::Expression;
 use crate::syntax::dictionary::BinaryOperation;
 use crate::syntax::dictionary::BinaryOperator;
-use crate::syntax::dictionary::UnaryOperation;
-use crate::syntax::dictionary::UnaryOperator;
 use crate::syntax::dictionary::PrimaryExpression;
 
 use std::rc::Rc;
@@ -256,6 +252,22 @@ get_mark(&self)-> Option<&str>
 
 
 pub fn
+get_identifier(&self)-> Option<&Rc<String>>
+{
+    if let Some(o) = self.get()
+    {
+        if let ObjectData::Identifier(rcs) = &o.data
+        {
+          return Some(rcs);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
 get_directory(&self)-> Option<&Directory>
 {
     if let Some(o) = self.get()
@@ -390,7 +402,19 @@ read_by_string(dic: &Dictionary, toks: &Vec<Token>, i: usize, s: &Rc<String>)-> 
 
         if pos < toks.len()
         {
-            if let TokenData::Others(c) = toks[pos].get_data()
+          let  dat = toks[pos].get_data();
+
+            if let TokenData::Identifier(s) = dat
+            {
+              buf.push_str(&*s);
+
+              offset += 1;
+
+              break;
+            }
+
+          else
+            if let TokenData::Others(c) = dat
             {
               buf.push(*c);
 

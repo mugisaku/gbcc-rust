@@ -29,7 +29,7 @@ Operand
 pub enum
 Operator
 {
-  Primary(PrimaryOperation),
+  Primary(PrimaryOperator),
   Unary(UnaryOperator),
   Binary(BinaryOperator),
   Assign(AssignOperator),
@@ -121,7 +121,7 @@ print(&self)
 
 
 pub enum
-PrimaryOperation
+PrimaryOperator
 {
   Access(Rc<String>),
   Subscript(Expression),
@@ -131,7 +131,7 @@ PrimaryOperation
 
 
 impl
-PrimaryOperation
+PrimaryOperator
 {
 
 
@@ -140,14 +140,14 @@ print(&self)
 {
     match self
     {
-  PrimaryOperation::Access(s)=>{print!(".{}",s);},
-  PrimaryOperation::Subscript(e)=>
+  PrimaryOperator::Access(s)=>{print!(".{}",s);},
+  PrimaryOperator::Subscript(e)=>
         {
           print!("[");
           e.print();
           print!("]");
         },
-  PrimaryOperation::Call(args)=>
+  PrimaryOperator::Call(args)=>
         {
           print!("(");
 

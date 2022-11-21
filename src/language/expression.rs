@@ -1,12 +1,6 @@
 
 
-use std::rc::Rc;
-
-use crate::token::Token;
-use crate::token::TokenData;
-use crate::syntax::parser;
 use crate::syntax::parser::Directory;
-use crate::syntax::parser::Object;
 use crate::syntax::parser::ObjectData;
 use crate::syntax::parser::Cursor;
 use super::typesystem::TypeInfo;
@@ -17,7 +11,7 @@ use super::value::*;
 
 
 pub struct
-Expression
+Source
 {
   elements: Vec<Element>,
 
@@ -25,20 +19,18 @@ Expression
 
 
 impl
-Expression
+Source
 {
 
 
 pub fn
-from(dir: &Directory)-> Expression
+from(dir: &Directory)-> Source
 {
-  let  mut e = Expression{ elements: Vec::new()};
+  let  mut src = Source{ elements: Vec::new()};
 
-  let mut  cur = Cursor::from(dir);
+  src.read_expression(dir);
 
-  e.read_expression(dir);
-
-  e
+  src
 }
 
 
@@ -71,7 +63,7 @@ push_assign_operator(&mut self, o: AssignOperator)
 
 
 pub fn
-push_primary_operation(&mut self, o: PrimaryOperation)
+push_primary_operator(&mut self, o: PrimaryOperator)
 {
   self.elements.push(Element::Operator(Operator::Primary(o)));
 }
@@ -125,7 +117,7 @@ read_unary_operation(&mut self, dir: &Directory)
 
         while let Some(dir) = cur.get_directory_with_name("primary_operation")
         {
-          self.read_primary_operation(dir);
+          self.read_primary_operator(dir);
 
           cur.advance(1);
         }
@@ -190,7 +182,7 @@ read_binary_operator(&mut self, dir: &Directory)
 
 
 pub fn
-read_primary_operation(&mut self, dir: &Directory)
+read_primary_operator(&mut self, dir: &Directory)
 {
   let mut  cur = Cursor::from(dir);
 
@@ -216,9 +208,9 @@ read_access(&mut self, dir: &Directory)
     {
         if let ObjectData::Identifier(s) = o.get_data()
         {
-          let  po = PrimaryOperation::Access(s.clone());
+          let  po = PrimaryOperator::Access(s.clone());
 
-          self.push_primary_operation(po);
+          self.push_primary_operator(po);
         }
     }
 }
@@ -235,9 +227,9 @@ read_subscript(&mut self, dir: &Directory)
     {
       let  e = Expression::from(&edir);
 
-      let  po = PrimaryOperation::Subscript(e);
+      let  po = PrimaryOperator::Subscript(e);
 
-      self.push_primary_operation(po);
+      self.push_primary_operator(po);
     }
 }
 
@@ -265,9 +257,9 @@ read_call(&mut self, dir: &Directory)
     }
 
 
-  let  po = PrimaryOperation::Call(args);
+  let  po = PrimaryOperator::Call(args);
 
-  self.push_primary_operation(po);
+  self.push_primary_operator(po);
 }
 
 
@@ -317,6 +309,119 @@ print(&self)
 }
 
 
+}
+
+
+
+
+pub struct
+PostfixNotation
+{
+  elements: Vec<Element>,
+
+}
+
+
+impl
+PostfixNotation
+{
+
+
+pub fn
+from(src: Source)-> PostfixNotation
+{
+  let mut  pn = PostfixNotation{ elements: Vec::new()};
+
+  let mut  stack: Vec<Element> = Vec::new();
+
+  let mut  assigned = false;
+
+    for e in src.elements
+    {
+      pn.push_element(e,&mut assigned,&mut stack);
+    }
+
+
+    while let Some(e) = stack.pop()
+    {
+      pn.elements.push(e);
+    }
+
+
+  pn
+}
+
+
+pub fn
+push_operator_element(&mut self, e: Element, stack: &mut Vec<Element>)
+{
+  let  pr = if let Element::Operator(o) = &e
+            {
+              o.get_priority()
+            }
+
+          else{0};
+
+
+    while let Some(last_e) = stack.last()
+    {
+        if let Element::Operator(last_o) = last_e
+        {
+            if last_o.get_priority() >= pr
+            {
+                if let Some(popped) = stack.pop()
+                {
+                  self.elements.push(popped);
+                }
+            }
+
+          else
+            {
+              break;
+            }
+        }
+
+      else
+        {
+          break;
+        }
+    }
+
+
+  stack.push(e);
+}
+
+
+pub fn
+push_element(&mut self, e: Element, assigned: &mut bool, stack: &mut Vec<Element>)
+{
+    if let Element::Operand(_) = e
+    {
+      self.elements.push(e);
+    }
+
+  else
+    {
+        if let Element::Operator(o) = &e
+        {
+            if let Operator::Assign(_) = o
+            {
+                if !*assigned
+                {
+                  *assigned = true;
+                }
+
+              else
+                {
+                  print!("do not multiple assign in one expression.");
+                }
+            }
+        }
+
+
+      self.push_operator_element(e,stack);
+    }
+}
 
 
 }
@@ -325,81 +430,194 @@ print(&self)
 
 
 pub struct
-ProcessedExpression
+UnaryOperation
 {
-  elements: Vec<Element>,
+  operator: UnaryOperator,
+
+  operand: Expression,
+
+}
+
+
+pub struct
+BinaryOperation
+{
+  operator: BinaryOperator,
+
+   left_operand: Expression,
+  right_operand: Expression,
+
+}
+
+
+pub struct
+PrimaryOperation
+{
+  operator: PrimaryOperator,
+
+  operand: Expression,
+
+}
+
+
+pub struct
+AssignOperation
+{
+  operator: AssignOperator,
+
+   left_operand: Expression,
+  right_operand: Expression,
+
+}
+
+
+pub enum
+Expression
+{
+  Empty,
+  Operand(Box<Operand>),
+  Unary(Box<UnaryOperation>),
+  Binary(Box<BinaryOperation>),
+  Primary(Box<PrimaryOperation>),
+  Assign(Box<AssignOperation>),
 
 }
 
 
 impl
-ProcessedExpression
+Expression
 {
 
 
 pub fn
-from(expr: Expression)-> ProcessedExpression
+combine(buf: &mut Vec<Expression>, o: Operator)-> Result<(),&str>
 {
-  let mut  pexpr = ProcessedExpression{ elements: Vec::new()};
+    match o
+    {
+  Operator::Unary(u)=>
+        {
+            if let Some(operand) = buf.pop()
+            {
+              let  unop = Box::new(UnaryOperation{ operator: u, operand});
 
-  let mut  stack: Vec<Operator> = Vec::new();
+              buf.push(Expression::Unary(unop));
 
-  let mut  assign_count = 0;
+              return Ok(());
+            }
 
-    for e in expr.elements
+
+          return Err("no operand for unary operation");
+        },
+  Operator::Binary(b)=>
+        {
+            if let Some(right) = buf.pop()
+            {
+                if let Some(left) = buf.pop()
+                {
+                  let  binop = Box::new(BinaryOperation{ operator: b, left_operand: left, right_operand: right});
+
+                  buf.push(Expression::Binary(binop));
+
+                  return Ok(());
+                }
+
+
+              return Err("no left operand for binary operation");
+            }
+
+
+          return Err("no right operand for binary operation");
+        },
+  Operator::Primary(p)=>
+        {
+            if let Some(operand) = buf.pop()
+            {
+              let  priop = Box::new(PrimaryOperation{ operator: p, operand});
+
+              buf.push(Expression::Primary(priop));
+
+              return Ok(());
+            }
+
+
+          return Err("no operand for primary operation");
+        },
+  Operator::Assign(a)=>
+        {
+            if let Some(right) = buf.pop()
+            {
+                if let Some(left) = buf.pop()
+                {
+                  let  assop = Box::new(AssignOperation{ operator: a, left_operand: left, right_operand: right});
+
+                  buf.push(Expression::Assign(assop));
+
+                  return Ok(());
+                }
+
+
+              return Err("no left operand for binary operation");
+            }
+
+
+          return Err("no right operand for binary operation");
+        },
+    }
+}
+
+
+pub fn
+from(dir: &Directory)-> Expression
+{
+  let  src = Source::from(dir);
+
+  let mut  pnt = PostfixNotation::from(src);
+
+  let mut  buf: Vec<Expression> = Vec::new();
+
+    for e in pnt.elements
     {
         match e
         {
-      Element::Operand(_)=>{pexpr.elements.push(e);},
       Element::Operator(o)=>
             {
-                if let Operator::Assign(_) = o
+                if let Err(s) = Self::combine(&mut buf,o)
                 {
-                    if assign_count == 0
-                    {
-                      assign_count = 1;
-                    }
+                  print!("{}",s);
 
-                  else
-                    {
-                      print!("do not multiple assign in one expression.");
-                    }
+                  return Expression::Empty;
                 }
-
-
-                while let Some(last_o) = stack.last()
-                {
-                    if last_o.get_priority() >= o.get_priority()
-                    {
-                        if let Some(popped) = stack.pop()
-                        {
-                          pexpr.elements.push(Element::Operator(popped));
-                        }
-                    }
-
-                  else
-                    {
-                      break;
-                    }
-                }
-
-
-              stack.push(o);
+            },
+      Element::Operand(o)=>
+            {
+              buf.push(Expression::Operand(Box::new(o)));
             },
         }
     }
 
 
-    while let Some(o) = stack.pop()
+  let  l = buf.len();
+
+    if l == 0
     {
-      pexpr.elements.push(Element::Operator(o));
+      Expression::Empty;
+    }
+
+  else
+    if l == 1
+    {
+        if let Some(e) = buf.pop()
+        {
+          return e;
+        }
     }
 
 
-  pexpr
+  Expression::Empty
 }
 
 
+/*
 pub fn
 evaluate(&self)-> Value
 {
@@ -528,24 +746,53 @@ operate_assign(l: &Value, r: &Value, asop: &AssignOperator)-> Value
 
 
 pub fn
-operate_primary(v: &Value, primop: &PrimaryOperation)-> Value
+operate_primary(v: &Value, primop: &PrimaryOperator)-> Value
 {
   Value::Undefined
 }
+*/
 
 
 pub fn
 print(&self)
 {
-    for e in &self.elements
+    match self
     {
-      e.print();
+  Expression::Empty=>{print!("");},
+  Expression::Operand(o)=>{o.print();},
+  Expression::Unary(u)=>
+        {
+          u.operator.print();
+
+          u.operand.print();
+        },
+  Expression::Binary(b)=>
+        {
+          b.left_operand.print();
+
+          b.operator.print();
+
+          b.right_operand.print();
+        },
+  Expression::Primary(p)=>
+        {
+          p.operand.print();
+
+          p.operator.print();
+        },
+  Expression::Assign(a)=>
+        {
+          a.left_operand.print();
+
+          a.operator.print();
+
+          a.right_operand.print();
+        },
     }
 }
 
 
 }
-
 
 
 
