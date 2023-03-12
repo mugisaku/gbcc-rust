@@ -5,7 +5,6 @@ use crate::syntax::parser::ObjectData;
 use crate::syntax::parser::Cursor;
 use super::typesystem::TypeInfo;
 use super::element::*;
-use super::value::*;
 
 
 
@@ -70,63 +69,105 @@ push_primary_operator(&mut self, o: PrimaryOperator)
 
 
 pub fn
-read_expression(&mut self, dir: &Directory)
+read_expression(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
     if let Some(dir) = cur.seek_directory("unary_operation")
     {
-      self.read_unary_operation(dir);
-
-        while cur.advance(1)
+        if self.read_unary_operation(dir).is_ok()
         {
-            if let Some(dir) = cur.get_directory_with_name("binary_operator")
+            while cur.advance(1)
             {
-              self.read_binary_operator(dir);
-
-              cur.advance(1);
-
-                if let Some(dir) = cur.seek_directory("unary_operation")
+                if let Some(dir) = cur.get_directory_with_name("binary_operator")
                 {
-                  self.read_unary_operation(dir);
+                    if self.read_binary_operator(dir).is_ok()
+                    {
+                      cur.advance(1);
+
+                        if let Some(dir) = cur.seek_directory("unary_operation")
+                        {
+                            if self.read_unary_operation(dir).is_err()
+                            {
+                              return Err(());
+                            }
+                        }
+                    }
+
+                  else
+                    {
+                      return Err(());
+                    }
                 }
             }
+
+
+          return Ok(());
         }
     }
+
+
+  Err(())
 }
 
 
 pub fn
-read_unary_operation(&mut self, dir: &Directory)
+read_unary_operation(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
     while let Some(dir) = cur.get_directory_with_name("unary_operator")
     {
-      self.read_unary_operator(dir);
+        if self.read_unary_operator(dir).is_ok()
+        {
+          cur.advance(1);
+        }
 
-      cur.advance(1);
+      else
+        {
+          return Err(());
+        }
     }
 
 
     if let Some(dir) = cur.seek_directory("operand")
     {
-      self.read_operand(dir);
-
-      cur.advance(1);
-
-        while let Some(dir) = cur.get_directory_with_name("primary_operation")
+        if self.read_operand(dir).is_ok()
         {
-          self.read_primary_operator(dir);
-
           cur.advance(1);
+
+            while let Some(dir) = cur.get_directory_with_name("primary_operation")
+            {
+                if self.read_primary_operator(dir).is_ok()
+                {
+                  cur.advance(1);
+                }
+
+              else
+                {
+                  return Err(());
+                }
+            }
+        }
+
+      else
+        {
+          return Err(());
         }
     }
+
+  else
+    {
+      return Err(());
+    }
+
+
+  Ok(())
 }
 
 
 pub fn
-read_unary_operator(&mut self, dir: &Directory)
+read_unary_operator(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -137,12 +178,21 @@ read_unary_operator(&mut self, dir: &Directory)
       else if s == "-"{self.push_unary_operator(UnaryOperator::Neg);}
       else if s == "*"{self.push_unary_operator(UnaryOperator::Dereference);}
       else if s == "&"{self.push_unary_operator(UnaryOperator::Address);}
+      else
+        {
+          return Err(());
+        }
+
+      return Ok(());
     }
+
+
+  Err(())
 }
 
 
 pub fn
-read_binary_operator(&mut self, dir: &Directory)
+read_binary_operator(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -177,12 +227,21 @@ read_binary_operator(&mut self, dir: &Directory)
       else if s ==  "&="{self.push_assign_operator(AssignOperator::AndAssign);}
       else if s ==  "|="{self.push_assign_operator(AssignOperator::OrAssign);}
       else if s ==  "^="{self.push_assign_operator(AssignOperator::XorAssign);}
+      else
+        {
+          return Err(());
+        }
+
+      return Ok(());
     }
+
+
+  Err(())
 }
 
 
 pub fn
-read_primary_operator(&mut self, dir: &Directory)
+read_primary_operator(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -193,12 +252,21 @@ read_primary_operator(&mut self, dir: &Directory)
            if name == "access"   {self.read_access(&codir);}
       else if name == "subscript"{self.read_subscript(&codir);}
       else if name == "call"     {self.read_call(&codir);}
+      else
+        {
+          return Err(());
+        }
+
+      return Ok(());
     }
+
+
+  Err(())
 }
 
 
 pub fn
-read_access(&mut self, dir: &Directory)
+read_access(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -211,13 +279,18 @@ read_access(&mut self, dir: &Directory)
           let  po = PrimaryOperator::Access(s.clone());
 
           self.push_primary_operator(po);
+
+          return Ok(());
         }
     }
+
+
+  Err(())
 }
 
 
 pub fn
-read_subscript(&mut self, dir: &Directory)
+read_subscript(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -225,17 +298,23 @@ read_subscript(&mut self, dir: &Directory)
 
     if let Some(edir) = cur.get_directory_with_name("expression")
     {
-      let  e = Expression::from(&edir);
+        if let Ok(e) = Expression::build(&edir)
+        {
+          let  po = PrimaryOperator::Subscript(e);
 
-      let  po = PrimaryOperator::Subscript(e);
+          self.push_primary_operator(po);
 
-      self.push_primary_operator(po);
+          return Ok(());
+        }
     }
+
+
+  Err(())
 }
 
 
 pub fn
-read_call(&mut self, dir: &Directory)
+read_call(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -245,26 +324,55 @@ read_call(&mut self, dir: &Directory)
 
     if let Some(edir) = cur.get_directory_with_name("expression")
     {
-      args.push(Expression::from(&edir));
+        if let Ok(e) = Expression::build(&edir)
+        {
+          args.push(e);
+        }
+
+      else
+        {
+          return Err(());
+        }
+
 
         while cur.advance(2)
         {
             if let Some(eedir) = cur.get_directory_with_name("expression")
             {
-              args.push(Expression::from(&eedir));
+                if let Ok(e) = Expression::build(&eedir)
+                {
+                  args.push(e);
+                }
+
+              else
+                {
+                  return Err(());
+                }
+            }
+
+          else
+            {
+              return Err(());
             }
         }
+    }
+
+  else
+    {
+      return Err(());
     }
 
 
   let  po = PrimaryOperator::Call(args);
 
   self.push_primary_operator(po);
+
+  Ok(())
 }
 
 
 pub fn
-read_operand(&mut self, dir: &Directory)
+read_operand(&mut self, dir: &Directory)-> Result<(),()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -272,11 +380,11 @@ read_operand(&mut self, dir: &Directory)
     {
         match o.get_data()
         {
-      ObjectData::Integer(i)=>   {self.push_operand(Operand::Integer(*i));},
-      ObjectData::Floating(f)=>  {self.push_operand(Operand::Floating(*f));},
-      ObjectData::Character(c)=> {self.push_operand(Operand::Character(*c));},
-      ObjectData::String(s)=>    {self.push_operand(Operand::String(s.clone()));},
-      ObjectData::Identifier(s)=>{self.push_operand(Operand::Identifier(s.clone()));},
+      ObjectData::Integer(i)=>   {  self.push_operand(Operand::Integer(*i));  return Ok(());},
+      ObjectData::Floating(f)=>  {  self.push_operand(Operand::Floating(*f));  return Ok(());},
+      ObjectData::Character(c)=> {  self.push_operand(Operand::Character(*c));  return Ok(());},
+      ObjectData::String(s)=>    {  self.push_operand(Operand::String(s.clone()));  return Ok(());},
+      ObjectData::Identifier(s)=>{  self.push_operand(Operand::Identifier(s.clone()));  return Ok(());},
       ObjectData::Mark(s)=>
           {
               if **s == "("
@@ -285,15 +393,21 @@ read_operand(&mut self, dir: &Directory)
 
                   if let Some(edir) = cur.get_directory_with_name("expression")
                   {
-                    let  e = Expression::from(&edir);
+                      if let Ok(e) = Expression::build(&edir)
+                      {
+                        self.push_operand(Operand::Expression(e));
 
-                    self.push_operand(Operand::Expression(e));
+                        return Ok(());
+                      }
                   }
               }
           },
       _=>{},
         }
     }
+
+
+  Err(())
 }
 
 
@@ -439,6 +553,20 @@ UnaryOperation
 }
 
 
+impl
+UnaryOperation
+{
+
+
+pub fn  get_operator(&self)-> &UnaryOperator{&self.operator}
+pub fn   get_operand(&self)-> &Expression{&self.operand}
+
+
+}
+
+
+
+
 pub struct
 BinaryOperation
 {
@@ -448,6 +576,21 @@ BinaryOperation
   right_operand: Expression,
 
 }
+
+
+impl
+BinaryOperation
+{
+
+
+pub fn  get_operator(&self)-> &BinaryOperator{&self.operator}
+pub fn   get_left_operand(&self)-> &Expression{&self.left_operand}
+pub fn   get_right_operand(&self)-> &Expression{&self.right_operand}
+
+
+}
+
+
 
 
 pub struct
@@ -460,6 +603,18 @@ PrimaryOperation
 }
 
 
+impl
+PrimaryOperation
+{
+
+
+pub fn  get_operator(&self)-> &PrimaryOperator{&self.operator}
+pub fn   get_operand(&self)-> &Expression{&self.operand}
+
+
+}
+
+
 pub struct
 AssignOperation
 {
@@ -467,6 +622,19 @@ AssignOperation
 
    left_operand: Expression,
   right_operand: Expression,
+
+}
+
+
+impl
+AssignOperation
+{
+
+
+pub fn  get_operator(&self)-> &AssignOperator{&self.operator}
+pub fn   get_left_operand(&self)-> &Expression{&self.left_operand}
+pub fn   get_right_operand(&self)-> &Expression{&self.right_operand}
+
 
 }
 
@@ -567,7 +735,7 @@ combine(buf: &mut Vec<Expression>, o: Operator)-> Result<(),&str>
 
 
 pub fn
-from(dir: &Directory)-> Expression
+build(dir: &Directory)-> Result<Expression,()>
 {
   let  src = Source::from(dir);
 
@@ -585,7 +753,7 @@ from(dir: &Directory)-> Expression
                 {
                   print!("{}",s);
 
-                  return Expression::Empty;
+                  return Err(());
                 }
             },
       Element::Operand(o)=>
@@ -600,7 +768,7 @@ from(dir: &Directory)-> Expression
 
     if l == 0
     {
-      Expression::Empty;
+      return Err(());
     }
 
   else
@@ -608,149 +776,13 @@ from(dir: &Directory)-> Expression
     {
         if let Some(e) = buf.pop()
         {
-          return e;
+          return Ok(e);
         }
     }
 
 
-  Expression::Empty
+  Err(())
 }
-
-
-/*
-pub fn
-evaluate(&self)-> Value
-{
-  let mut  buf: Vec<Value> = Vec::new();
-
-    for e in &self.elements
-    {
-        match e
-        {
-      Element::Operand(o)=>{buf.push(Value::from(o));}
-      Element::Operator(o)=>{Self::operate(&mut buf,&o)},
-        }
-    }
-
-
-    if buf.len() == 1
-    {
-        if let Some(v) = buf.pop()
-        {
-          return v;
-        }
-    }
-
-
-  Value::Void
-}
-
-
-pub fn
-operate(buf: &mut Vec<Value>, o: &Operator)
-{
-    match o
-    {
-  Operator::Unary(unop)=>
-        {
-            if let Some(v) = buf.pop()
-            {
-              buf.push(Self::operate_unary(&v,unop));
-            }
-        },
-  Operator::Binary(binop)=>
-        {
-            if let Some(rv) = buf.pop()
-            {
-                if let Some(lv) = buf.pop()
-                {
-                  buf.push(Self::operate_binary(&lv,&rv,binop));
-                }
-            }
-        },
-  Operator::Primary(primop)=>
-        {
-            if let Some(v) = buf.pop()
-            {
-              buf.push(Self::operate_primary(&v,primop));
-            }
-        },
-  Operator::Assign(asop)=>
-        {
-            if let Some(rv) = buf.pop()
-            {
-                if let Some(lv) = buf.pop()
-                {
-                  buf.push(Self::operate_assign(&lv,&rv,asop));
-                }
-            }
-        },
-    }
-}
-
-
-pub fn
-operate_unary(v: &Value, unop: &UnaryOperator)-> Value
-{
-    match unop
-    {
-  UnaryOperator::Not=>{return Value::not(v);},
-  UnaryOperator::LogicalNot=>{return Value::logical_not(v);},
-  UnaryOperator::Neg=>{return Value::neg(v);},
-  _=>{},
-    }
-
-
-  Value::Undefined
-}
-
-
-pub fn
-operate_binary(l: &Value, r: &Value, binop: &BinaryOperator)-> Value
-{
-    match binop
-    {
-  BinaryOperator::Add=> {return Value::add(l,r);},
-  BinaryOperator::Sub=> {return Value::sub(l,r);},
-  BinaryOperator::Mul=> {return Value::mul(l,r);},
-  BinaryOperator::Div=> {return Value::div(l,r);},
-  BinaryOperator::Rem=> {return Value::rem(l,r);},
-  BinaryOperator::Shl=> {return Value::shl(l,r);},
-  BinaryOperator::Shr=> {return Value::shr(l,r);},
-  BinaryOperator::Or=>  {return Value::or(l,r);},
-  BinaryOperator::And=> {return Value::and(l,r);},
-  BinaryOperator::Xor=> {return Value::xor(l,r);},
-
-  BinaryOperator::Eq=>  {return Value::eq(l,r);},
-  BinaryOperator::Neq=> {return Value::neq(l,r);},
-  BinaryOperator::Lt=>  {return Value::lt(l,r);},
-  BinaryOperator::Lteq=>{return Value::lteq(l,r);},
-  BinaryOperator::Gt=>  {return Value::gt(l,r);},
-  BinaryOperator::Gteq=>{return Value::gteq(l,r);},
-
-  BinaryOperator::LogicalAnd=>{return Value::logical_and(l,r);},
-  BinaryOperator::LogicalOr=> {return Value::logical_or(l,r);},
-  _=>{},
-    }
-
-
-  Value::Undefined
-}
-
-
-pub fn
-operate_assign(l: &Value, r: &Value, asop: &AssignOperator)-> Value
-{
-  Value::Undefined
-}
-
-
-pub fn
-operate_primary(v: &Value, primop: &PrimaryOperator)-> Value
-{
-  Value::Undefined
-}
-*/
 
 
 pub fn

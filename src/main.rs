@@ -3,7 +3,7 @@ mod token;
 mod source_file;
 mod syntax;
 mod language;
-mod virtual_machine;
+mod ir;
 mod debug;
 
 
@@ -34,13 +34,13 @@ return_statement   = "return" & [expression];
 
 type_expression = IDENTIFIER;
 
-parameter_list = "(" & [variable_declaration & {"," & variable_declaration}] & ")";
+parameter = IDENTIFIER & ":" & type_expression;
 
-return_value_type = "->" & type_expression;
+function_signature = "(" & [parameter & {"," & parameter}] & ")" & ["->" & type_expression];
 
-function_definition = "fn" & IDENTIFIER & parameter_list & [return_value_type] & block_statement;
+function_definition = "fn" & IDENTIFIER & function_signature & block_statement;
 
-variable_declaration = "var" & IDENTIFIER & ":" & type_expression;
+variable_declaration = "var" & parameter;
 
 struct_definition = "struct" & IDENTIFIER & "{" & [{}] & "}";
 
@@ -93,6 +93,59 @@ test()-> slen
 fn
 main()
 {
+  use crate::ir::block::WordCount;
+  use crate::ir::block::Operand;
+  use crate::ir::block::Block;
+  use crate::ir::function::VariableInfo;
+  use crate::ir::function::Function;
+  use crate::ir::executor::Library;
+  use crate::ir::executor::Executor;
+
+  let  mut f = Function::new("test",WordCount::one());
+  let  mut blk = Block::new("start");
+  let  mut lib = Library::new();
+  let  mut exe = Executor::new(65536);
+
+f.add_parameter("a",WordCount::one());
+f.add_parameter("b",WordCount::one());
+
+blk.add_addi("c",Operand::from("a"),Operand::from(9999));
+blk.add_ret(Some(Operand::from("c")));
+
+f.add_block(blk);
+f.fix(lib.get_variable_info_list());
+
+f.print();
+
+lib.add_function(f);
+
+  if exe.reset(&lib).is_ok()
+  {
+      if exe.prepare_first_call(&lib,"test").is_ok()
+      {
+        exe.push_argument(&lib,Operand::from(2));
+        exe.push_argument(&lib,Operand::from(1));
+
+          if exe.raise_call(&lib).is_ok()
+          {
+            exe.run(&lib,None);
+
+              if let Some(m) = exe.get_return_value()
+              {
+                println!("{} is returned",m.get_u64(0));
+              }
+
+            else
+              {
+                println!("no value is returned");
+              }
+          }
+      }
+  }
+
+
+
+/*
   let  dic_f = source_file::SourceFile::from(dic_s);
   let  txt_f = source_file::SourceFile::from(txt_s);
 
@@ -102,64 +155,8 @@ main()
 
     if let Ok(toks) = tokenizer::tokenize(&txt_f)
     {
-use language::expression::Expression;
-use language::space::*;
-use syntax::parser::Directory;
-use syntax::parser::Cursor;
-use virtual_machine::assembly::*;
-use virtual_machine::processor::Processor;
-        if let Some(dir) = syntax::parser::parse(&dic,&toks)
-        {
-//dir.print();
-          let  sp = Space::from(&dir);
-//sp.print();
-//let  _ = crate::virtual_machine::object::compile(&sp);
-let mut  note = Note::new();
-note.put_label("start");
-note.put_relpos16("function");
-note.put_pshu32(80);
-note.put_pshu32(20);
-note.put_pshu32(24);
-note.put_cal();
-note.put_pshu8(16);
-note.put_ssp();
-note.put_prnu64();
-note.put_hlt();
-note.put_label("function");
-
-note.put_psh8();
-note.put_maa();
-note.put_ld64();
-note.put_pshu8(16);
-note.put_maa();
-note.put_ld64();
-note.put_addu();
-
-note.put_psh8();
-note.put_retd();
-note.put_hlt();
-
-
-note.print();
-print!("\n");
-  if let Ok(img) = note.assemble()
-  {
-    print_as_machine_code(&img);
-
-let mut  proc = Processor::new();
-
-proc.renew_memory(1024);
-proc.load_image(&img);
-proc.reset();
-while !proc.is_halted()
-{
-proc.step();
-}
-  }
-
-
-        }
     }
+*/
 }
 
 

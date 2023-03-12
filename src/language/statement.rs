@@ -2,7 +2,6 @@
 
 use std::rc::Rc;
 use super::expression::Expression;
-use super::space::VariableDeclaration;
 use crate::syntax::parser::ObjectData;
 use crate::syntax::parser::Directory;
 use crate::syntax::parser::Cursor;
@@ -18,7 +17,6 @@ Statement
   Continue,
   Return(Option<Expression>),
   Expression(Expression),
-  VariableDeclaration(VariableDeclaration),
 
 }
 
@@ -29,24 +27,25 @@ Statement
 
 
 pub fn
-read_return(dir: &Directory)-> Statement
+read_return(dir: &Directory)-> Result<Statement,()>
 {
   let mut  cur = Cursor::from(dir);
 
     if let Some(d) = cur.seek_directory("expression")
     {
-      let  e = Expression::from(d);
-
-      return Statement::Return(Some(e));
+        if let Ok(e) = Expression::build(d)
+        {
+          return Ok(Statement::Return(Some(e)));
+        }
     }
 
 
-  Statement::Return(None)
+  Ok(Statement::Return(None))
 }
 
 
 pub fn
-read_if(dir: &Directory)-> Statement
+read_if(dir: &Directory)-> Result<Statement,()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -57,12 +56,12 @@ read_if(dir: &Directory)-> Statement
     }
 
 
-  Statement::Return(None)
+  Ok(Statement::Return(None))
 }
 
 
 pub fn
-read_while(dir: &Directory)-> Statement
+read_while(dir: &Directory)-> Result<Statement,()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -70,27 +69,27 @@ read_while(dir: &Directory)-> Statement
 
     if let Some(expr_d) = cur.get_directory_with_name("expression")
     {
-      let  e = Expression::from(expr_d);
-
-      cur.advance(1);
-
-        if let Some(blk_d) = cur.get_directory_with_name("block_statement")
+        if let Ok(e) = Expression::build(expr_d)
         {
-          let mut  blk = Block::from(blk_d);
+          cur.advance(1);
 
-          blk.set_condition(e);
-
-          return Statement::While(blk);
+            if let Some(blk_d) = cur.get_directory_with_name("block_statement")
+            {
+                if let Ok(blk) = Block::build(blk_d)
+                {
+                  return Ok(Statement::While(blk));
+                }
+            }
         }
     }
 
 
-  Statement::Empty
+  Err(())
 }
 
 
 pub fn
-from(dir: &Directory)-> Statement
+build(dir: &Directory)-> Result<Statement,()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -106,7 +105,10 @@ from(dir: &Directory)-> Statement
       else
         if d.get_name() == "block_statement"
         {
-          return Statement::Block(Block::from(d));
+            if let Ok(blk) = Block::build(d)
+            {
+              return Ok(Statement::Block(blk));
+            }
         }
 
       else
@@ -118,13 +120,13 @@ from(dir: &Directory)-> Statement
       else
         if d.get_name() == "break_statement"
         {
-          return Statement::Break;
+          return Ok(Statement::Break);
         }
 
       else
         if d.get_name() == "continue_statement"
         {
-          return Statement::Continue;
+          return Ok(Statement::Continue);
         }
 
       else
@@ -138,7 +140,7 @@ from(dir: &Directory)-> Statement
     }
 
 
-  Statement::Empty
+  Err(())
 }
 
 
@@ -191,7 +193,7 @@ print(&self)
             }
         },
   Statement::Expression(e)=>{e.print();},
-  Statement::VariableDeclaration(vd)=>{vd.print();},
+//  Statement::VariableDeclaration(vd)=>{vd.print();},
     }
 }
 
@@ -224,7 +226,7 @@ new()-> Block
 
 
 pub fn
-from(dir: &Directory)-> Block
+build(dir: &Directory)-> Result<Block,()>
 {
   let mut  cur = Cursor::from(dir);
 
@@ -238,9 +240,12 @@ from(dir: &Directory)-> Block
 
             if d_name == "statement"
             {
-              stmts.push(Statement::from(d));
+                if let Ok(stmt) = Statement::build(d)
+                {
+                  stmts.push(stmt);
+                }
             }
-
+/*
           else
             if d_name == "variable_declartion"
             {
@@ -248,13 +253,14 @@ from(dir: &Directory)-> Block
 
               stmts.push(Statement::VariableDeclaration(vd));
             }
-
+*/
           else
             if d_name == "expression"
             {
-              let  e = Expression::from(d);
-
-              stmts.push(Statement::Expression(e));
+                if let Ok(e) = Expression::build(d)
+                {
+                  stmts.push(Statement::Expression(e));
+                }
             }
         }
 
@@ -262,7 +268,7 @@ from(dir: &Directory)-> Block
     }
 
 
-  Block{ condition: None, statements: stmts}
+  Ok(Block{ condition: None, statements: stmts})
 }
 
 

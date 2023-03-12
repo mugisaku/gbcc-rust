@@ -1,79 +1,33 @@
 
 
-use std::rc::Rc;
 use crate::syntax::parser::Directory;
 use crate::syntax::parser::Cursor;
+use crate::syntax::parser::ObjectData;
+use crate::language::expression::Expression;
 
 
-pub enum
-PrimitiveTypeKind
-{
-  Null,
-  NullPointer,
-  GeneralPointer,
-  Void,
-  Boolean,
-  Character,
-  SignedInteger,
-  Integer,
-  Floating,
-  Length,
-  SignedLength,
-
-}
-
-
-pub struct
-PrimitiveTypeInfo
-{
-  kind: PrimitiveTypeKind,
-
-  size: usize,
-
-  name: &'static str,
-
-}
 
 
 pub static  word_size: usize = 8;
 
-pub static  bool_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Boolean, size: 1, name: "bool"};
-pub static  char_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Character, size: 1, name: "char"};
-pub static   s8_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::SignedInteger, size: 1, name: "s8"};
-pub static  s16_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::SignedInteger, size: 2, name: "s16"};
-pub static  s32_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::SignedInteger, size: 4, name: "s32"};
-pub static  s64_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::SignedInteger, size: 8, name: "s64"};
-pub static   u8_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Integer, size: 1, name: "u8"};
-pub static  u16_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Integer, size: 2, name: "u16"};
-pub static  u32_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Integer, size: 4, name: "u32"};
-pub static  u64_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Integer, size: 8, name: "u64"};
-pub static  f32_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Floating, size: 4, name: "f32"};
-pub static  f64_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Floating, size: 8, name: "f64"};
-pub static  null_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Null, size: 0, name: "null"};
-pub static  nullptr_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::NullPointer, size: 0, name: "nullptr"};
-pub static  geneptr_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::GeneralPointer, size: word_size, name: "geneptr"};
-pub static  void_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Void, size: 0, name: "void"};
-pub static  ulen_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::Length, size: word_size, name: "ulen"};
-pub static  slen_pti: PrimitiveTypeInfo = PrimitiveTypeInfo{ kind: PrimitiveTypeKind::SignedLength, size: word_size, name: "slen"};
-
-pub static  bool_ti: TypeInfo = TypeInfo::Primitive(&bool_pti);
-pub static  char_ti: TypeInfo = TypeInfo::Primitive(&char_pti);
-pub static   s8_ti: TypeInfo = TypeInfo::Primitive(&s8_pti);
-pub static  s16_ti: TypeInfo = TypeInfo::Primitive(&s16_pti);
-pub static  s32_ti: TypeInfo = TypeInfo::Primitive(&s32_pti);
-pub static  s64_ti: TypeInfo = TypeInfo::Primitive(&s64_pti);
-pub static   u8_ti: TypeInfo = TypeInfo::Primitive(&u8_pti);
-pub static  u16_ti: TypeInfo = TypeInfo::Primitive(&u16_pti);
-pub static  u32_ti: TypeInfo = TypeInfo::Primitive(&u32_pti);
-pub static  u64_ti: TypeInfo = TypeInfo::Primitive(&u64_pti);
-pub static  f32_ti: TypeInfo = TypeInfo::Primitive(&f32_pti);
-pub static  f64_ti: TypeInfo = TypeInfo::Primitive(&f64_pti);
-pub static  null_ti: TypeInfo = TypeInfo::Primitive(&null_pti);
-pub static  nullptr_ti: TypeInfo = TypeInfo::Primitive(&nullptr_pti);
-pub static  geneptr_ti: TypeInfo = TypeInfo::Primitive(&geneptr_pti);
-pub static  void_ti: TypeInfo = TypeInfo::Primitive(&void_pti);
-pub static  ulen_ti: TypeInfo = TypeInfo::Primitive(&ulen_pti);
-pub static  slen_ti: TypeInfo = TypeInfo::Primitive(&slen_pti);
+pub static  bool_ti: TypeInfo = TypeInfo::Boolean(1);
+pub static  char_ti: TypeInfo = TypeInfo::Character(1);
+pub static   s8_ti: TypeInfo = TypeInfo::SignedInteger(1);
+pub static  s16_ti: TypeInfo = TypeInfo::SignedInteger(2);
+pub static  s32_ti: TypeInfo = TypeInfo::SignedInteger(4);
+pub static  s64_ti: TypeInfo = TypeInfo::SignedInteger(8);
+pub static   u8_ti: TypeInfo = TypeInfo::Integer(1);
+pub static  u16_ti: TypeInfo = TypeInfo::Integer(2);
+pub static  u32_ti: TypeInfo = TypeInfo::Integer(4);
+pub static  u64_ti: TypeInfo = TypeInfo::Integer(8);
+pub static  f32_ti: TypeInfo = TypeInfo::Floating(4);
+pub static  f64_ti: TypeInfo = TypeInfo::Floating(8);
+pub static  null_ti: TypeInfo = TypeInfo::Null;
+pub static  nullptr_ti: TypeInfo = TypeInfo::NullPointer;
+pub static  geneptr_ti: TypeInfo = TypeInfo::GeneralPointer;
+pub static  void_ti: TypeInfo = TypeInfo::Void;
+pub static  ulen_ti: TypeInfo = TypeInfo::Length;
+pub static  slen_ti: TypeInfo = TypeInfo::SignedLength;
 
 
 pub fn
@@ -93,16 +47,44 @@ get_max(a: usize, b: usize)-> usize
 pub enum
 TypeInfo
 {
-  Primitive(&'static PrimitiveTypeInfo),
+  Null,
+  NullPointer,
+  GeneralPointer,
+  Void,
+  Boolean(usize),
+  Character(usize),
+  SignedInteger(usize),
+  Integer(usize),
+  Floating(usize),
+  Length,
+  SignedLength,
 
   Array(Box<TypeInfo>,usize),
   Pointer(Box<TypeInfo>),
   Reference(Box<TypeInfo>),
+  Function(Box<FunctionInfo>),
 
   Struct(StructInfo),
   Union(UnionInfo),
   Enum(EnumInfo),
-  Function(FunctionInfo),
+
+}
+
+
+impl
+PartialEq for TypeInfo
+{
+
+
+fn
+eq(&self, other: &Self)-> bool
+{
+  let  a =  self.make_id();
+  let  b = other.make_id();
+
+  a == b
+}
+
 
 }
 
@@ -117,14 +99,24 @@ clone(&self)-> Self
 {
     match self
     {
-  TypeInfo::Primitive(p)=> {return TypeInfo::Primitive(p);},
-  TypeInfo::Array(ti,n)=>  {return TypeInfo::Array(ti.clone(),*n);},
-  TypeInfo::Pointer(ti)=>  {return TypeInfo::Pointer(ti.clone());},
-  TypeInfo::Reference(ti)=>{return TypeInfo::Reference(ti.clone());},
-  TypeInfo::Struct(s)=>    {return TypeInfo::Struct(s.clone());},
-  TypeInfo::Union(u)=>     {return TypeInfo::Union(u.clone());},
-  TypeInfo::Enum(e)=>      {return TypeInfo::Enum(e.clone());},
-  TypeInfo::Function(f)=>  {return TypeInfo::Function(f.clone());},
+  TypeInfo::Null=>             {return TypeInfo::Null;},
+  TypeInfo::NullPointer=>      {return TypeInfo::NullPointer;},
+  TypeInfo::GeneralPointer=>   {return TypeInfo::GeneralPointer;},
+  TypeInfo::Void=>             {return TypeInfo::Void;},
+  TypeInfo::Boolean(sz)=>      {return TypeInfo::Boolean(*sz);},
+  TypeInfo::Character(sz)=>    {return TypeInfo::Character(*sz);},
+  TypeInfo::SignedInteger(sz)=>{return TypeInfo::SignedInteger(*sz);},
+  TypeInfo::Integer(sz)=>      {return TypeInfo::Integer(*sz);}
+  TypeInfo::Floating(sz)=>     {return TypeInfo::Floating(*sz);}
+  TypeInfo::Length=>           {return TypeInfo::Length;}
+  TypeInfo::SignedLength=>     {return TypeInfo::SignedLength;}
+  TypeInfo::Array(ti,n)=>      {return TypeInfo::Array(ti.clone(),*n);},
+  TypeInfo::Pointer(ti)=>      {return TypeInfo::Pointer(ti.clone());},
+  TypeInfo::Reference(ti)=>    {return TypeInfo::Reference(ti.clone());},
+  TypeInfo::Struct(s)=>        {return TypeInfo::Struct(s.clone());},
+  TypeInfo::Union(u)=>         {return TypeInfo::Union(u.clone());},
+  TypeInfo::Enum(e)=>          {return TypeInfo::Enum(e.clone());},
+  TypeInfo::Function(f)=>      {return TypeInfo::Function(f.clone());},
     }
 }
 
@@ -176,7 +168,17 @@ get_size(&self)-> usize
 {
     match self
     {
-  TypeInfo::Primitive(p)=>{return p.size;},
+  TypeInfo::Null=>             {return 0;},
+  TypeInfo::NullPointer=>      {return 0;},
+  TypeInfo::GeneralPointer=>   {return word_size;},
+  TypeInfo::Void=>             {return 0;},
+  TypeInfo::Boolean(sz)=>      {return *sz;},
+  TypeInfo::Character(sz)=>    {return *sz;},
+  TypeInfo::SignedInteger(sz)=>{return *sz;},
+  TypeInfo::Integer(sz)=>      {return *sz;},
+  TypeInfo::Floating(sz)=>     {return *sz;},
+  TypeInfo::Length=>           {return word_size;},
+  TypeInfo::SignedLength=>     {return word_size;},
 
   TypeInfo::Array(ti,n)=>{return ti.get_size()*n;},
   TypeInfo::Pointer(ti)=>{return word_size;},
@@ -195,8 +197,6 @@ get_align(&self)-> usize
 {
     match self
     {
-  TypeInfo::Primitive(p)=>{return p.size;},
-
   TypeInfo::Array(ti,n)=>{return ti.get_align();},
   TypeInfo::Pointer(ti)=>{return word_size;},
   TypeInfo::Reference(ti)=>{return word_size;},
@@ -205,6 +205,67 @@ get_align(&self)-> usize
   TypeInfo::Union(u)=>{return u.get_align();},
   TypeInfo::Enum(e)=>{return e.get_align();},
   TypeInfo::Function(f)=>{return word_size;},
+  _=>{},
+    }
+
+
+  self.get_size()
+}
+
+
+pub fn
+make_id(&self)-> String
+{
+  let mut  buf = String::new();
+
+  self.print_id(&mut buf);
+
+  buf
+}
+
+
+pub fn
+print_id(&self, buf: &mut String)
+{
+    match self
+    {
+  TypeInfo::Null=>             {buf.push_str("null");},
+  TypeInfo::NullPointer=>      {buf.push_str("nullptr");},
+  TypeInfo::GeneralPointer=>   {buf.push_str("geneptr");},
+  TypeInfo::Void=>             {buf.push_str("void");},
+  TypeInfo::Boolean(sz)=>      {buf.push_str(format!("bool{}",8*sz).as_str());},
+  TypeInfo::Character(sz)=>    {buf.push_str(format!("char{}",8*sz).as_str());},
+  TypeInfo::SignedInteger(sz)=>{buf.push_str(format!("i{}",8*sz).as_str());},
+  TypeInfo::Integer(sz)=>      {buf.push_str(format!("u{}",8*sz).as_str());},
+  TypeInfo::Floating(sz)=>     {buf.push_str(format!("f{}",8*sz).as_str());},
+  TypeInfo::Length=>           {buf.push_str("len");},
+  TypeInfo::SignedLength=>     {buf.push_str("slen");},
+
+  TypeInfo::Array(ti,n)=>
+        {
+          ti.print_id(buf);
+
+          let  t = format!("[{}]",n);
+
+          buf.push_str(&t);
+        },
+  TypeInfo::Pointer(ti)=>
+        {
+          ti.print_id(buf);
+
+          buf.push('*');
+        },
+  TypeInfo::Reference(ti)=>
+        {
+          ti.print_id(buf);
+
+          buf.push('&');
+        },
+
+  TypeInfo::Struct(s)=>{s.print_id(buf);},
+  TypeInfo::Union(u)=>{u.print_id(buf);},
+  TypeInfo::Enum(e)=>{e.print_id(buf);},
+  TypeInfo::Function(f)=>{f.print_id(buf);},
     }
 }
 
@@ -214,8 +275,6 @@ print(&self)
 {
     match self
     {
-  TypeInfo::Primitive(p)=>{print!("{}",p.name);},
-
   TypeInfo::Array(ti,n)=>
         {
           ti.print();
@@ -236,7 +295,11 @@ print(&self)
   TypeInfo::Union(u)=>{u.print();},
   TypeInfo::Enum(e)=>{e.print();},
   TypeInfo::Function(f)=>{f.print();},
+  _=>{}
     }
+
+
+  print!("{}",self.make_id());
 }
 
 
@@ -244,10 +307,11 @@ print(&self)
 
 
 pub struct
-Member
+Parameter
 {
-       name: String,
-  type_info: Box<TypeInfo>,
+  name: String,
+
+  type_info: TypeInfo,
 
   offset: usize,
 
@@ -255,24 +319,73 @@ Member
 
 
 impl
-Clone for Member
+Clone for Parameter
 {
 
 
 fn
 clone(&self)-> Self
 {
-  Member{ name: self.name.clone(), type_info: self.type_info.clone(), offset: self.offset}
+  Parameter{ name: self.name.clone(), type_info: self.type_info.clone(), offset: self.offset}
 }
 
 
 }
+
+
+impl
+Parameter
+{
+
+
+pub fn
+new(name: &str, ti: TypeInfo, off: usize)-> Parameter
+{
+  Parameter{ name: String::from(name), type_info: ti, offset: off}
+}
+
+
+pub fn
+get_name(&self)-> &str
+{
+  &self.name
+}
+
+
+pub fn
+get_type_info(&self)-> &TypeInfo
+{
+  &self.type_info
+}
+
+
+pub fn
+get_offset(&self)-> usize
+{
+  self.offset
+}
+
+
+pub fn
+print(&self)
+{
+  print!("{}: ",self.name);
+
+  self.type_info.print();
+
+  print!("(offset: {})",self.offset);
+}
+
+
+}
+
+
 
 
 pub struct
 StructInfo
 {
-  member_list: Vec<Member>,
+  member_list: Vec<Parameter>,
 
    size: usize,
   align: usize,
@@ -308,24 +421,46 @@ new()-> StructInfo
 
 
 pub fn
-push(&mut self, name: String, type_info: Box<TypeInfo>)
+push(&mut self, name: String, type_info: TypeInfo)
 {
   let  offset = self.size                                                ;
                 self.size = get_aligned_size(offset+type_info.get_size());
 
   self.align = get_max(self.align,type_info.get_align());
 
-  self.member_list.push(Member{ name, type_info, offset});
+  self.member_list.push(Parameter{ name, type_info, offset});
 }
 
 
-pub fn   get_size(&self)-> usize{return self.size;}
-pub fn  get_align(&self)-> usize{return self.align;}
+pub fn   get_size(&self)-> usize{self.size}
+pub fn  get_align(&self)-> usize{self.align}
+
+pub fn  get_member_list(&self)-> &Vec<Parameter>{&self.member_list}
+
+
+pub fn
+print_id(&self, buf: &mut String)
+{
+    for m in &self.member_list
+    {
+      m.type_info.print_id(buf);
+    }
+}
 
 
 pub fn
 print(&self)
 {
+  print!("struct{{");
+
+    for m in &self.member_list
+    {
+      m.print();
+      print!(",\n");
+    }
+
+
+  print!("}}");
 }
 
 
@@ -337,7 +472,7 @@ print(&self)
 pub struct
 UnionInfo
 {
-  member_list: Vec<Member>,
+  member_list: Vec<Parameter>,
 
    size: usize,
   align: usize,
@@ -373,13 +508,13 @@ new()-> UnionInfo
 
 
 pub fn
-push(&mut self, name: String, type_info: Box<TypeInfo>)
+push(&mut self, name: String, type_info: TypeInfo)
 {
   self.size = get_aligned_size(type_info.get_size());
 
   self.align = get_max(self.align,type_info.get_align());
 
-  self.member_list.push(Member{ name, type_info, offset: 0});
+  self.member_list.push(Parameter{ name, type_info, offset: 0});
 }
 
 
@@ -388,8 +523,28 @@ pub fn  get_align(&self)-> usize{return self.align;}
 
 
 pub fn
+print_id(&self, buf: &mut String)
+{
+    for m in &self.member_list
+    {
+      m.type_info.print_id(buf);
+    }
+}
+
+
+pub fn
 print(&self)
 {
+  print!("union{{");
+
+    for m in &self.member_list
+    {
+      m.print();
+      print!(",\n");
+    }
+
+
+  print!("}}");
 }
 
 
@@ -401,7 +556,7 @@ print(&self)
 pub struct
 Enumerator
 {
-  name: Rc<String>,
+  name: String,
 
   value: i64,
 
@@ -411,7 +566,7 @@ Enumerator
 pub struct
 EnumInfo
 {
-  member_list: Vec<Member>,
+  member_list: Vec<Parameter>,
 
    size: usize,
   align: usize,
@@ -451,6 +606,16 @@ pub fn  get_align(&self)-> usize{return self.align;}
 
 
 pub fn
+print_id(&self, buf: &mut String)
+{
+    for m in &self.member_list
+    {
+      m.type_info.print_id(buf);
+    }
+}
+
+
+pub fn
 print(&self)
 {
 }
@@ -464,9 +629,9 @@ print(&self)
 pub struct
 FunctionInfo
 {
-  type_info: Box<TypeInfo>,
+  parameter_list: Vec<Parameter>,
 
-  parameter_list: StructInfo,
+  return_type_info: TypeInfo,
 
 }
 
@@ -480,7 +645,7 @@ Clone for FunctionInfo
 fn
 clone(&self)-> Self
 {
-  FunctionInfo{ type_info: self.type_info.clone(), parameter_list: self.parameter_list.clone()}
+  FunctionInfo{ parameter_list: self.parameter_list.clone(), return_type_info: self.return_type_info.clone()}
 }
 
 
@@ -493,8 +658,70 @@ FunctionInfo
 
 
 pub fn
+new(parals: Vec<Parameter>, retti: TypeInfo)-> FunctionInfo
+{
+  FunctionInfo{ parameter_list: parals, return_type_info: retti}
+}
+
+
+pub fn
+get_return_type_info(&self)-> &TypeInfo
+{
+  &self.return_type_info
+}
+
+
+pub fn
+get_parameter_list(&self)-> &Vec<Parameter>
+{
+  &self.parameter_list
+}
+
+
+pub fn
+get_stack_size(&self)-> usize
+{
+  let mut  sz = get_aligned_size(self.return_type_info.get_size());
+
+    for p in &self.parameter_list
+    {
+      sz += get_aligned_size(p.get_type_info().get_size());
+    }
+
+
+  sz
+}
+
+
+pub fn
+print_id(&self, buf: &mut String)
+{
+  buf.push_str("fn");
+
+    for p in &self.parameter_list
+    {
+      p.get_type_info().print_id(buf);
+    }
+
+
+  self.return_type_info.print_id(buf);
+}
+
+
+pub fn
 print(&self)
 {
+  print!("(");
+
+    for p in &self.parameter_list
+    {
+      p.print();
+    }
+
+
+  print!(")-> ");
+
+  self.return_type_info.print();
 }
 
 
