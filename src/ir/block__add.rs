@@ -26,31 +26,6 @@ Block
 
 
 pub fn
-add_jmp(&mut self, label: &str)
-{
-  self.terminator = Some(Terminator::Jump(BlockLink::new(label)));
-}
-
-
-pub fn
-add_br(&mut self, var_name: &str, on_true: &str, on_false: &str)
-{
-  let  bi = BranchInfo{ condition: VariableLink::new(var_name), on_true: BlockLink::new(on_true), on_false: BlockLink::new(on_false)};
-
-  self.terminator = Some(Terminator::Branch(bi));
-}
-
-
-pub fn
-add_ret(&mut self, o_opt: Option<Operand>)
-{
-  self.terminator = Some(Terminator::Return(o_opt));
-}
-
-
-
-
-pub fn
 add_un(&mut self, dst: &str, o: Operand, u: UnaryOperator)
 {
   let  ao = AllocatingOperation::Unary(o,u);
@@ -404,20 +379,6 @@ add_allocate(&mut self, dst: &str, wc: WordCount)
 
 
 pub fn
-add_copy(&mut self, dst: &str, o: Operand)
-{
-  self.line_list.push(Line::AllocatingOperation(VariableLink::new(dst),AllocatingOperation::Copy(o)));
-}
-
-
-pub fn
-add_load(&mut self, dst: &str, src: &str, sz: usize)
-{
-  self.line_list.push(Line::AllocatingOperation(VariableLink::new(dst),AllocatingOperation::Load(VariableLink::new(src),sz)));
-}
-
-
-pub fn
 add_address(&mut self, dst: &str, src: &str)
 {
   self.line_list.push(Line::AllocatingOperation(VariableLink::new(dst),AllocatingOperation::Address(VariableLink::new(src))));
@@ -432,19 +393,45 @@ add_phi(&mut self, dst: &str, ops: Vec<PhiOperand>)
 
 
 pub fn
-add_call(&mut self, dst: &str, ci: CallInfo)
+add_call(&mut self, dst: &str, target: &str, wc: WordCount, args: Vec<Operand>)
 {
+  let  ci = CallInfo{ target: VariableLink::new(target), return_word_count: wc, argument_list: args};
+
   self.line_list.push(Line::AllocatingOperation(VariableLink::new(dst),AllocatingOperation::Call(ci)));
 }
 
 
 pub fn
-add_store(&mut self, dst: &str, src: &str, sz: usize)
+add_copy_word(&mut self, dst: &str, src: &str)
 {
   let  dst_vl = VariableLink::new(dst);
   let  src_vl = VariableLink::new(src);
 
-  self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::Store(dst_vl,src_vl,sz)));
+  self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::CopyWord(src_vl,dst_vl)));
+}
+
+
+pub fn
+add_copy_string(&mut self, dst: &str, src: &str, sz: usize)
+{
+  let  dst_vl = VariableLink::new(dst);
+  let  src_vl = VariableLink::new(src);
+
+  self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::CopyString(src_vl,dst_vl,sz)));
+}
+
+
+pub fn
+add_message(&mut self, s: &str)
+{
+  self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::Message(String::from(s))));
+}
+
+
+pub fn
+add_print(&mut self, s: &str, c: char)
+{
+  self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::Print(VariableLink::new(s),c)));
 }
 
 

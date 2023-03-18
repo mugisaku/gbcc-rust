@@ -93,58 +93,7 @@ test()-> slen
 fn
 main()
 {
-  use crate::ir::block::WordCount;
-  use crate::ir::block::Operand;
-  use crate::ir::block::Block;
-  use crate::ir::function::VariableInfo;
-  use crate::ir::function::Function;
-  use crate::ir::executor::Library;
-  use crate::ir::executor::Executor;
-
-  let  mut f = Function::new("test",WordCount::one());
-  let  mut blk = Block::new("start");
-  let  mut lib = Library::new();
-  let  mut exe = Executor::new(65536);
-
-f.add_parameter("a",WordCount::one());
-f.add_parameter("b",WordCount::one());
-
-blk.add_addi("c",Operand::from("a"),Operand::from(9999));
-blk.add_ret(Some(Operand::from("c")));
-
-f.add_block(blk);
-f.fix(lib.get_variable_info_list());
-
-f.print();
-
-lib.add_function(f);
-
-  if exe.reset(&lib).is_ok()
-  {
-      if exe.prepare_first_call(&lib,"test").is_ok()
-      {
-        exe.push_argument(&lib,Operand::from(2));
-        exe.push_argument(&lib,Operand::from(1));
-
-          if exe.raise_call(&lib).is_ok()
-          {
-            exe.run(&lib,None);
-
-              if let Some(m) = exe.get_return_value()
-              {
-                println!("{} is returned",m.get_u64(0));
-              }
-
-            else
-              {
-                println!("no value is returned");
-              }
-          }
-      }
-  }
-
-
-
+  crate::ir::test::test_for();
 /*
   let  dic_f = source_file::SourceFile::from(dic_s);
   let  txt_f = source_file::SourceFile::from(txt_s);

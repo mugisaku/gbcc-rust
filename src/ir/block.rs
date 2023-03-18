@@ -211,6 +211,15 @@ from(f: f32)-> Operand
 
 
 
+pub fn
+new_operand_list()-> Vec<Operand>
+{
+  Vec::new()
+}
+
+
+
+
 #[derive(Clone)]
 pub struct
 VariableLink
@@ -345,6 +354,20 @@ CallInfo
 
 
 pub fn
+new(name: &str, ret_wc: WordCount)-> CallInfo
+{
+  CallInfo{ target: VariableLink::new(name), return_word_count: ret_wc, argument_list: Vec::new()}
+}
+
+
+pub fn
+push(&mut self, o: Operand)
+{
+  self.argument_list.push(o);
+}
+
+
+pub fn
 print(&self)
 {
   self.target.print();
@@ -381,6 +404,13 @@ BranchInfo
 impl
 BranchInfo
 {
+
+
+pub fn
+new(cond: &str, on_true: &str, on_false: &str)-> BranchInfo
+{
+  BranchInfo{ condition: VariableLink::new(cond), on_true: BlockLink::new(on_true), on_false: BlockLink::new(on_false)}
+}
 
 
 pub fn
@@ -546,10 +576,6 @@ AllocatingOperation
 
   Allocate(WordCount),
 
-  Copy(Operand),
-
-  Load(VariableLink,usize),
-
   Address(VariableLink),
 
   Phi(Vec<PhiOperand>),
@@ -571,8 +597,6 @@ get_word_count(&self)-> WordCount
   AllocatingOperation::Unary(_,_)=>   {WordCount::one()},
   AllocatingOperation::Binary(_,_,_)=>{WordCount::one()},
   AllocatingOperation::Allocate(wc)=> {*wc},
-  AllocatingOperation::Copy(_)=>      {WordCount::one()},
-  AllocatingOperation::Load(_,_)=>   {WordCount::one()},
   AllocatingOperation::Address(_)=>{WordCount::one()},
   AllocatingOperation::Phi(_)=>  {WordCount::one()},
   AllocatingOperation::Call(ci)=>{ci.return_word_count},
@@ -607,23 +631,11 @@ print(&self)
         },
   AllocatingOperation::Allocate(wc)=>
         {
-          print!("alo {}",wc.number);
-        },
-  AllocatingOperation::Copy(o)=>
-        {
-          print!("cpy ");
-
-          o.print();
-        },
-  AllocatingOperation::Load(src,sz)=>
-        {
-          src.print();
-
-          print!(" ");
+          print!("allocate {}",wc.number);
         },
   AllocatingOperation::Address(o)=>
         {
-          print!("addr ");
+          print!("address ");
 
           o.print();
         },
@@ -644,6 +656,8 @@ print(&self)
         },
   AllocatingOperation::Call(ci)=>
         {
+          print!("cal ");
+
           ci.print();
         },
     }
@@ -654,7 +668,10 @@ print(&self)
 pub enum
 NonAllocatingOperation
 {
-  Store(VariableLink,VariableLink,usize),
+  CopyWord(VariableLink,VariableLink),
+  CopyString(VariableLink,VariableLink,usize),
+  Message(String),
+  Print(VariableLink,char),
 
 }
 
@@ -669,17 +686,39 @@ print(&self)
 {
     match self
     {
-  NonAllocatingOperation::Store(dst,src,sz)=>
+  NonAllocatingOperation::CopyWord(src,dst)=>
         {
-          print!("st (dst)");
-
-          dst.print();
-
-          print!(" (src)");
+          print!("copy_word (src)");
 
           src.print();
 
-          print!(" ");
+          print!(" (dst)");
+
+          dst.print();
+        },
+  NonAllocatingOperation::CopyString(dst,src,sz)=>
+        {
+          print!("copy_string (src)");
+
+          src.print();
+
+          print!(" (dst)");
+
+          dst.print();
+
+          print!("{}",*sz);
+        },
+  NonAllocatingOperation::Message(s)=>
+        {
+          print!("message \"{}\"",s);
+        },
+  NonAllocatingOperation::Print(target,c)=>
+        {
+          print!("print ");
+
+          target.print();
+
+          print!(" {}",c);
         },
     }
 }
@@ -792,6 +831,28 @@ PhiOperand
 }
 
 
+impl
+PhiOperand
+{
+
+
+pub fn
+make(blk_name: &str, o: Operand)-> PhiOperand
+{
+  PhiOperand{ from: BlockLink::new(blk_name), value: o}
+}
+
+
+}
+
+
+pub fn
+new_phi_operand_list()-> Vec<PhiOperand>
+{
+  Vec::new()
+}
+
+
 
 
 pub struct
@@ -816,6 +877,33 @@ new(name: &str)-> Block
 {
   Block{ name: String::from(name), line_list: Vec::new(), terminator: None}
 }
+
+
+
+
+pub fn
+set_jmp(&mut self, label: &str)
+{
+  self.terminator = Some(Terminator::Jump(BlockLink::new(label)));
+}
+
+
+pub fn
+set_br(&mut self, var_name: &str, on_true: &str, on_false: &str)
+{
+  let  bi = BranchInfo{ condition: VariableLink::new(var_name), on_true: BlockLink::new(on_true), on_false: BlockLink::new(on_false)};
+
+  self.terminator = Some(Terminator::Branch(bi));
+}
+
+
+pub fn
+set_ret(&mut self, o_opt: Option<Operand>)
+{
+  self.terminator = Some(Terminator::Return(o_opt));
+}
+
+
 
 
 pub fn

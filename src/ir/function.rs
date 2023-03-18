@@ -229,6 +229,14 @@ add_local_variable(&mut self, name: &str, wc: WordCount)-> Result<AddressSource,
 pub fn
 add_block(&mut self, mut blk: Block)-> Result<(),()>
 {
+    if let None = &blk.terminator
+    {
+      println!("add_block errror: no terminator is set");
+
+      return Err(());
+    }
+
+
     if let None = self.find_block(&blk.name)
     {
         for l in &mut blk.line_list
@@ -263,7 +271,7 @@ add_block(&mut self, mut blk: Block)-> Result<(),()>
 
 
 pub fn
-fix_operand(o: &mut Operand, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>)
+fix_operand(o: &mut Operand, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>)-> Result<(),()>
 {
     if let OperandLiteral::Identifier(s) = &o.literal
     {
@@ -277,35 +285,57 @@ fix_operand(o: &mut Operand, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<Variable
           StorageClass::Argument=>{o.address_source = Some(AddressSource::ArgumentOffset(vi.offset));}
           _=>{}
             }
+
+
+          return Ok(());
         }
 
       else
         if let Some(vi) = Self::find_variable_info_in(gvar_ls,&name)
         {
           o.address_source = Some(AddressSource::GlobalOffset(vi.offset));
+
+          return Ok(());
         }
+
+
+      println!("fix error: operand {} is not found",&name);
+
+      return Err(());
     }
+
+
+  Ok(())
 }
 
 
 pub fn
-fix_variable_address_source(vl: &mut VariableLink, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>)
+fix_variable_address_source(vl: &mut VariableLink, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>)-> Result<(),()>
 {
     if let Some(vi) = Self::find_variable_info_in(lvar_ls,&vl.name)
     {
       vl.address_source = Some(AddressSource::LocalOffset(vi.offset));
+
+      return Ok(());
     }
 
   else
     if let Some(vi) = Self::find_variable_info_in(gvar_ls,&vl.name)
     {
       vl.address_source = Some(AddressSource::GlobalOffset(vi.offset));
+
+      return Ok(());
     }
+
+
+  println!("fix error: variable {} is not found",&vl.name);
+
+  return Err(());
 }
 
 
 pub fn
-fix_block_index(ln: &mut BlockLink, name_ls: &Vec<String>)
+fix_block_index(ln: &mut BlockLink, name_ls: &Vec<String>)-> Result<(),()>
 {
     for i in 0..name_ls.len()
     {
@@ -313,106 +343,161 @@ fix_block_index(ln: &mut BlockLink, name_ls: &Vec<String>)
         {
           ln.index = Some(i as u64);
 
-          return;
+          return Ok(());
         }
     }
+
+
+  println!("fix error: block {} is not found",&ln.name);
+
+  return Err(());
 }
 
 
 
 
 pub fn
-fix_allocating_operation(ao: &mut AllocatingOperation, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>, name_ls: &Vec<String>)
+fix_allocating_operation(ao: &mut AllocatingOperation, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>, name_ls: &Vec<String>)-> Result<(),()>
 {
     match ao
     {
   AllocatingOperation::Unary(o,_)=>
         {
-          Self::fix_operand(o,lvar_ls,gvar_ls);
+            if Self::fix_operand(o,lvar_ls,gvar_ls).is_err()
+            {
+              return Err(());
+            }
         },
   AllocatingOperation::Binary(l,r,_)=>
         {
-          Self::fix_operand(l,lvar_ls,gvar_ls);
-          Self::fix_operand(r,lvar_ls,gvar_ls);
+            if Self::fix_operand(l,lvar_ls,gvar_ls).is_err()
+            || Self::fix_operand(r,lvar_ls,gvar_ls).is_err()
+            {
+              return Err(());
+            }
         },
-  AllocatingOperation::Allocate(wc)=>
+  AllocatingOperation::Allocate(_)=>
         {
-        },
-  AllocatingOperation::Copy(o)=>
-        {
-          Self::fix_operand(o,lvar_ls,gvar_ls);
-        },
-  AllocatingOperation::Load(vl,_)=>
-        {
-          Self::fix_variable_address_source(vl,lvar_ls,gvar_ls);
         },
   AllocatingOperation::Address(vl)=>
         {
-          Self::fix_variable_address_source(vl,lvar_ls,gvar_ls);
+            if Self::fix_variable_address_source(vl,lvar_ls,gvar_ls).is_err()
+            {
+              return Err(());
+            }
         },
   AllocatingOperation::Phi(ops)=>
         {
             for po in ops
             {
-              Self::fix_block_index(&mut po.from,name_ls);
-              Self::fix_operand(&mut po.value,lvar_ls,gvar_ls);
+                if Self::fix_block_index(&mut po.from,name_ls).is_err()
+                || Self::fix_operand(&mut po.value,lvar_ls,gvar_ls).is_err()
+                {
+                  return Err(());
+                }
             }
         },
   AllocatingOperation::Call(ci)=>
         {
-          Self::fix_variable_address_source(&mut ci.target,lvar_ls,gvar_ls);
+            if Self::fix_variable_address_source(&mut ci.target,lvar_ls,gvar_ls).is_err()
+            {
+              return Err(());
+            }
+
 
             for a in &mut ci.argument_list
             {
-              Self::fix_operand(a,lvar_ls,gvar_ls);
+                if Self::fix_operand(a,lvar_ls,gvar_ls).is_err()
+                {
+                  return Err(());
+                }
             }
         },
     }
+
+
+  Ok(())
 }
 
 
 pub fn
-fix_non_allocating_operation(nao: &mut NonAllocatingOperation, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>)
+fix_non_allocating_operation(nao: &mut NonAllocatingOperation, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>)-> Result<(),()>
 {
     match nao
     {
-  NonAllocatingOperation::Store(dst,src,sz)=>
+  NonAllocatingOperation::CopyWord(src,dst)=>
         {
-          Self::fix_variable_address_source(src,lvar_ls,gvar_ls);
-          Self::fix_variable_address_source(dst,lvar_ls,gvar_ls);
+            if Self::fix_variable_address_source(src,lvar_ls,gvar_ls).is_err()
+            || Self::fix_variable_address_source(dst,lvar_ls,gvar_ls).is_err()
+            {
+              return Err(());
+            }
+        },
+  NonAllocatingOperation::CopyString(src,dst,sz)=>
+        {
+            if Self::fix_variable_address_source(src,lvar_ls,gvar_ls).is_err()
+            || Self::fix_variable_address_source(dst,lvar_ls,gvar_ls).is_err()
+            {
+              return Err(());
+            }
+        },
+  NonAllocatingOperation::Message(_)=>
+        {
+        },
+  NonAllocatingOperation::Print(target,_)=>
+        {
+            if Self::fix_variable_address_source(target,lvar_ls,gvar_ls).is_err()
+            {
+              return Err(());
+            }
         },
     }
+
+
+  Ok(())
 }
 
 
 pub fn
-fix_terminator(tm: &mut Terminator, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>, name_ls: &Vec<String>)
+fix_terminator(tm: &mut Terminator, lvar_ls: &Vec<VariableInfo>, gvar_ls: &Vec<VariableInfo>, name_ls: &Vec<String>)-> Result<(),()>
 {
     match tm
     {
   Terminator::Jump(bl)=>
         {
-          Self::fix_block_index(bl,name_ls);
+            if Self::fix_block_index(bl,name_ls).is_err()
+            {
+              return Err(());
+            }
         },
   Terminator::Branch(bi)=>
         {
-          Self::fix_variable_address_source(&mut bi.condition,lvar_ls,gvar_ls);
-          Self::fix_block_index(&mut bi.on_true ,name_ls);
-          Self::fix_block_index(&mut bi.on_false,name_ls);
+            if Self::fix_variable_address_source(&mut bi.condition,lvar_ls,gvar_ls).is_err()
+            || Self::fix_block_index(&mut bi.on_true ,name_ls).is_err()
+            || Self::fix_block_index(&mut bi.on_false,name_ls).is_err()
+            {
+              return Err(());
+            }
         },
   Terminator::Return(o_opt)=>
         {
             if let Some(o) = o_opt
             {
-              Self::fix_operand(o,lvar_ls,gvar_ls);
+                if Self::fix_operand(o,lvar_ls,gvar_ls).is_err()
+                {
+                  return Err(());
+                }
             }
         },
     }
+
+
+  Ok(())
 }
 
 
 pub fn
-fix(&mut self, gvar_ls: &Vec<VariableInfo>)
+fix(&mut self, gvar_ls: &Vec<VariableInfo>)-> Result<(),()>
 {
   let mut  name_ls: Vec<String> = Vec::new();
 
@@ -430,13 +515,18 @@ fix(&mut self, gvar_ls: &Vec<VariableInfo>)
             {
           Line::AllocatingOperation(vl,ao)=>
                 {
-                  Self::fix_variable_address_source(vl,&self.variable_info_list,gvar_ls);
-
-                  Self::fix_allocating_operation(ao,&self.variable_info_list,gvar_ls,&name_ls);
+                    if Self::fix_variable_address_source(vl,&self.variable_info_list,gvar_ls).is_err()
+                    || Self::fix_allocating_operation(ao,&self.variable_info_list,gvar_ls,&name_ls).is_err()
+                    {
+                      return Err(());
+                    }
                 }
           Line::NonAllocatingOperation(nao)=>
                 {
-                  Self::fix_non_allocating_operation(nao,&self.variable_info_list,gvar_ls);
+                    if Self::fix_non_allocating_operation(nao,&self.variable_info_list,gvar_ls).is_err()
+                    {
+                      return Err(());
+                    }
                 }
             }
         }
@@ -444,9 +534,15 @@ fix(&mut self, gvar_ls: &Vec<VariableInfo>)
 
         if let Some(tm) = &mut blk.terminator
         {
-          Self::fix_terminator(tm,&self.variable_info_list,gvar_ls,&name_ls);
+            if Self::fix_terminator(tm,&self.variable_info_list,gvar_ls,&name_ls).is_err()
+            {
+              return Err(());
+            }
         }
     }
+
+
+  Ok(())
 }
 
 
