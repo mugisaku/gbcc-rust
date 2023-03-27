@@ -1,14 +1,15 @@
-mod tokenizer;
 mod token;
 mod source_file;
-mod syntax;
-mod language;
-mod ir;
+//mod syntax;
+//mod language;
+//mod ir;
 mod debug;
+
+use std::env;
 
 
 static dic_s: &'static str =
-r#"
+r##"
 top_element =
   function_definition |
     struct_definition |
@@ -74,11 +75,11 @@ unary_operation = [{unary_operator}] & operand & [{primary_operation}];
 
 expression = unary_operation & [{binary_operator & unary_operation}];
 
-"#;
+"##;
 
 
 static txt_s: &'static str =
-r#"
+r"
 
 fn
 test()-> slen
@@ -87,13 +88,39 @@ test()-> slen
 }
 
 
-"#;
+";
 
 
 fn
 main()
 {
-  crate::ir::test::test_for();
+  let  args: Vec<String> = env::args().collect();
+
+    for i in 1..args.len()
+    {
+      let  arg = &args[i];
+
+        if let Ok(src) = crate::source_file::SourceFile::open(&arg)
+        {
+          println!("{} is opened",&arg);
+
+            if let Ok(toks) = crate::token::tokenize::tokenize(&src)
+            {
+//              crate::token::print_token_string(&toks);
+//              crate::token::restore_token_string(&toks);
+            }
+
+          else
+            {
+              println!("tokenize is failed");
+
+              return;
+            }
+        }
+    }
+
+
+//  crate::ir::test::test_for();
 /*
   let  dic_f = source_file::SourceFile::from(dic_s);
   let  txt_f = source_file::SourceFile::from(txt_s);

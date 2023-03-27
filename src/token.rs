@@ -1,17 +1,23 @@
 
 
+pub mod tokenize;
+pub mod read_number;
+pub mod read_string;
+pub mod skip;
+pub mod is;
 
 
 use std::rc::Rc;
+use crate::source_file::Cursor;
 
 
+#[derive(Clone)]
 pub struct
 TokenInfo
 {
-  filepath: Rc<String>,
+  pub(crate) filepath: Rc<String>,
 
-  x_pos: u32,
-  y_pos: u32,
+  pub(crate) cursor: Cursor,
 
 }
 
@@ -24,43 +30,19 @@ TokenInfo
 pub fn
 new(filepath: &str)-> TokenInfo
 {
-  let  s = String::from(filepath);
-
-  TokenInfo{ filepath: Rc::new(s), x_pos: 0, y_pos: 0}
-}
-
-
-pub fn
-clone(&self)-> TokenInfo
-{
-  TokenInfo{ filepath: Rc::clone(&self.filepath), x_pos: self.x_pos, y_pos: self.y_pos}
+  TokenInfo{ filepath: Rc::new(String::from(filepath)), cursor: Cursor::new()}
 }
 
 
 pub fn  get_filepath(&self)-> &String{&*self.filepath}
-pub fn  get_x_pos(&self)-> u32{self.x_pos}
-pub fn  get_y_pos(&self)-> u32{self.y_pos}
+pub fn  get_x(&self)-> usize{self.cursor.get_x()}
+pub fn  get_y(&self)-> usize{self.cursor.get_y()}
+
 
 pub fn
-set_pos(&mut self, x: u32, y: u32)
+print(&self)
 {
-  self.x_pos = x;
-  self.y_pos = y;
-}
-
-
-}
-
-
-impl
-fmt::Display for TokenInfo
-{
-
-
-fn
-fmt(&self, f: &mut fmt::Formatter)-> fmt::Result
-{
-  write!(f,"[X:{:05} Y:{:05}] ",1+self.x_pos,1+self.y_pos)
+  print!("[X:{:05} Y:{:05}] ",1+self.get_x(),1+self.get_y())
 }
 
 
@@ -103,11 +85,11 @@ print_character(c: char)
 
 
 pub fn
-print_string(s: &str)
+print_char_string(s: &Vec<char>)
 {
-    for c in s.chars()
+    for c in s
     {
-      print_character(c);
+      print_character(*c);
     }
 }
 
@@ -119,10 +101,9 @@ TokenData
 {
   Space,
   Newline,
-  Identifier(Rc<String>),
-  String(Rc<String>),
+  Identifier(Vec<char>),
+  String(Vec<char>),
   Character(char),
-  Letter(char),
   Integer(u64),
   Floating(f64),
   Others(char),
@@ -150,12 +131,12 @@ print(&self)
       },
   TokenData::Identifier(s)=>
       {
-        print!("{}",&*s);
+        print_char_string(&*s);
       },
   TokenData::String(s)=>
       {
         print!("\"");
-        print_string(&*s);
+        print_char_string(&*s);
         print!("\"");
       },
   TokenData::Character(c)=>
@@ -168,10 +149,6 @@ print(&self)
         '\r'=> {print!("\\r");},
         _   => {print!("\'{}\'",c);},
           }
-      },
-  TokenData::Letter(c)=>
-      {
-        print!("\'{}",c);
       },
   TokenData::Integer(i)=>
       {
@@ -201,9 +178,6 @@ Token
   info: TokenInfo,
 
 }
-
-
-use std::fmt;
 
 
 impl
@@ -259,7 +233,7 @@ is_newline(&self)-> bool
 
 
 pub fn
-get_identifier(&self)-> Option<&Rc<String>>
+get_identifier(&self)-> Option<&Vec<char>>
 {
     if let TokenData::Identifier(s) = &self.data
     {
@@ -272,7 +246,7 @@ get_identifier(&self)-> Option<&Rc<String>>
 
 
 pub fn
-get_string(&self)-> Option<&Rc<String>>
+get_string(&self)-> Option<&Vec<char>>
 {
     if let TokenData::String(s) = &self.data
     {
@@ -324,19 +298,6 @@ get_character(&self)-> Option<char>
 
 
 pub fn
-get_letter(&self)-> Option<char>
-{
-    if let TokenData::Letter(c) = self.data
-    {
-      return Some(c);
-    }
-
-
-  None
-}
-
-
-pub fn
 get_others(&self)-> Option<char>
 {
     if let TokenData::Others(c) = self.data
@@ -352,41 +313,31 @@ get_others(&self)-> Option<char>
 pub fn
 print(&self)
 {
-  print!("{}",self);
-}
-
-
-}
-
-
-impl
-fmt::Display for Token
-{
-
-
-fn
-fmt(&self, f: &mut fmt::Formatter)-> fmt::Result
-{
-  let  _ = write!(f,"[X:{:06} Y:{:06}] ",1+self.info.x_pos,1+self.info.y_pos);
+  print!("[X:{:06} Y:{:06}] ",1+self.info.get_x(),1+self.info.get_y());
 
     match &self.data
     {
   TokenData::Space=>
       {
-        print!("SPACE");
+        print!("Space");
       },
   TokenData::Newline=>
       {
-        print!("NEWLINE");
+        print!("Newline");
       },
   TokenData::Identifier(s)=>
       {
-        print!("identifier: {}",&*s);
+        print!("Identifier: ");
+
+          for c in s
+          {
+            print!("{}",c);
+          }
       },
   TokenData::String(s)=>
       {
-        print!("\"");
-        print_string(&*s);
+        print!("String: \"");
+        print_char_string(&*s);
         print!("\"");
       },
   TokenData::Character(c)=>
@@ -396,30 +347,23 @@ fmt(&self, f: &mut fmt::Formatter)-> fmt::Result
         '\0'=> {print!("Null Character");},
         '\n'=> {print!("Newline Character");},
         '\t'=> {print!("Tab Character");},
-        '\r'=> {print!("return Character");},
-        _   => {print!("\'{}\'",c);},
+        '\r'=> {print!("Return Character");},
+        _   => {print!("Character: \'{}\'",c);},
           }
-      },
-  TokenData::Letter(c)=>
-      {
-        print!("\'{}",c);
       },
   TokenData::Integer(i)=>
       {
-        print!("{}",i);
+        print!("Integer: {}",i);
       },
   TokenData::Floating(f)=>
       {
-        print!("{}",f);
+        print!("Floating: {}",f);
       },
   TokenData::Others(c)=>
       {
-        print!("others: {}",c);
+        print!("Others: {}",c);
       },
     }
-
-
-  write!(f,"")
 }
 
 
@@ -428,9 +372,49 @@ fmt(&self, f: &mut fmt::Formatter)-> fmt::Result
 
 
 
-pub type TokenString = Vec<Token>;
+pub fn
+restore_token_string(toks: &Vec<Token>)
+{
+    for tok in toks
+    {
+        match tok.get_data()
+        {
+      TokenData::Space=>         {print!(" ");},
+      TokenData::Newline=>       {print!("\n");},
+      TokenData::Identifier(s)=> {print_char_string(&s);},
+      TokenData::String(s)=>
+            {
+              print!("\"");
+              print_char_string(&s);
+              print!("\"");
+            },
+      TokenData::Character(c)=>
+            {
+              print!("\'");
+              crate::token::print_character(*c);
+              print!("\'");
+            },
+      TokenData::Integer(i)=>    {print!("{}",i);},
+      TokenData::Floating(f)=>   {print!("{:.9}",f);},
+      TokenData::Others(c)=>     {print!("{}",c);},
+        }
+    }
+}
 
 
+pub fn
+print_token_string(toks: &Vec<Token>)
+{
+    for tok in toks
+    {
+      tok.print();
+
+      print!("\n");
+    }
+}
+
+
+/*
 pub struct
 Cursor<'a>
 {
@@ -580,19 +564,6 @@ get_character(&self)-> Option<char>
 
 
 pub fn
-get_letter(&self)-> Option<char>
-{
-    if let Some(tok) = self.get()
-    {
-      return tok.get_letter();
-    }
-
-
-  None
-}
-
-
-pub fn
 get_others(&self)-> Option<char>
 {
     if let Some(tok) = self.get()
@@ -631,9 +602,8 @@ is_newline(&self)-> bool
 }
 
 
-
 }
-
+*/
 
 
 

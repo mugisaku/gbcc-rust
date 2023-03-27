@@ -289,25 +289,31 @@ Dictionary
 
 
 pub fn
-open(filepath: &str)-> Dictionary
+open(filepath: &str)-> Result<Dictionary,()>
 {
-  let  src = SourceFile::open(filepath);
+    if let Ok(srcf) = SourceFile::open(filepath)
+    {
+      return Self::make(&srcf);
+    }
 
-  Self::from(&src)
+
+  Err(())
 }
 
 
 pub fn
-from(src: &SourceFile)-> Dictionary
+make(src: &SourceFile)-> Result<Dictionary,()>
 {
   let mut  dic = Dictionary{definition_list: Vec::new()};
 
-  dic.read_source_file(src);
+    if dic.read_source_file(src).is_ok()
+    {
+      return Ok(dic);
+    }
 
-  dic
+
+  Err(())
 }
-
-
 
 
 pub fn
@@ -663,7 +669,7 @@ read_definition(cur: &mut Cursor)-> Option<Definition>
 
 
 pub fn
-read_source_file(&mut self, src: &SourceFile)
+read_source_file(&mut self, src: &SourceFile)-> Result<(),()>
 {
     if let Ok(toks) = tokenize(src)
     {
@@ -673,7 +679,13 @@ read_source_file(&mut self, src: &SourceFile)
         {
           self.definition_list.push(def);
         }
+
+
+      return Ok(());
     }
+
+
+  Err(())
 }
 
 

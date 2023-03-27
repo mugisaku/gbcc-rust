@@ -3,12 +3,14 @@
 use crate::token::Token;
 use crate::token::TokenInfo;
 use crate::token::TokenData;
-use crate::syntax::dictionary::Definition;
-use crate::syntax::dictionary::Dictionary;
-use crate::syntax::dictionary::Expression;
-use crate::syntax::dictionary::BinaryOperation;
-use crate::syntax::dictionary::BinaryOperator;
-use crate::syntax::dictionary::PrimaryExpression;
+use crate::syntax::dictionary::{
+  Definition,
+  Dictionary,
+  Expression,
+  BinaryOperation,
+  BinaryOperator,
+  PrimaryExpression,
+};
 
 use std::rc::Rc;
 
@@ -392,10 +394,11 @@ seek(toks: &Vec<Token>, i: usize)-> usize
 pub fn
 read_by_string(dic: &Dictionary, toks: &Vec<Token>, i: usize, s: &Rc<String>)-> Option<Packet>
 {
-  let mut  buf = String::new();
+  let mut  buf = new_char_string();
 
   let mut  offset = 0;
 
+/*
     while offset < s.len()
     {
       let  pos = i+offset;
@@ -440,6 +443,7 @@ read_by_string(dic: &Dictionary, toks: &Vec<Token>, i: usize, s: &Rc<String>)-> 
 
       return Some(Packet{ index: i+offset, objects: vec![o]});
     }
+*/
 
 
   None
@@ -489,17 +493,6 @@ read_by_identifier(dic: &Dictionary, toks: &Vec<Token>, i: usize, s: &str)-> Opt
         if s == "CHARACTER_LITERAL"
         {
             if let TokenData::Character(_) = dat
-            {
-              let  o = Object::from(&toks[i]);
-
-              return Some(Packet{ index: i+1, objects: vec![o]});
-            }
-        }
-
-      else
-        if s == "LETTER_LITERAL"
-        {
-            if let TokenData::Letter(_) = dat
             {
               let  o = Object::from(&toks[i]);
 
