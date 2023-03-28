@@ -9,7 +9,7 @@ use super::{
 
 
 use super::read_number::{
-  Number,
+  read_fraction_number,
   read_number,
 };
 
@@ -148,6 +148,76 @@ read_data_that_begins_from_id_head(&mut self, first_c: char)-> Result<(),()>
 
 
 pub fn
+read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),()>
+{
+  let  mut s = new_char_string();
+
+  s.push(c);
+
+  self.cursor.advance();
+
+  Self::read_identifier(&self.input,&mut self.cursor,&mut s);
+
+    if let Some(last_c) = self.get_character()
+    {
+        if last_c == '\''
+        {
+            if s.len() == 1
+            {
+              self.cursor.advance();
+
+              self.push(TokenData::Character(c));
+
+              return Ok(());
+            }
+
+
+          println!("文字リテラルに一文字を超える内容{},{}",last_c,s.len());
+
+          return Err(());
+        }
+    }
+
+
+  self.push(TokenData::Others('\''));
+  self.push(TokenData::Identifier(s));
+
+  Ok(())
+}
+
+
+pub fn
+read_escape_sequence(&mut self)-> Result<(),()>
+{
+    if let Ok(esc) = read_escape_sequence(&self.input,&mut self.cursor)
+    {
+        if let Some(last_c) = self.get_character()
+        {
+            if last_c == '\''
+            {
+              self.cursor.advance();
+
+              self.push(TokenData::Character(esc));
+
+              return Ok(());
+            }
+        }
+
+
+      println!("文字列リテラルが不正な閉じ方");
+    }
+
+  else
+    {
+      println!("文字列リテラルで不正なシーケンス文字");
+    }
+
+
+  Err(())
+}
+
+
+pub fn
 read_data_that_begins_from_single_quote(&mut self)-> Result<(),()>
 {
     if let Some(c) = self.get_character()
@@ -164,69 +234,13 @@ read_data_that_begins_from_single_quote(&mut self)-> Result<(),()>
         {
           self.cursor.advance();
 
-            if let Ok(esc) = read_escape_sequence(&self.input,&mut self.cursor)
-            {
-                if let Some(last_c) = self.get_character()
-                {
-                    if last_c == '\''
-                    {
-                      self.cursor.advance();
-
-                      self.push(TokenData::Character(esc));
-
-                      return Ok(());
-                    }
-                }
-
-
-              println!("文字列リテラルが不正な閉じ方");
-            }
-
-          else
-            {
-              println!("文字列リテラルで不正なシーケンス文字");
-            }
-
-
-          return Err(());
+          return self.read_escape_sequence();
         }
 
 
         if is_id_head(c)
         {
-          let  mut s = new_char_string();
-
-          s.push(c);
-
-          self.cursor.advance();
-
-          Self::read_identifier(&self.input,&mut self.cursor,&mut s);
-
-            if let Some(last_c) = self.get_character()
-            {
-                if last_c == '\''
-                {
-                    if s.len() == 1
-                    {
-                      self.cursor.advance();
-
-                      self.push(TokenData::Character(c));
-
-                      return Ok(());
-                    }
-
-
-                  println!("文字リテラルに一文字を超える内容{},{}",last_c,s.len());
-
-                  return Err(());
-                }
-            }
-
-
-          self.push(TokenData::Others('\''));
-          self.push(TokenData::Identifier(s));
-
-          return Ok(());
+          return self.read_character_or_identifier_after_single_quote(c);
         }
 
 
@@ -253,6 +267,44 @@ read_data_that_begins_from_single_quote(&mut self)-> Result<(),()>
 
 
   println!("不正なシングルクオート要素");
+
+  Err(())
+}
+
+
+pub fn
+read_data_that_begins_from_digit(&mut self, c: char)-> Result<(),()>
+{
+    if let Ok(n) = read_number(&self.input,&mut self.cursor,c)
+    {
+        if let Some(next_c) = self.get_character()
+        {
+            if next_c == '.'
+            {
+              self.cursor.advance();
+
+                if let Ok(f) = read_fraction_number(&self.input,&mut self.cursor,n)
+                {
+                  self.push(TokenData::Floating(f));
+                }
+
+              else
+                {
+                  self.push(TokenData::Integer(n));
+                  self.push(TokenData::Others('.'));
+                }
+
+
+              return Ok(());
+            }
+        }
+
+
+      self.push(TokenData::Integer(n));
+
+      return Ok(());
+    }
+
 
   Err(())
 }
@@ -370,17 +422,7 @@ step(&mut self, c: char)-> Result<(),()>
   else
     if is_digit(c)
     {
-        if let Ok(n) = read_number(&self.input,&mut self.cursor,c)
-        {
-            match n
-            {
-          Number::Integer(i)=> {self.push(TokenData::Integer(i));}
-          Number::Floating(f)=>{self.push(TokenData::Floating(f));}
-            }
-
-
-          return Ok(());
-        }
+      return self.read_data_that_begins_from_digit(c);
     }
 
   else

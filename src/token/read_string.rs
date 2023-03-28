@@ -5,12 +5,6 @@ use super::{
 };
 
 
-use super::read_number::{
-  Number,
-  read_number,
-};
-
-
 use crate::source_file::{
   SourceFile,
   Cursor,

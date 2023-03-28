@@ -102,12 +102,12 @@ main()
 
         if let Ok(src) = crate::source_file::SourceFile::open(&arg)
         {
-          println!("{} is opened",&arg);
+//          println!("{} is opened",&arg);
 
             if let Ok(toks) = crate::token::tokenize::tokenize(&src)
             {
 //              crate::token::print_token_string(&toks);
-//              crate::token::restore_token_string(&toks);
+              crate::token::restore_token_string(&toks);
             }
 
           else
