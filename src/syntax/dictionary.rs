@@ -1,29 +1,65 @@
 
 
-use std::rc::Rc;
-use crate::source_file::SourceFile;
-use crate::token::Token;
-use crate::token::TokenData;
-use crate::token::Cursor;
-use crate::tokenizer::tokenize;
-
-pub type TokenString = Vec<Token>;
+use crate::source_file::to_string;
+use crate::token::print_char_string;
 
 
 pub enum
-Expression
+Operand
 {
-  Empty,
-  UnaryOperation( Box<UnaryOperation>),
-  BinaryOperation(Box<BinaryOperation>),
-  Primary(        Box<PrimaryExpression>),
+  One(       Box<Expression>),
+  Option(    Box<Expression>),
+  Repetition(Box<Expression>),
+
+  Identifier(Vec<char>),
+  Keyword(Vec<char>),
+  String(Vec<char>),
+
+  IdentifierLiteral,
+  IntegerLiteral,
+  FloatingLiteral,
+  CharacterLiteral,
+  StringLiteral,
 
 }
 
 
 impl
-Expression
+Operand
 {
+
+
+pub fn
+test(&self, dic: &Dictionary)-> Result<(),()>
+{
+    match self
+    {
+  Operand::One(e)=>      {e.test(dic)},
+  Operand::Option(e)=>   {e.test(dic)},
+  Operand::Repetition(e)=>{e.test(dic)},
+  Operand::Identifier(id)=>
+        {
+          let  s = to_string(id);
+
+            if let None = dic.find(&s)
+            {
+              print!("definition <{}> not found.\n",&s);
+
+              return Err(());
+            }
+
+
+          Ok(())
+        },
+  Operand::Keyword(_)=>{Ok(())},
+  Operand::String(_)=>{Ok(())},
+  Operand::IdentifierLiteral=>{Ok(())},
+  Operand::IntegerLiteral=>{Ok(())},
+  Operand::FloatingLiteral=>{Ok(())},
+  Operand::CharacterLiteral=>{Ok(())},
+  Operand::StringLiteral=>{Ok(())},
+    }
+}
 
 
 pub fn
@@ -31,72 +67,41 @@ print(&self)
 {
     match self
     {
-  Expression::Empty=>{print!("EMPTY");},
-  Expression::UnaryOperation(o)=>
+  Operand::One(e)=>
         {
-            match o.operator
-            {
-          UnaryOperator::Nop=>
-                {
-                },
-          UnaryOperator::Not=>
-                {
-                  print!("!");
-                },
-            }
-
-
-          o.operand.print();
+          print!("(");
+          e.print();
+          print!(")");
         },
-  Expression::BinaryOperation(o)=>
+  Operand::Option(e)=>
         {
-          o.left.print();
-
-            match o.operator
-            {
-          BinaryOperator::And=>
-                {
-                  print!(" & ");
-                },
-          BinaryOperator::Or=>
-                {
-                  print!(" | ");
-                },
-            }
-
-
-          o.right.print();
+          print!("[");
+          e.print();
+          print!("]");
         },
-  Expression::Primary(pr)=>
+  Operand::Repetition(e)=>
         {
-            match &**pr
-            {
-          PrimaryExpression::None=>
-                {
-                  print!("NONE");
-                },
-          PrimaryExpression::One(e)=>
-                {
-                  print!("(");
-                  e.print();
-                  print!(")");
-                },
-          PrimaryExpression::Option(e)=>
-                {
-                  print!("[");
-                  e.print();
-                  print!("]");
-                },
-          PrimaryExpression::Repetition(e)=>
-                {
-                  print!("{}","{");
-                  e.print();
-                  print!("{}","}");
-                },
-          PrimaryExpression::Identifier(s)=>{print!("{}",s);},
-          PrimaryExpression::String(s)=>{print!("\"{}\"",&*s);},
-            }
+          print!("{}","{");
+          e.print();
+          print!("{}","}");
         },
+  Operand::Identifier(s)=>{print_char_string(s);},
+  Operand::Keyword(s)=>
+        {
+          print!("\'");
+          print_char_string(s);
+        },
+  Operand::String(s)=>
+        {
+          print!("\"");
+          print_char_string(s);
+          print!("\"");
+        },
+  Operand::IdentifierLiteral=>{print!(".Identifier");},
+  Operand::IntegerLiteral=>{print!(".Integer");},
+  Operand::FloatingLiteral=>{print!(".Floating");},
+  Operand::CharacterLiteral=>{print!(".Character");},
+  Operand::StringLiteral=>{print!(".String");},
     }
 }
 
@@ -104,20 +109,6 @@ print(&self)
 }
 
 
-
-
-pub enum
-PrimaryExpression
-{
-  None,
-  One(       Expression),
-  Option(    Expression),
-  Repetition(Expression),
-
-  Identifier(Rc<String>),
-  String(Rc<String>),
-
-}
 
 
 pub enum
@@ -129,11 +120,30 @@ UnaryOperator
 }
 
 
+impl
+UnaryOperator
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  UnaryOperator::Nop=>{},
+  UnaryOperator::Not=>{print!("!");},
+    }
+}
+
+
+}
+
+
 pub struct
 UnaryOperation
 {
-  operator: UnaryOperator,
-  operand: Expression,
+  pub(crate) operator: UnaryOperator,
+  pub(crate)  operand: Operand,
 
 }
 
@@ -151,13 +161,23 @@ get_operator(&self)-> &UnaryOperator
 
 
 pub fn
-get_operand(&self)-> &Expression
+get_operand(&self)-> &Operand
 {
   &self.operand
 }
 
 
+pub fn
+print(&self)
+{
+  self.operator.print();
+  self.operand.print();
 }
+
+
+}
+
+
 
 
 pub enum
@@ -165,17 +185,40 @@ BinaryOperator
 {
   And,
   Or,
+  Arrow,
 
 }
+
+
+impl
+BinaryOperator
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  BinaryOperator::And=>{print!("&");},
+  BinaryOperator::Or=> {print!("|");},
+  BinaryOperator::Arrow=>{print!("->");},
+    }
+}
+
+
+}
+
+
 
 
 pub struct
 BinaryOperation
 {
-  operator: BinaryOperator,
+  pub(crate) operator: BinaryOperator,
 
-   left: Expression,
-  right: Expression,
+  pub(crate)  left: Operand,
+  pub(crate) right: Operand,
 
 }
 
@@ -193,26 +236,104 @@ get_operator(&self)-> &BinaryOperator
 
 
 pub fn
-get_left(&self)-> &Expression
+get_left(&self)-> &Operand
 {
   &self.left
 }
 
 
 pub fn
-get_right(&self)-> &Expression
+get_right(&self)-> &Operand
 {
   &self.right
 }
 
 
+pub fn
+test(&self, dic: &Dictionary)-> Result<(),()>
+{
+    if   self.left.test(dic).is_ok()
+     && self.right.test(dic).is_ok()
+    {
+      return Ok(());
+    }
+
+
+  Err(())
 }
+
+
+pub fn
+print(&self)
+{
+  self.left.print();
+
+  print!(" ");
+
+  self.operator.print();
+
+  print!(" ");
+
+  self.right.print();
+}
+
+
+}
+
+
+
+
+pub enum
+Expression
+{
+  Empty,
+  Operand(Operand),
+  UnaryOperation( UnaryOperation),
+  BinaryOperation(BinaryOperation),
+
+}
+
+
+impl
+Expression
+{
+
+
+pub fn
+test(&self, dic: &Dictionary)-> Result<(),()>
+{
+    match self
+    {
+  Expression::Empty=>{Ok(())},
+  Expression::Operand(o)=>{o.test(dic)}
+  Expression::UnaryOperation(o)=>{o.operand.test(dic)},
+  Expression::BinaryOperation(o)=>{o.test(dic)},
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Expression::Empty=>{print!("EMPTY");},
+  Expression::Operand(o)=>{o.print();},
+  Expression::UnaryOperation(o)=>{o.print();},
+  Expression::BinaryOperation(o)=>{o.print();},
+    }
+}
+
+
+}
+
+
 
 
 pub struct
 Definition
 {
-  name: Rc<String>,
+  name: String,
 
   expression: Expression,
 
@@ -227,7 +348,7 @@ Definition
 pub fn
 new(name: &str)-> Definition
 {
-  Definition{ name: Rc::new(String::from(name)), expression: Expression::Empty}
+  Definition{ name: String::from(name), expression: Expression::Empty}
 }
 
 
@@ -235,13 +356,6 @@ pub fn
 get_name(&self)-> &String
 {
   &self.name
-}
-
-
-pub fn
-clone_name(&self)-> Rc<String>
-{
-  self.name.clone()
 }
 
 
@@ -262,7 +376,7 @@ set_expression(&mut self, expr: Expression)
 pub fn
 print(&self)
 {
-  print!("{}: ",self.name);
+  print!("{}: ",&self.name);
 
   self.expression.print();
 
@@ -289,11 +403,18 @@ Dictionary
 
 
 pub fn
-open(filepath: &str)-> Result<Dictionary,()>
+new()-> Dictionary
 {
-    if let Ok(srcf) = SourceFile::open(filepath)
+  Dictionary{definition_list: Vec::new()}
+}
+
+
+pub fn
+make_from_file(filepath: &str)-> Result<Dictionary,()>
+{
+    if let Ok(src) = crate::source_file::SourceFile::open(filepath)
     {
-      return Self::make(&srcf);
+      return super::read_dictionary::read_dictionary(&src);
     }
 
 
@@ -302,17 +423,11 @@ open(filepath: &str)-> Result<Dictionary,()>
 
 
 pub fn
-make(src: &SourceFile)-> Result<Dictionary,()>
+make_from_string(s: &str)-> Result<Dictionary,()>
 {
-  let mut  dic = Dictionary{definition_list: Vec::new()};
+  let  src = crate::source_file::SourceFile::from(s);
 
-    if dic.read_source_file(src).is_ok()
-    {
-      return Ok(dic);
-    }
-
-
-  Err(())
+  return super::read_dictionary::read_dictionary(&src);
 }
 
 
@@ -340,352 +455,25 @@ find(&self, name: &str)-> Option<&Definition>
 
 
 pub fn
-test_expression(&self, e: &Expression)
+add(&mut self, def: Definition)
 {
-    match e
-    {
-  Expression::Empty=>{},
-  Expression::UnaryOperation(op)=>{self.test_expression(&op.operand);},
-  Expression::BinaryOperation(op)=>
-        {
-          self.test_expression(&op.left );
-          self.test_expression(&op.right);
-        },
-  Expression::Primary(pr)=>
-        {
-            match &**pr
-            {
-          PrimaryExpression::One(ee)=>      {self.test_expression(ee);},
-          PrimaryExpression::Option(ee)=>   {self.test_expression(ee);},
-          PrimaryExpression::Repetition(ee)=>{self.test_expression(ee);},
-          PrimaryExpression::Identifier(s)=>
-                {
-                    if (**s != "IDENTIFIER") &&
-                       (**s !=   "INTEGER_LITERAL") &&
-                       (**s !=  "FLOATING_LITERAL") &&
-                       (**s !=    "LETTER_LITERAL") &&
-                       (**s != "CHARACTER_LITERAL") &&
-                       (**s !=    "STRING_LITERAL")
-                    {
-                        if let None = self.find(&*s)
-                        {
-                          print!("definition <{}> not found.\n",s);
-                        }
-                    }
-                },
-          PrimaryExpression::String(_)=>{},
-          PrimaryExpression::None=>{},
-            }
-        }
-    }
+  self.definition_list.push(def);
 }
 
 
 pub fn
-test(&self)
+test(&self)-> Result<(),()>
 {
     for def in &self.definition_list
     {
-      self.test_expression(def.get_expression());
-    }
-}
-
-
-
-
-pub fn
-read_packed_expression(cur: &mut Cursor, opener: char)-> Option<PrimaryExpression>
-{
-    match opener
-    {
-  '('=>
+        if def.expression.test(self).is_err()
         {
-            if let Some(e) = Self::read_expression(cur,')')
-            {
-              return Some(PrimaryExpression::One(e));
-            }
-        },
-  '['=>
-        {
-            if let Some(e) = Self::read_expression(cur,']')
-            {
-              return Some(PrimaryExpression::Option(e));
-            }
-        },
-  '{'=>
-        {
-            if let Some(e) = Self::read_expression(cur,'}')
-            {
-              return Some(PrimaryExpression::Repetition(e));
-            }
-        },
-    _=>{},
-    }
-
-
-  None
-}
-
-
-pub fn
-read_primary_expression(cur: &mut Cursor)-> Option<PrimaryExpression>
-{
-  cur.skip_spaces();
-
-    if let Some(tok) = cur.get()
-    {
-        match tok.get_data()
-        {
-      TokenData::Identifier(s)=>
-            {
-              let  o = PrimaryExpression::Identifier(s.clone());
-
-              cur.advance();
-
-              return Some(o);
-            },
-      TokenData::String(s)=>
-            {
-              let  o = PrimaryExpression::String(s.clone());
-
-              cur.advance();
-
-              return Some(o);
-            },
-      TokenData::Others(c)=>
-            {
-              let  opener = *c;
-
-              cur.advance();
-
-              return Self::read_packed_expression(cur,opener);
-            },
-      _=>{},
+          return Err(());
         }
     }
 
 
-  None
-}
-
-
-pub fn
-read_unary_operation(cur: &mut Cursor)-> Option<UnaryOperation>
-{
-    if let Some(p) = Self::read_primary_expression(cur)
-    {
-      let  unop = UnaryOperation{
-                    operator: UnaryOperator::Nop,
-                     operand: Expression::Primary(Box::new(p))
-                  };
-
-      return Some(unop);
-    }
-
-
-  None
-}
-
-
-pub fn
-read_binary_operator(cur: &mut Cursor)-> Option<BinaryOperator>
-{
-  cur.skip_spaces();
-
-    if let Some(c) = cur.get_others()
-    {
-        match c
-        {
-      '&'=>
-            {
-              cur.advance();
-
-              return Some(BinaryOperator::And);
-            },
-      '|'=>
-            {
-              cur.advance();
-
-              return Some(BinaryOperator::Or);
-            },
-      _=>{},
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-read_binary_operation_element(cur: &mut Cursor)-> Option<(BinaryOperator,Expression)>
-{
-  cur.skip_spaces();
-
-    if let Some(operator) = Self::read_binary_operator(cur)
-    {
-        if let Some(operation) = Self::read_unary_operation(cur)
-        {
-          let  boxed = Box::new(operation);
-
-          return Some((operator,Expression::UnaryOperation(boxed)));
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-test_closing(cur: &Cursor, closer: char)-> bool
-{
-    if let Some(tok) = cur.get()
-    {
-        if let Some(c) = tok.get_others()
-        {
-          return c == closer;
-        }
-    }
-
-
-  false
-}
-
-
-pub fn
-test_illegal_closing(cur: &Cursor)-> bool
-{
-    if let Some(tok) = cur.get()
-    {
-        if let Some(c) = tok.get_others()
-        {
-            if (c == ')') ||
-               (c == ']') ||
-               (c == '}')
-            {
-              return true;
-            }
-        }
-    }
-
-
-  false
-}
-
-
-pub fn
-read_expression(cur: &mut Cursor, closer: char)-> Option<Expression>
-{
-  cur.skip_spaces();
-
-    if Self::test_closing(cur,closer)
-    {
-      cur.advance();
-
-      return Some(Expression::Empty);
-    }
-
-
-    if Self::test_illegal_closing(cur)
-    {
-      return None;
-    }
-
-
-    if let Some(first) = Self::read_unary_operation(cur)
-    {
-      let mut  e = Expression::UnaryOperation(Box::new(first));
-
-      cur.skip_spaces();
-
-        if Self::test_closing(cur,closer)
-        {
-          cur.advance();
-
-          return Some(e);
-        }
-
-
-        if Self::test_illegal_closing(cur)
-        {
-          return None;
-        }
-
-
-        while let Some((operator,operation)) = Self::read_binary_operation_element(cur)
-        {
-          let  boxed = Box::new(BinaryOperation{ operator, left: e, right: operation});
-
-          e = Expression::BinaryOperation(boxed);
-
-          cur.skip_spaces();
-
-            if Self::test_closing(cur,closer)
-            {
-              cur.advance();
-
-              return Some(e);
-            }
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-read_definition(cur: &mut Cursor)-> Option<Definition>
-{
-  cur.skip_spaces();
-
-    if let Some(s) = cur.get_identifier()
-    {
-      let mut  def = Definition::new(s);
-
-      cur.advance();
-      cur.skip_spaces();
-
-        if let Some(c) = cur.get_others()
-        {
-            if c == '='
-            {
-              cur.advance();
-
-                if let Some(e) = Self::read_expression(cur,';')
-                {
-                  def.set_expression(e);
-
-                  return Some(def);
-                }
-            }
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-read_source_file(&mut self, src: &SourceFile)-> Result<(),()>
-{
-    if let Ok(toks) = tokenize(src)
-    {
-      let mut  cur = Cursor::from(&toks);
-
-        while let Some(def) = Self::read_definition(&mut cur)
-        {
-          self.definition_list.push(def);
-        }
-
-
-      return Ok(());
-    }
-
-
-  Err(())
+  Ok(())
 }
 
 
@@ -694,13 +482,11 @@ read_source_file(&mut self, src: &SourceFile)-> Result<(),()>
 pub fn
 print(&self)
 {
-  self.test();
-
     for def in &self.definition_list
     {
       def.print();
 
-      print!("\n");
+      print!("\n\n");
     }
 }
 

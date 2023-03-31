@@ -185,5 +185,20 @@ new_char_string()-> Vec<char>
 }
 
 
+pub fn
+to_string(src: &Vec<char>)-> String
+{
+  let  mut s = String::new();
+
+    for c in src
+    {
+      s.push(*c);
+    }
+
+
+  s
+}
+
+
 
 

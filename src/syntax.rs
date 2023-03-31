@@ -1,6 +1,7 @@
 
 
 pub mod dictionary;
-pub mod parser;
+pub mod read_dictionary;
+//pub mod parser;
 
 

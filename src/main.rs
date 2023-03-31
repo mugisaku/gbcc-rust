@@ -1,6 +1,6 @@
 mod token;
 mod source_file;
-//mod syntax;
+mod syntax;
 //mod language;
 //mod ir;
 mod debug;
@@ -10,13 +10,13 @@ use std::env;
 
 static dic_s: &'static str =
 r##"
-top_element =
+top_element:
   function_definition |
     struct_definition |
       enum_definition |
   variable_definition;
 
-statement =
+statement:
                  ";" |
         if_statement |
      while_statement |
@@ -25,34 +25,34 @@ statement =
      block_statement |
      return_statement;
 
-if_statement       = "if" & expression & block_statement & [{"else" & ["if"] & block_statement}];
-while_statement    = "while" & block_statement;
-break_statement    = "break";
-continue_statement = "continue";
-block_statement    = "{" & [{statement | (variable_declaration & ["=" & expression]) | expression}] &"}";
-return_statement   = "return" & [expression];
+if_statement      : 'if -> expression & block_statement & [{'else & ['if] & block_statement}];
+while_statement   : 'while -> block_statement;
+break_statement   : 'break;
+continue_statement: 'continue;
+block_statement   : "{" & [{statement | (variable_declaration & ["=" & expression]) | expression}] &"}";
+return_statement  : 'return -> [expression];
 
 
-type_expression = IDENTIFIER;
+type_expression: .Identifier;
 
-parameter = IDENTIFIER & ":" & type_expression;
+parameter: .Identifier & ":" & type_expression;
 
-function_signature = "(" & [parameter & {"," & parameter}] & ")" & ["->" & type_expression];
+function_signature: "(" & [parameter & {"," & parameter}] & ")" & ["->" & type_expression];
 
-function_definition = "fn" & IDENTIFIER & function_signature & block_statement;
+function_definition: 'fn -> .Identifier & function_signature & block_statement;
 
-variable_declaration = "var" & parameter;
+variable_declaration: 'var & parameter;
 
-struct_definition = "struct" & IDENTIFIER & "{" & [{}] & "}";
+struct_definition: 'struct -> .Identifier & "{" & [{}] & "}";
 
-enum_definition = "enum" & IDENTIFIER & "{" & [{}] &  "}";
+enum_definition: 'enum -> .Identifier & "{" & [{}] &  "}";
 
 
-operand = IDENTIFIER | INTEGER_LITERAL | FLOATING_LITERAL | LETTER_LITERAL | CHARACTER_LITERAL | STRING_LITERAL | ("(" & expression & ")");
+operand: .Identifier | .Integer | .Floating | .Character | .String | ("(" & expression & ")");
 
-unary_operator = "!" | "++" | "--" | "-" | "~" | "*" | "&";
+unary_operator: "!" | "++" | "--" | "-" | "~" | "*" | "&";
 
-binary_operator =
+binary_operator:
   "+=" | "+" |
   "-=" | "-" |
   "*=" | "*" |
@@ -65,15 +65,15 @@ binary_operator =
   "<<=" |"<<" | "<=" | "<" |
   ">>=" |">>" | ">=" | ">" ;
 
-access    = "." & IDENTIFIER;
-subscript = "[" & expression & "]";
-call      = "(" & [expression & [{"," & expression}]] & ")";
+access   : "." & .Identifier;
+subscript: "[" & expression & "]";
+call     : "(" & [expression & [{"," & expression}]] & ")";
 
-primary_operation = access | subscript | call;
+primary_operation: access | subscript | call;
 
-unary_operation = [{unary_operator}] & operand & [{primary_operation}];
+unary_operation: [{unary_operator}] & operand & [{primary_operation}];
 
-expression = unary_operation & [{binary_operator & unary_operation}];
+expression: unary_operation & [{binary_operator & unary_operation}];
 
 "##;
 
@@ -92,7 +92,7 @@ test()-> slen
 
 
 fn
-main()
+open_and_print_tokens()
 {
   let  args: Vec<String> = env::args().collect();
 
@@ -102,7 +102,7 @@ main()
 
         if let Ok(src) = crate::source_file::SourceFile::open(&arg)
         {
-//          println!("{} is opened",&arg);
+          println!("{} is opened",&arg);
 
             if let Ok(toks) = crate::token::tokenize::tokenize(&src)
             {
@@ -118,21 +118,25 @@ main()
             }
         }
     }
+}
 
 
-//  crate::ir::test::test_for();
-/*
-  let  dic_f = source_file::SourceFile::from(dic_s);
-  let  txt_f = source_file::SourceFile::from(txt_s);
+fn
+main()
+{
+  use crate::syntax::dictionary::{
+    Dictionary,
+  };
 
-  let  dic = syntax::dictionary::Dictionary::from(&dic_f);
-
-//  dic.print();
-
-    if let Ok(toks) = tokenizer::tokenize(&txt_f)
+    if let Ok(dic) = Dictionary::make_from_string(&dic_s)
     {
+      dic.print();
     }
-*/
+
+  else
+    {
+      println!("");
+    }
 }
 
 

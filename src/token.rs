@@ -414,51 +414,36 @@ print_token_string(toks: &Vec<Token>)
 }
 
 
-/*
-pub struct
-Cursor<'a>
-{
-  data: &'a TokenString,
-
-  base_index: usize,
-
-}
-
-
-impl<'a>
-Cursor<'a>
-{
 
 
 pub fn
-from(toks: &'a Vec<Token>)-> Self
+get_token(toks: &Vec<Token>, pos: usize)-> Option<&Token>
 {
-  Self{data: toks, base_index: 0}
+    if pos < toks.len()
+    {
+      return Some(&toks[pos]);
+    }
+
+
+  None
 }
 
 
 pub fn
-clone(&self)-> Self
+advance(pos: &mut usize)
 {
-  Self{data: self.data, base_index: self.base_index}
+  *pos += 1;
 }
 
 
 pub fn
-advance(&mut self)
+skip_spaces(toks: &Vec<Token>, pos: &mut usize)
 {
-  self.base_index += 1;
-}
-
-
-pub fn
-skip_spaces(&mut self)
-{
-    while let Some(tok) = self.get()
+    while let Some(tok) = get_token(toks,*pos)
     {
         if tok.is_space() || tok.is_newline()
         {
-          self.advance();
+          advance(pos);
         }
 
       else
@@ -470,38 +455,56 @@ skip_spaces(&mut self)
 
 
 pub fn
-is_finished(&self)-> bool
+strip_spaces(toks: Vec<Token>)-> Vec<Token>
 {
-  self.base_index >= self.data.len()
-}
+  let  mut buf: Vec<Token> = Vec::new();
 
-
-pub fn
-is_not_finished(&self)-> bool
-{
-  self.base_index < self.data.len()
-}
-
-
-pub fn
-get(&self)-> Option<&Token>
-{
-    if self.is_not_finished()
+    for tok in toks
     {
-      return Some(&self.data[self.base_index]);
+        if  !tok.is_space()
+         && !tok.is_newline()
+        {
+          buf.push(tok);
+        }
     }
 
-  else
-    {
-      return None;
-    }
+
+  buf
 }
 
 
 pub fn
-get_integer(&self)-> Option<u64>
+read_string_of_others(toks: &Vec<Token>, pos: &mut usize, s: &str)-> bool
 {
-    if let Some(tok) = self.get()
+  let  tmp = *pos;
+
+    for sc in s.chars()
+    {
+        if let Some(oc) = get_others(toks,*pos)
+        {
+            if sc == oc
+            {
+              advance(pos);
+
+              continue;
+            }
+        }
+
+
+      *pos = tmp;
+
+      return false;
+    }
+
+
+  true
+}
+
+
+pub fn
+get_integer(toks: &Vec<Token>, pos: usize)-> Option<u64>
+{
+    if let Some(tok) = get_token(toks,pos)
     {
       return tok.get_integer();
     }
@@ -512,9 +515,9 @@ get_integer(&self)-> Option<u64>
 
 
 pub fn
-get_floating(&self)-> Option<f64>
+get_floating(toks: &Vec<Token>, pos: usize)-> Option<f64>
 {
-    if let Some(tok) = self.get()
+    if let Some(tok) = get_token(toks,pos)
     {
       return tok.get_floating();
     }
@@ -525,9 +528,9 @@ get_floating(&self)-> Option<f64>
 
 
 pub fn
-get_identifier(&self)-> Option<&Rc<String>>
+get_identifier(toks: &Vec<Token>, pos: usize)-> Option<&Vec<char>>
 {
-    if let Some(tok) = self.get()
+    if let Some(tok) = get_token(toks,pos)
     {
       return tok.get_identifier();
     }
@@ -538,9 +541,9 @@ get_identifier(&self)-> Option<&Rc<String>>
 
 
 pub fn
-get_string(&self)-> Option<&Rc<String>>
+get_string(toks: &Vec<Token>, pos: usize)-> Option<&Vec<char>>
 {
-    if let Some(tok) = self.get()
+    if let Some(tok) = get_token(toks,pos)
     {
       return tok.get_string();
     }
@@ -551,9 +554,9 @@ get_string(&self)-> Option<&Rc<String>>
 
 
 pub fn
-get_character(&self)-> Option<char>
+get_character(toks: &Vec<Token>, pos: usize)-> Option<char>
 {
-    if let Some(tok) = self.get()
+    if let Some(tok) = get_token(toks,pos)
     {
       return tok.get_character();
     }
@@ -564,9 +567,9 @@ get_character(&self)-> Option<char>
 
 
 pub fn
-get_others(&self)-> Option<char>
+get_others(toks: &Vec<Token>, pos: usize)-> Option<char>
 {
-    if let Some(tok) = self.get()
+    if let Some(tok) = get_token(toks,pos)
     {
       return tok.get_others();
     }
@@ -577,9 +580,9 @@ get_others(&self)-> Option<char>
 
 
 pub fn
-is_space(&self)-> bool
+is_space(toks: &Vec<Token>, pos: usize)-> bool
 {
-    if let Some(tok) = self.get()
+    if let Some(tok) = get_token(toks,pos)
     {
       return tok.is_space();
     }
@@ -590,9 +593,9 @@ is_space(&self)-> bool
 
 
 pub fn
-is_newline(&self)-> bool
+is_newline(toks: &Vec<Token>, pos: usize)-> bool
 {
-    if let Some(tok) = self.get()
+    if let Some(tok) = get_token(toks,pos)
     {
       return tok.is_newline();
     }
@@ -601,9 +604,6 @@ is_newline(&self)-> bool
   false
 }
 
-
-}
-*/
 
 
 

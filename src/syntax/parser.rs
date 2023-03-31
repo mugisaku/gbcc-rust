@@ -3,18 +3,14 @@
 use crate::token::Token;
 use crate::token::TokenInfo;
 use crate::token::TokenData;
-use crate::syntax::dictionary::{
+use super::dictionary::{
   Definition,
   Dictionary,
   Expression,
   BinaryOperation,
   BinaryOperator,
-  PrimaryExpression,
+  Operand,
 };
-
-use std::rc::Rc;
-
-pub type TokenString = Vec<Token>;
 
 
 pub fn
@@ -36,7 +32,7 @@ print_indent(n: usize)
 pub struct
 Directory
 {
-  name: Rc<String>,
+  name: String,
 
   objects: Vec<Object>,
 
@@ -51,21 +47,21 @@ Directory
 pub fn
 new(name: &str)-> Directory
 {
-  Directory{ name: Rc::new(String::from(name)), objects: Vec::new()}
+  Directory{ name: String::from(name), objects: Vec::new()}
 }
 
 
 pub fn
 get_name(&self)-> &String
 {
-  &*self.name
+  &self.name
 }
 
 
 pub fn
 print(&self)
 {
-  print!("[{}] START\n",*self.name);
+  print!("[{}] START\n",&self.name);
 
     for o in &self.objects
     {
@@ -89,11 +85,11 @@ ObjectData
 
   Integer(u64),
   Floating(f64),
-  String(Rc<String>),
-  Identifier(Rc<String>),
+  String(String),
+  Identifier(String),
   Character(char),
 
-  Mark(Rc<String>),
+  Mark(String),
 
   Directory(Directory),
 
@@ -168,11 +164,11 @@ print(&self)
 
   ObjectData::Integer(i)=>{print!("{}",i);},
   ObjectData::Floating(f)=>{print!("{}",f);},
-  ObjectData::String(s)=>{print!("{}",*s);},
-  ObjectData::Identifier(s)=>{print!("{}",*s);},
+  ObjectData::String(s)=>{print!("{}",s);},
+  ObjectData::Identifier(s)=>{print!("{}",s);},
   ObjectData::Character(c)=>{print!("{}",c);},
 
-  ObjectData::Mark(s)=>{print!("{}",*s);},
+  ObjectData::Mark(s)=>{print!("{}",s);},
 
   ObjectData::Directory(d)=>
         {
@@ -254,13 +250,13 @@ get_mark(&self)-> Option<&str>
 
 
 pub fn
-get_identifier(&self)-> Option<&Rc<String>>
+get_identifier(&self)-> Option<&String>
 {
     if let Some(o) = self.get()
     {
-        if let ObjectData::Identifier(rcs) = &o.data
+        if let ObjectData::Identifier(s) = &o.data
         {
-          return Some(rcs);
+          return Some(s);
         }
     }
 
@@ -315,7 +311,7 @@ seek_directory(&mut self, name: &str)-> Option<&Directory>
     {
         if let ObjectData::Directory(d) = &objs[self.index].data
         {
-            if *d.name == name
+            if d.name == name
             {
               return Some(d);
             }
@@ -392,7 +388,7 @@ seek(toks: &Vec<Token>, i: usize)-> usize
 
 
 pub fn
-read_by_string(dic: &Dictionary, toks: &Vec<Token>, i: usize, s: &Rc<String>)-> Option<Packet>
+read_by_string(dic: &Dictionary, toks: &Vec<Token>, i: usize, s: &String)-> Option<Packet>
 {
   let mut  buf = new_char_string();
 
