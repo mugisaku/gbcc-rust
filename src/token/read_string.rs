@@ -15,9 +15,9 @@ use crate::source_file::{
 
 
 pub fn
-read_raw_string(src: &SourceFile, cur: &mut Cursor, n: usize)-> Result<Vec<char>,()>
+read_raw_string(src: &SourceFile, cur: &mut Cursor, n: usize)-> Result<String,()>
 {
-  let  mut s = new_char_string();
+  let  mut s = String::new();
 
     while let Some(c) = src.get_character(cur)
     {
@@ -237,9 +237,9 @@ read_character(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
 
 
 pub fn
-read_string(src: &SourceFile, cur: &mut Cursor)-> Result<Vec<char>,()>
+read_string(src: &SourceFile, cur: &mut Cursor)-> Result<String,()>
 {
-  let  mut s = new_char_string();
+  let  mut s = String::new();
 
     while let Some(c) = src.get_character(cur)
     {

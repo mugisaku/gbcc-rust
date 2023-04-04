@@ -77,11 +77,11 @@ read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: cha
         },
   '\''=>
         {
-            if let Some(id) = get_identifier(toks,*pos)
+            if let Some(s) = get_identifier(toks,*pos)
             {
               advance(pos);
 
-              return Ok(Operand::Keyword(id.clone()));
+              return Ok(Operand::Keyword(s.clone()));
             }
 
 
@@ -89,13 +89,11 @@ read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: cha
         },
   '.'=>
         {
-            if let Some(id) = get_identifier(toks,*pos)
+            if let Some(s) = get_identifier(toks,*pos)
             {
-              let  s = to_string(&id);
-
               advance(pos);
 
-              return to_literal_operand(&s);
+              return to_literal_operand(s.as_str());
             }
 
 
@@ -264,11 +262,9 @@ read_expression(toks: &Vec<Token>, pos: &mut usize, closer: char)-> Result<Expre
 pub fn
 read_definition(toks: &Vec<Token>, pos: &mut usize)-> Option<Definition>
 {
-    if let Some(id) = get_identifier(toks,*pos)
+    if let Some(s) = get_identifier(toks,*pos)
     {
-      let  s = to_string(&id);
-
-      let  mut def = Definition::new(&s);
+      let  mut def = Definition::new(s.as_str());
 
       advance(pos);
 

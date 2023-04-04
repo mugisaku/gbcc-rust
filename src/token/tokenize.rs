@@ -4,7 +4,7 @@ use super::{
   TokenInfo,
   TokenData,
   Token,
-  print_char_string,
+  print_string,
 };
 
 
@@ -75,7 +75,7 @@ get_character(&self)-> Option<char>
 
 
 pub fn
-read_identifier(src: &SourceFile, cur: &mut Cursor, s: &mut Vec<char>)
+read_identifier(src: &SourceFile, cur: &mut Cursor, s: &mut String)
 {
     while let Some(c) = src.get_character(cur)
     {
@@ -97,7 +97,7 @@ read_identifier(src: &SourceFile, cur: &mut Cursor, s: &mut Vec<char>)
 pub fn
 read_data_that_begins_from_id_head(&mut self, first_c: char)-> Result<(),()>
 {
-  let  mut s = new_char_string();
+  let  mut s = String::new();
 
     if first_c == 'r'
     {
@@ -150,7 +150,7 @@ read_data_that_begins_from_id_head(&mut self, first_c: char)-> Result<(),()>
 pub fn
 read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),()>
 {
-  let  mut s = new_char_string();
+  let  mut s = String::new();
 
   s.push(c);
 
@@ -515,6 +515,15 @@ tokenize(src: &SourceFile)-> Result<TokenString,()>
 
 
   Ok(toks)
+}
+
+
+pub fn
+tokenize_from_string(s: &str)-> Result<TokenString,()>
+{
+  let  src = SourceFile::from(s);
+
+  return tokenize(&src);
 }
 
 

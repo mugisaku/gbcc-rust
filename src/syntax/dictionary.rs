@@ -1,7 +1,6 @@
 
 
-use crate::source_file::to_string;
-use crate::token::print_char_string;
+use crate::token::print_string;
 
 
 pub enum
@@ -11,9 +10,9 @@ Operand
   Option(    Box<Expression>),
   Repetition(Box<Expression>),
 
-  Identifier(Vec<char>),
-  Keyword(Vec<char>),
-  String(Vec<char>),
+  Identifier(String),
+  Keyword(String),
+  String(String),
 
   IdentifierLiteral,
   IntegerLiteral,
@@ -37,13 +36,11 @@ test(&self, dic: &Dictionary)-> Result<(),()>
   Operand::One(e)=>      {e.test(dic)},
   Operand::Option(e)=>   {e.test(dic)},
   Operand::Repetition(e)=>{e.test(dic)},
-  Operand::Identifier(id)=>
+  Operand::Identifier(s)=>
         {
-          let  s = to_string(id);
-
-            if let None = dic.find(&s)
+            if let None = dic.find(s)
             {
-              print!("definition <{}> not found.\n",&s);
+              print!("definition <{}> not found.\n",s);
 
               return Err(());
             }
@@ -85,16 +82,16 @@ print(&self)
           e.print();
           print!("{}","}");
         },
-  Operand::Identifier(s)=>{print_char_string(s);},
+  Operand::Identifier(s)=>{print_string(s);},
   Operand::Keyword(s)=>
         {
           print!("\'");
-          print_char_string(s);
+          print_string(s);
         },
   Operand::String(s)=>
         {
           print!("\"");
-          print_char_string(s);
+          print_string(s);
           print!("\"");
         },
   Operand::IdentifierLiteral=>{print!(".Identifier");},
@@ -333,9 +330,9 @@ print(&self)
 pub struct
 Definition
 {
-  name: String,
+  pub(crate) name: String,
 
-  expression: Expression,
+  pub(crate) expression: Expression,
 
 }
 
@@ -392,7 +389,7 @@ print(&self)
 pub struct
 Dictionary
 {
-  definition_list: Vec<Definition>,
+  pub(crate) definition_list: Vec<Definition>,
 
 }
 
@@ -406,19 +403,6 @@ pub fn
 new()-> Dictionary
 {
   Dictionary{definition_list: Vec::new()}
-}
-
-
-pub fn
-make_from_file(filepath: &str)-> Result<Dictionary,()>
-{
-    if let Ok(src) = crate::source_file::SourceFile::open(filepath)
-    {
-      return super::read_dictionary::read_dictionary(&src);
-    }
-
-
-  Err(())
 }
 
 

@@ -8,7 +8,7 @@ mod debug;
 use std::env;
 
 
-static dic_s: &'static str =
+static DIC_S: &'static str =
 r##"
 top_element:
   function_definition |
@@ -78,7 +78,7 @@ expression: unary_operation & [{binary_operator & unary_operation}];
 "##;
 
 
-static txt_s: &'static str =
+static TXT_S: &'static str =
 r"
 
 fn
@@ -124,13 +124,25 @@ open_and_print_tokens()
 fn
 main()
 {
+  use crate::syntax::parse::{
+    parse_from_string,
+  };
+
   use crate::syntax::dictionary::{
     Dictionary,
   };
 
-    if let Ok(dic) = Dictionary::make_from_string(&dic_s)
+
+    if let Ok(dic) = Dictionary::make_from_string(&DIC_S)
     {
       dic.print();
+
+        if let Ok(dir) = parse_from_string(TXT_S,&dic)
+        {
+          println!("**\n");
+
+          dir.print(0);
+        }
     }
 
   else

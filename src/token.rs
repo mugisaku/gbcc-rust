@@ -85,11 +85,11 @@ print_character(c: char)
 
 
 pub fn
-print_char_string(s: &Vec<char>)
+print_string(s: &str)
 {
-    for c in s
+    for c in s.chars()
     {
-      print_character(*c);
+      print_character(c);
     }
 }
 
@@ -101,8 +101,8 @@ TokenData
 {
   Space,
   Newline,
-  Identifier(Vec<char>),
-  String(Vec<char>),
+  Identifier(String),
+  String(String),
   Character(char),
   Integer(u64),
   Floating(f64),
@@ -131,12 +131,12 @@ print(&self)
       },
   TokenData::Identifier(s)=>
       {
-        print_char_string(&*s);
+        print_string(s);
       },
   TokenData::String(s)=>
       {
         print!("\"");
-        print_char_string(&*s);
+        print_string(s);
         print!("\"");
       },
   TokenData::Character(c)=>
@@ -233,7 +233,7 @@ is_newline(&self)-> bool
 
 
 pub fn
-get_identifier(&self)-> Option<&Vec<char>>
+get_identifier(&self)-> Option<&String>
 {
     if let TokenData::Identifier(s) = &self.data
     {
@@ -246,7 +246,7 @@ get_identifier(&self)-> Option<&Vec<char>>
 
 
 pub fn
-get_string(&self)-> Option<&Vec<char>>
+get_string(&self)-> Option<&String>
 {
     if let TokenData::String(s) = &self.data
     {
@@ -327,17 +327,12 @@ print(&self)
       },
   TokenData::Identifier(s)=>
       {
-        print!("Identifier: ");
-
-          for c in s
-          {
-            print!("{}",c);
-          }
+        print!("Identifier: {}",s);
       },
   TokenData::String(s)=>
       {
         print!("String: \"");
-        print_char_string(&*s);
+        print_string(s);
         print!("\"");
       },
   TokenData::Character(c)=>
@@ -381,11 +376,11 @@ restore_token_string(toks: &Vec<Token>)
         {
       TokenData::Space=>         {print!(" ");},
       TokenData::Newline=>       {print!("\n");},
-      TokenData::Identifier(s)=> {print_char_string(&s);},
+      TokenData::Identifier(s)=> {print_string(s);},
       TokenData::String(s)=>
             {
               print!("\"");
-              print_char_string(&s);
+              print_string(s);
               print!("\"");
             },
       TokenData::Character(c)=>
@@ -528,7 +523,7 @@ get_floating(toks: &Vec<Token>, pos: usize)-> Option<f64>
 
 
 pub fn
-get_identifier(toks: &Vec<Token>, pos: usize)-> Option<&Vec<char>>
+get_identifier(toks: &Vec<Token>, pos: usize)-> Option<&String>
 {
     if let Some(tok) = get_token(toks,pos)
     {
@@ -541,7 +536,7 @@ get_identifier(toks: &Vec<Token>, pos: usize)-> Option<&Vec<char>>
 
 
 pub fn
-get_string(toks: &Vec<Token>, pos: usize)-> Option<&Vec<char>>
+get_string(toks: &Vec<Token>, pos: usize)-> Option<&String>
 {
     if let Some(tok) = get_token(toks,pos)
     {
