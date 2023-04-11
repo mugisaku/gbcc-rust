@@ -43,6 +43,8 @@ Status<'a,'b>
 
   position: usize,
 
+  depth: usize,
+
   interruption: bool,
 
 }
@@ -74,7 +76,7 @@ read_by_string(&mut self, s: &str)-> Option<Vec<Object>>
 
     if read_string_of_others(&self.token_string,&mut self.position,s)
     {
-      let  o = Object{token_info: self.token_string[old_pos].get_info().clone(), data: ObjectData::OthersString(String::from(s))};
+      let  o = Object{token_info: Some(self.token_string[old_pos].get_info().clone()), data: ObjectData::OthersString(String::from(s))};
 
       return Some(vec![o]);
     }
@@ -149,7 +151,7 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
             {
                 if kw == id
                 {
-                  let  o = Object{token_info: self.get_token_info(), data: ObjectData::Keyword(kw.clone())};
+                  let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Keyword(kw.clone())};
 
                   self.position += 1;
 
@@ -161,7 +163,7 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         {
             if let Some(s) = get_identifier(&self.token_string,self.position)
             {
-              let  o = Object{token_info: self.get_token_info(), data: ObjectData::Identifier(s.clone())};
+              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Identifier(s.clone())};
 
               self.advance();
 
@@ -172,7 +174,7 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         {
             if let Some(i) = get_integer(&self.token_string,self.position)
             {
-              let  o = Object{token_info: self.get_token_info(), data: ObjectData::Integer(i)};
+              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Integer(i)};
 
               self.advance();
 
@@ -183,7 +185,7 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         {
             if let Some(f) = get_floating(&self.token_string,self.position)
             {
-              let  o = Object{token_info: self.get_token_info(), data: ObjectData::Floating(f)};
+              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Floating(f)};
 
               self.advance();
 
@@ -194,7 +196,7 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         {
             if let Some(c) = get_character(&self.token_string,self.position)
             {
-              let  o = Object{token_info: self.get_token_info(), data: ObjectData::Character(c)};
+              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Character(c)};
 
               self.advance();
 
@@ -205,7 +207,7 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         {
             if let Some(s) = get_string(&self.token_string,self.position)
             {
-              let  o = Object{token_info: self.get_token_info(), data: ObjectData::String(s.clone())};
+              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::String(s.clone())};
 
               self.advance();
 
@@ -331,7 +333,7 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
         {
           let  dir = Directory{ name: def.name.clone(), object_list: objs};
 
-          let  obj = Object{ token_info: tok.get_info().clone(), data: ObjectData::Directory(dir)};
+          let  obj = Object{ token_info: None, data: ObjectData::Directory(dir)};
 
           return Some(vec![obj]);
         }
@@ -350,7 +352,21 @@ read_by_name(&mut self, name: &str)-> Option<Vec<Object>>
 {
     if let Some(def) = self.dictionary.find(name)
     {
-      return self.read_by_definition(def);
+        if self.depth >= 800
+        {
+          println!("read_by_name: depth limit is over");
+
+          return None;
+        }
+
+
+      self.depth += 1;
+
+      let  res = self.read_by_definition(def);
+
+      self.depth -= 1;
+
+      return res;
     }
 
 
@@ -368,11 +384,11 @@ parse(toks: &Vec<Token>, dic: &Dictionary)-> Result<Directory,()>
 {
   let  mut dir = Directory::new("/");
 
-    if let Some(first) = dic.get_first() 
+    if let Some(main_def) = dic.get_main() 
     {
-      let  mut st = Status{dictionary: dic, token_string: toks, position: 0, interruption: false};
+      let  mut st = Status{dictionary: dic, token_string: toks, position: 0, depth: 0, interruption: false};
 
-        while let Some(mut objs) = st.read_by_definition(first)
+        while let Some(mut objs) = st.read_by_definition(main_def)
         {
           dir.object_list.append(&mut objs);
         }
@@ -396,6 +412,7 @@ parse_from_string(s: &str, dic: &Dictionary)-> Result<Directory,()>
 {
     if let Ok(toks) = tokenize_from_string(s)
     {
+//crate::token::print_token_string(&toks);
       let  stripped = strip_spaces(toks);
 
       return parse(&stripped,dic);

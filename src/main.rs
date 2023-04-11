@@ -1,7 +1,7 @@
 mod token;
 mod source_file;
 mod syntax;
-//mod language;
+mod language;
 //mod ir;
 mod debug;
 
@@ -47,33 +47,6 @@ struct_definition: 'struct -> .Identifier & "{" & [{}] & "}";
 
 enum_definition: 'enum -> .Identifier & "{" & [{}] &  "}";
 
-
-operand: .Identifier | .Integer | .Floating | .Character | .String | ("(" & expression & ")");
-
-unary_operator: "!" | "++" | "--" | "-" | "~" | "*" | "&";
-
-binary_operator:
-  "+=" | "+" |
-  "-=" | "-" |
-  "*=" | "*" |
-  "/=" | "/" |
-  "%=" | "%" |
-  "==" | "!=" | "=" |
-  "||" | "|=" | "|" |
-  "&&" | "&=" | "&" |
-  "^=" | "^" |
-  "<<=" |"<<" | "<=" | "<" |
-  ">>=" |">>" | ">=" | ">" ;
-
-access   : "." & .Identifier;
-subscript: "[" & expression & "]";
-call     : "(" & [expression & [{"," & expression}]] & ")";
-
-primary_operation: access | subscript | call;
-
-unary_operation: [{unary_operator}] & operand & [{primary_operation}];
-
-expression: unary_operation & [{binary_operator & unary_operation}];
 
 "##;
 
@@ -124,30 +97,19 @@ open_and_print_tokens()
 fn
 main()
 {
-  use crate::syntax::parse::{
-    parse_from_string,
-  };
+  use crate::language::expression::Expression;
 
-  use crate::syntax::dictionary::{
-    Dictionary,
-  };
-
-
-    if let Ok(dic) = Dictionary::make_from_string(&DIC_S)
+    if let Ok(e) = Expression::make_from_string("1+2+3 == 5")
     {
-      dic.print();
+      e.print();
 
-        if let Ok(dir) = parse_from_string(TXT_S,&dic)
-        {
-          println!("**\n");
+      let  v = e.to_value();
 
-          dir.print(0);
-        }
-    }
+      print!(" = ");
 
-  else
-    {
-      println!("");
+      v.print();
+
+      print!("\n");
     }
 }
 

@@ -1,787 +1,53 @@
 
 
-use crate::syntax::parser::Directory;
-use crate::syntax::parser::ObjectData;
-use crate::syntax::parser::Cursor;
-use super::typesystem::TypeInfo;
-use super::element::*;
 
 
+use super::value::Value;
 
+use super::operate::{
+  operate_prefix_constant,
+  operate_postfix_constant,
+  operate_binary_constant,
+};
 
-pub struct
-Source
-{
-  elements: Vec<Element>,
 
-}
-
-
-impl
-Source
-{
-
-
-pub fn
-from(dir: &Directory)-> Source
-{
-  let  mut src = Source{ elements: Vec::new()};
-
-  src.read_expression(dir);
-
-  src
-}
-
-
-pub fn
-push_operand(&mut self, o: Operand)
-{
-  self.elements.push(Element::Operand(o));
-}
-
-
-pub fn
-push_unary_operator(&mut self, o: UnaryOperator)
-{
-  self.elements.push(Element::Operator(Operator::Unary(o)));
-}
-
-
-pub fn
-push_binary_operator(&mut self, o: BinaryOperator)
-{
-  self.elements.push(Element::Operator(Operator::Binary(o)));
-}
-
-
-pub fn
-push_assign_operator(&mut self, o: AssignOperator)
-{
-  self.elements.push(Element::Operator(Operator::Assign(o)));
-}
-
-
-pub fn
-push_primary_operator(&mut self, o: PrimaryOperator)
-{
-  self.elements.push(Element::Operator(Operator::Primary(o)));
-}
-
-
-pub fn
-read_expression(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-    if let Some(dir) = cur.seek_directory("unary_operation")
-    {
-        if self.read_unary_operation(dir).is_ok()
-        {
-            while cur.advance(1)
-            {
-                if let Some(dir) = cur.get_directory_with_name("binary_operator")
-                {
-                    if self.read_binary_operator(dir).is_ok()
-                    {
-                      cur.advance(1);
-
-                        if let Some(dir) = cur.seek_directory("unary_operation")
-                        {
-                            if self.read_unary_operation(dir).is_err()
-                            {
-                              return Err(());
-                            }
-                        }
-                    }
-
-                  else
-                    {
-                      return Err(());
-                    }
-                }
-            }
-
-
-          return Ok(());
-        }
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_unary_operation(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-    while let Some(dir) = cur.get_directory_with_name("unary_operator")
-    {
-        if self.read_unary_operator(dir).is_ok()
-        {
-          cur.advance(1);
-        }
-
-      else
-        {
-          return Err(());
-        }
-    }
-
-
-    if let Some(dir) = cur.seek_directory("operand")
-    {
-        if self.read_operand(dir).is_ok()
-        {
-          cur.advance(1);
-
-            while let Some(dir) = cur.get_directory_with_name("primary_operation")
-            {
-                if self.read_primary_operator(dir).is_ok()
-                {
-                  cur.advance(1);
-                }
-
-              else
-                {
-                  return Err(());
-                }
-            }
-        }
-
-      else
-        {
-          return Err(());
-        }
-    }
-
-  else
-    {
-      return Err(());
-    }
-
-
-  Ok(())
-}
-
-
-pub fn
-read_unary_operator(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-    if let Some(s) = cur.get_mark()
-    {
-           if s == "~"{self.push_unary_operator(UnaryOperator::Not);}
-      else if s == "!"{self.push_unary_operator(UnaryOperator::LogicalNot);}
-      else if s == "-"{self.push_unary_operator(UnaryOperator::Neg);}
-      else if s == "*"{self.push_unary_operator(UnaryOperator::Dereference);}
-      else if s == "&"{self.push_unary_operator(UnaryOperator::Address);}
-      else
-        {
-          return Err(());
-        }
-
-      return Ok(());
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_binary_operator(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-    if let Some(s) = cur.get_mark()
-    {
-           if s ==  "+"{self.push_binary_operator(BinaryOperator::Add);}
-      else if s ==  "-"{self.push_binary_operator(BinaryOperator::Sub);}
-      else if s ==  "*"{self.push_binary_operator(BinaryOperator::Mul);}
-      else if s ==  "/"{self.push_binary_operator(BinaryOperator::Div);}
-      else if s ==  "%"{self.push_binary_operator(BinaryOperator::Rem);}
-      else if s == "<<"{self.push_binary_operator(BinaryOperator::Shl);}
-      else if s == ">>"{self.push_binary_operator(BinaryOperator::Shr);}
-      else if s ==  "&"{self.push_binary_operator(BinaryOperator::And);}
-      else if s ==  "|"{self.push_binary_operator(BinaryOperator::Or);}
-      else if s ==  "^"{self.push_binary_operator(BinaryOperator::Xor);}
-      else if s == "=="{self.push_binary_operator(BinaryOperator::Eq);}
-      else if s == "!="{self.push_binary_operator(BinaryOperator::Neq);}
-      else if s ==  "<"{self.push_binary_operator(BinaryOperator::Lt);}
-      else if s == "<="{self.push_binary_operator(BinaryOperator::Lteq);}
-      else if s ==  ">"{self.push_binary_operator(BinaryOperator::Gt);}
-      else if s == ">="{self.push_binary_operator(BinaryOperator::Gteq);}
-      else if s == "&&"{self.push_binary_operator(BinaryOperator::LogicalAnd);}
-      else if s == "||"{self.push_binary_operator(BinaryOperator::LogicalOr);}
-      else if s ==   "="{self.push_assign_operator(AssignOperator::Assign);}
-      else if s ==  "+="{self.push_assign_operator(AssignOperator::AddAssign);}
-      else if s ==  "-="{self.push_assign_operator(AssignOperator::SubAssign);}
-      else if s ==  "*="{self.push_assign_operator(AssignOperator::MulAssign);}
-      else if s ==  "/="{self.push_assign_operator(AssignOperator::DivAssign);}
-      else if s ==  "%="{self.push_assign_operator(AssignOperator::RemAssign);}
-      else if s == "<<="{self.push_assign_operator(AssignOperator::ShlAssign);}
-      else if s == ">>="{self.push_assign_operator(AssignOperator::ShrAssign);}
-      else if s ==  "&="{self.push_assign_operator(AssignOperator::AndAssign);}
-      else if s ==  "|="{self.push_assign_operator(AssignOperator::OrAssign);}
-      else if s ==  "^="{self.push_assign_operator(AssignOperator::XorAssign);}
-      else
-        {
-          return Err(());
-        }
-
-      return Ok(());
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_primary_operator(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-    if let Some(codir) = cur.get_directory()
-    {
-      let  name = codir.get_name();
-
-           if name == "access"   {self.read_access(&codir);}
-      else if name == "subscript"{self.read_subscript(&codir);}
-      else if name == "call"     {self.read_call(&codir);}
-      else
-        {
-          return Err(());
-        }
-
-      return Ok(());
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_access(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-  cur.advance(1);
-
-    if let Some(o) = cur.get()
-    {
-        if let ObjectData::Identifier(s) = o.get_data()
-        {
-          let  po = PrimaryOperator::Access(s.clone());
-
-          self.push_primary_operator(po);
-
-          return Ok(());
-        }
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_subscript(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-  cur.advance(1);
-
-    if let Some(edir) = cur.get_directory_with_name("expression")
-    {
-        if let Ok(e) = Expression::build(&edir)
-        {
-          let  po = PrimaryOperator::Subscript(e);
-
-          self.push_primary_operator(po);
-
-          return Ok(());
-        }
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_call(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-  cur.advance(1);
-
-  let mut  args: Vec<Expression> = Vec::new();
-
-    if let Some(edir) = cur.get_directory_with_name("expression")
-    {
-        if let Ok(e) = Expression::build(&edir)
-        {
-          args.push(e);
-        }
-
-      else
-        {
-          return Err(());
-        }
-
-
-        while cur.advance(2)
-        {
-            if let Some(eedir) = cur.get_directory_with_name("expression")
-            {
-                if let Ok(e) = Expression::build(&eedir)
-                {
-                  args.push(e);
-                }
-
-              else
-                {
-                  return Err(());
-                }
-            }
-
-          else
-            {
-              return Err(());
-            }
-        }
-    }
-
-  else
-    {
-      return Err(());
-    }
-
-
-  let  po = PrimaryOperator::Call(args);
-
-  self.push_primary_operator(po);
-
-  Ok(())
-}
-
-
-pub fn
-read_operand(&mut self, dir: &Directory)-> Result<(),()>
-{
-  let mut  cur = Cursor::from(dir);
-
-    if let Some(o) = cur.get()
-    {
-        match o.get_data()
-        {
-      ObjectData::Integer(i)=>   {  self.push_operand(Operand::Integer(*i));  return Ok(());},
-      ObjectData::Floating(f)=>  {  self.push_operand(Operand::Floating(*f));  return Ok(());},
-      ObjectData::Character(c)=> {  self.push_operand(Operand::Character(*c));  return Ok(());},
-      ObjectData::String(s)=>    {  self.push_operand(Operand::String(s.clone()));  return Ok(());},
-      ObjectData::Identifier(s)=>{  self.push_operand(Operand::Identifier(s.clone()));  return Ok(());},
-      ObjectData::Mark(s)=>
-          {
-              if **s == "("
-              {
-                cur.advance(1);
-
-                  if let Some(edir) = cur.get_directory_with_name("expression")
-                  {
-                      if let Ok(e) = Expression::build(&edir)
-                      {
-                        self.push_operand(Operand::Expression(e));
-
-                        return Ok(());
-                      }
-                  }
-              }
-          },
-      _=>{},
-        }
-    }
-
-
-  Err(())
-}
-
-
-
-
-pub fn
-print(&self)
-{
-    for e in &self.elements
-    {
-      e.print();
-    }
-}
-
-
-}
-
-
-
-
-pub struct
-PostfixNotation
-{
-  elements: Vec<Element>,
-
-}
-
-
-impl
-PostfixNotation
-{
-
-
-pub fn
-from(src: Source)-> PostfixNotation
-{
-  let mut  pn = PostfixNotation{ elements: Vec::new()};
-
-  let mut  stack: Vec<Element> = Vec::new();
-
-  let mut  assigned = false;
-
-    for e in src.elements
-    {
-      pn.push_element(e,&mut assigned,&mut stack);
-    }
-
-
-    while let Some(e) = stack.pop()
-    {
-      pn.elements.push(e);
-    }
-
-
-  pn
-}
-
-
-pub fn
-push_operator_element(&mut self, e: Element, stack: &mut Vec<Element>)
-{
-  let  pr = if let Element::Operator(o) = &e
-            {
-              o.get_priority()
-            }
-
-          else{0};
-
-
-    while let Some(last_e) = stack.last()
-    {
-        if let Element::Operator(last_o) = last_e
-        {
-            if last_o.get_priority() >= pr
-            {
-                if let Some(popped) = stack.pop()
-                {
-                  self.elements.push(popped);
-                }
-            }
-
-          else
-            {
-              break;
-            }
-        }
-
-      else
-        {
-          break;
-        }
-    }
-
-
-  stack.push(e);
-}
-
-
-pub fn
-push_element(&mut self, e: Element, assigned: &mut bool, stack: &mut Vec<Element>)
-{
-    if let Element::Operand(_) = e
-    {
-      self.elements.push(e);
-    }
-
-  else
-    {
-        if let Element::Operator(o) = &e
-        {
-            if let Operator::Assign(_) = o
-            {
-                if !*assigned
-                {
-                  *assigned = true;
-                }
-
-              else
-                {
-                  print!("do not multiple assign in one expression.");
-                }
-            }
-        }
-
-
-      self.push_operator_element(e,stack);
-    }
-}
-
-
-}
-
-
-
-
-pub struct
-UnaryOperation
-{
-  operator: UnaryOperator,
-
-  operand: Expression,
-
-}
-
-
-impl
-UnaryOperation
-{
-
-
-pub fn  get_operator(&self)-> &UnaryOperator{&self.operator}
-pub fn   get_operand(&self)-> &Expression{&self.operand}
-
-
-}
-
-
-
-
-pub struct
-BinaryOperation
-{
-  operator: BinaryOperator,
-
-   left_operand: Expression,
-  right_operand: Expression,
-
-}
-
-
-impl
-BinaryOperation
-{
-
-
-pub fn  get_operator(&self)-> &BinaryOperator{&self.operator}
-pub fn   get_left_operand(&self)-> &Expression{&self.left_operand}
-pub fn   get_right_operand(&self)-> &Expression{&self.right_operand}
-
-
-}
-
-
-
-
-pub struct
-PrimaryOperation
-{
-  operator: PrimaryOperator,
-
-  operand: Expression,
-
-}
-
-
-impl
-PrimaryOperation
-{
-
-
-pub fn  get_operator(&self)-> &PrimaryOperator{&self.operator}
-pub fn   get_operand(&self)-> &Expression{&self.operand}
-
-
-}
-
-
-pub struct
-AssignOperation
-{
-  operator: AssignOperator,
-
-   left_operand: Expression,
-  right_operand: Expression,
-
-}
-
-
-impl
-AssignOperation
-{
-
-
-pub fn  get_operator(&self)-> &AssignOperator{&self.operator}
-pub fn   get_left_operand(&self)-> &Expression{&self.left_operand}
-pub fn   get_right_operand(&self)-> &Expression{&self.right_operand}
-
-
-}
 
 
 pub enum
-Expression
+OperandCore
 {
-  Empty,
-  Operand(Box<Operand>),
-  Unary(Box<UnaryOperation>),
-  Binary(Box<BinaryOperation>),
-  Primary(Box<PrimaryOperation>),
-  Assign(Box<AssignOperation>),
+  Identifier(String),
+  Integer(u64),
+  Floating(f64),
+  Character(char),
+  String(String),
+  Expression(Box<Expression>),
 
 }
 
 
 impl
-Expression
+OperandCore
 {
 
 
 pub fn
-combine(buf: &mut Vec<Expression>, o: Operator)-> Result<(),&str>
+to_value(&self)-> Value
 {
-    match o
+    match self
     {
-  Operator::Unary(u)=>
+  OperandCore::Identifier(s)=>
         {
-            if let Some(operand) = buf.pop()
-            {
-              let  unop = Box::new(UnaryOperation{ operator: u, operand});
-
-              buf.push(Expression::Unary(unop));
-
-              return Ok(());
-            }
-
-
-          return Err("no operand for unary operation");
+               if *s == "false"{return Value::Bool(false);}
+          else if *s ==  "true"{return Value::Bool(true);}
+          else if *s ==  "undefined"{return Value::Undefined;}
+          else {return Value::Undefined;}
         },
-  Operator::Binary(b)=>
-        {
-            if let Some(right) = buf.pop()
-            {
-                if let Some(left) = buf.pop()
-                {
-                  let  binop = Box::new(BinaryOperation{ operator: b, left_operand: left, right_operand: right});
-
-                  buf.push(Expression::Binary(binop));
-
-                  return Ok(());
-                }
-
-
-              return Err("no left operand for binary operation");
-            }
-
-
-          return Err("no right operand for binary operation");
-        },
-  Operator::Primary(p)=>
-        {
-            if let Some(operand) = buf.pop()
-            {
-              let  priop = Box::new(PrimaryOperation{ operator: p, operand});
-
-              buf.push(Expression::Primary(priop));
-
-              return Ok(());
-            }
-
-
-          return Err("no operand for primary operation");
-        },
-  Operator::Assign(a)=>
-        {
-            if let Some(right) = buf.pop()
-            {
-                if let Some(left) = buf.pop()
-                {
-                  let  assop = Box::new(AssignOperation{ operator: a, left_operand: left, right_operand: right});
-
-                  buf.push(Expression::Assign(assop));
-
-                  return Ok(());
-                }
-
-
-              return Err("no left operand for binary operation");
-            }
-
-
-          return Err("no right operand for binary operation");
-        },
+  OperandCore::Integer(u)=>{if *u <= (i64::MAX as u64){Value::I64(*u as i64)} else{Value::U64(*u)}},
+  OperandCore::Floating(f)=>{Value::F64(*f)},
+  OperandCore::Expression(e)=>{e.to_value()},
+  _=>{Value::Undefined},
     }
-}
-
-
-pub fn
-build(dir: &Directory)-> Result<Expression,()>
-{
-  let  src = Source::from(dir);
-
-  let mut  pnt = PostfixNotation::from(src);
-
-  let mut  buf: Vec<Expression> = Vec::new();
-
-    for e in pnt.elements
-    {
-        match e
-        {
-      Element::Operator(o)=>
-            {
-                if let Err(s) = Self::combine(&mut buf,o)
-                {
-                  print!("{}",s);
-
-                  return Err(());
-                }
-            },
-      Element::Operand(o)=>
-            {
-              buf.push(Expression::Operand(Box::new(o)));
-            },
-        }
-    }
-
-
-  let  l = buf.len();
-
-    if l == 0
-    {
-      return Err(());
-    }
-
-  else
-    if l == 1
-    {
-        if let Some(e) = buf.pop()
-        {
-          return Ok(e);
-        }
-    }
-
-
-  Err(())
 }
 
 
@@ -790,36 +56,404 @@ print(&self)
 {
     match self
     {
-  Expression::Empty=>{print!("");},
-  Expression::Operand(o)=>{o.print();},
-  Expression::Unary(u)=>
+  OperandCore::Identifier(s)=>{print!("{}",s);},
+  OperandCore::Integer(u)=>{print!("{}",u);},
+  OperandCore::Floating(f)=>{print!("{}",f);},
+  OperandCore::Character(c)=>{print!("{}",c);},
+  OperandCore::String(s)=>{print!("\"{}\"",s);},
+  OperandCore::Expression(e)=>
         {
-          u.operator.print();
-
-          u.operand.print();
+          print!("(");
+          e.print();
+          print!(")");
         },
-  Expression::Binary(b)=>
+    }
+}
+
+
+}
+
+
+
+
+pub enum
+PostfixOperator
+{
+  Access(String),
+  Subscript(Box<Expression>),
+  Call(Vec<Expression>),
+  Increment,
+  Decrement,
+
+}
+
+
+impl
+PostfixOperator
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  PostfixOperator::Access(s)=>{print!(".{}",s);},
+  PostfixOperator::Subscript(o)=>
         {
-          b.left_operand.print();
-
-          b.operator.print();
-
-          b.right_operand.print();
+          print!("[");
+          o.print();
+          print!("]");
         },
-  Expression::Primary(p)=>
+  PostfixOperator::Call(args)=>
         {
-          p.operand.print();
+          print!("(");
 
-          p.operator.print();
+            for o in args
+            {
+              o.print();
+
+              print!(", ");
+            }
+
+          print!(")");
         },
-  Expression::Assign(a)=>
+  PostfixOperator::Increment=>{print!("++");},
+  PostfixOperator::Decrement=>{print!("--");},
+    }
+}
+
+
+}
+
+
+
+
+pub enum
+PrefixOperator
+{
+  Neg,
+  Not,
+  Address,
+  Dereference,
+  LogicalNot,
+  Increment,
+  Decrement,
+
+}
+
+
+impl
+PrefixOperator
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  PrefixOperator::Neg=>{print!("-");},
+  PrefixOperator::Not=>{print!("~");},
+  PrefixOperator::Address=>{print!("&");},
+  PrefixOperator::Dereference=>{print!("*");},
+  PrefixOperator::LogicalNot=>{print!("!");},
+  PrefixOperator::Increment=>{print!("++");},
+  PrefixOperator::Decrement=>{print!("--");},
+    }
+}
+
+
+}
+
+
+pub enum
+BinaryOperator
+{
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Rem,
+  Shl,
+  Shr,
+  And,
+  Or,
+  Xor,
+  Eq,
+  Neq,
+  Lt,
+  Lteq,
+  Gt,
+  Gteq,
+  LogicalOr,
+  LogicalAnd,
+
+  Assign,
+  AddAssign,
+  SubAssign,
+  MulAssign,
+  DivAssign,
+  RemAssign,
+  ShlAssign,
+  ShrAssign,
+  AndAssign,
+  OrAssign,
+  XorAssign,
+
+}
+
+
+impl
+BinaryOperator
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  BinaryOperator::Add=>{print!("+");},
+  BinaryOperator::Sub=>{print!("-");},
+  BinaryOperator::Mul=>{print!("*");},
+  BinaryOperator::Div=>{print!("/");},
+  BinaryOperator::Rem=>{print!("%");},
+  BinaryOperator::Shl=>{print!("<<");},
+  BinaryOperator::Shr=>{print!(">>");},
+  BinaryOperator::And=>{print!("&");},
+  BinaryOperator::Or=>{print!("|");},
+  BinaryOperator::Xor=>{print!("^");},
+  BinaryOperator::Eq=>{print!("==");},
+  BinaryOperator::Neq=>{print!("!=");},
+  BinaryOperator::Lt=>{print!("<");},
+  BinaryOperator::Lteq=>{print!("<=");},
+  BinaryOperator::Gt=>{print!(">");},
+  BinaryOperator::Gteq=>{print!(">=");},
+  BinaryOperator::LogicalAnd=>{print!("&&");},
+  BinaryOperator::LogicalOr=>{print!("||");},
+
+  BinaryOperator::Assign=>{print!("=");},
+  BinaryOperator::AddAssign=>{print!("+=");},
+  BinaryOperator::SubAssign=>{print!("-=");},
+  BinaryOperator::MulAssign=>{print!("*=");},
+  BinaryOperator::DivAssign=>{print!("/=");},
+  BinaryOperator::RemAssign=>{print!("%=");},
+  BinaryOperator::ShlAssign=>{print!("<<=");},
+  BinaryOperator::ShrAssign=>{print!(">>=");},
+  BinaryOperator::AndAssign=>{print!("&=");},
+  BinaryOperator::OrAssign=>{print!("|=");},
+  BinaryOperator::XorAssign=>{print!("^=");},
+    }
+}
+
+
+}
+
+
+
+
+pub enum
+Operator
+{
+  Prefix(PrefixOperator),
+  Postfix(PostfixOperator),
+  Binary(BinaryOperator),
+
+}
+
+
+impl
+Operator
+{
+
+
+pub fn
+get_priority(&self)-> usize
+{
+    match self
+    {
+  Operator::Postfix(o)=>{return 3;},
+  Operator::Prefix(o)=>  {return 2;},
+  Operator::Binary(o)=> {return 1;},
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Operator::Postfix(o)=>{o.print();},
+  Operator::Prefix(o)=>{o.print();},
+  Operator::Binary(o)=>{o.print();},
+    }
+}
+
+
+}
+
+
+
+
+pub struct
+Operand
+{
+  pub(crate) prefix_operator_list: Vec<PrefixOperator>,
+
+  pub(crate) core: OperandCore,
+
+  pub(crate) postfix_operator_list: Vec<PostfixOperator>,
+
+}
+
+
+impl
+Operand
+{
+
+
+pub fn
+to_value(&self)-> Value
+{
+  let  mut v = self.core.to_value();
+
+    for o in &self.postfix_operator_list
+    {
+      v = operate_postfix_constant(&v,o);
+    }
+
+
+  let  l = self.prefix_operator_list.len();
+
+    for i in 0..l
+    {
+      let  o = &self.prefix_operator_list[l-1-i];
+
+      v = operate_prefix_constant(&v,o);
+    }
+
+
+  v
+}
+
+
+pub fn
+print(&self)
+{
+    for o in &self.prefix_operator_list
+    {
+      o.print();
+    }
+
+
+  self.core.print();
+
+    for o in &self.postfix_operator_list
+    {
+      o.print();
+    }
+}
+
+
+}
+
+
+
+
+pub struct
+ExpressionTail
+{
+  pub(crate) operator: BinaryOperator,
+
+  pub(crate) operand: Operand,
+
+}
+
+
+pub struct
+Expression
+{
+  pub(crate) operand: Operand,
+
+  pub(crate) tail_list: Vec<ExpressionTail>,
+
+}
+
+
+impl
+Expression
+{
+
+
+pub fn
+make_from_string(s: &str)-> Result<Expression,()>
+{
+  static  mut dic_opt: Option<crate::syntax::dictionary::Dictionary> = None;
+
+    unsafe
+    {
+        if let None = &mut dic_opt
         {
-          a.left_operand.print();
+          let  mut dic = super::expression_dictionary::get_dictionary();
 
-          a.operator.print();
+          dic.set_main("expression");
 
-          a.right_operand.print();
-        },
+          dic_opt = Some(dic);
+        }
+
+
+        if let Some(dic) = &dic_opt
+        {
+            if let Ok(dir) = crate::syntax::parse::parse_from_string(s,&dic)
+            {
+              let  cur = crate::syntax::Cursor::new(&dir);
+
+                if let Some(e_dir) = cur.get_directory()
+                {
+//                  e_dir.print(0);
+
+                  return super::read_expression::read_expression(&e_dir);
+                }
+            }
+
+
+          println!("make_from_string error: parse is failed");
+        }
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+to_value(&self)-> Value
+{
+  let  mut l = self.operand.to_value();
+
+    for t in &self.tail_list
+    {
+      let  r = t.operand.to_value();
+
+      l = operate_binary_constant(&l,&r,&t.operator);
+    }
+
+
+  l
+}
+
+
+pub fn
+print(&self)
+{
+  self.operand.print();
+
+    for t in &self.tail_list
+    {
+      t.operator.print();
+      t.operand.print();
     }
 }
 

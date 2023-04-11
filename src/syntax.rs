@@ -102,7 +102,7 @@ ObjectData
 pub struct
 Object
 {
-  token_info: TokenInfo,
+  token_info: Option<TokenInfo>,
         data: ObjectData,
 
 }
@@ -114,7 +114,7 @@ Object
 
 
 pub fn
-get_token_info(&self)-> &TokenInfo
+get_token_info(&self)-> &Option<TokenInfo>
 {
   &self.token_info
 }
@@ -158,12 +158,48 @@ print(&self, n: usize)
 
 
 
-pub fn
-get_object(objs: &Vec<Object>, pos: usize)-> Option<&Object>
+pub struct
+Cursor<'a>
 {
-    if pos < objs.len()
+  directory: &'a Directory,
+
+  position: usize,
+
+}
+
+
+impl<'a>
+Cursor<'a>
+{
+
+
+pub fn
+new(dir: &'a Directory)-> Cursor<'a>
+{
+  Cursor{directory: dir, position: 0}
+}
+
+
+pub fn
+advance(&mut self, n: usize)
+{
+  self.position += n;
+}
+
+
+pub fn
+is_not_finished(&self)-> bool
+{
+  self.position < self.directory.object_list.len()
+}
+
+
+pub fn
+get_object(&self)-> Option<&Object>
+{
+    if self.is_not_finished()
     {
-      return Some(&objs[pos]);
+      return Some(&self.directory.object_list[self.position]);
     }
 
 
@@ -172,9 +208,9 @@ get_object(objs: &Vec<Object>, pos: usize)-> Option<&Object>
 
 
 pub fn
-test_keyword(objs: &Vec<Object>, pos: usize, s: &str)-> bool
+test_keyword(&self, s: &str)-> bool
 {
-    if let Some(o) = get_object(objs,pos)
+    if let Some(o) = self.get_object()
     {
         if let ObjectData::Keyword(kw) = &o.data
         {
@@ -188,9 +224,9 @@ test_keyword(objs: &Vec<Object>, pos: usize, s: &str)-> bool
 
 
 pub fn
-get_keyword(objs: &Vec<Object>, pos: usize)-> Option<&String>
+get_keyword(&self)-> Option<&String>
 {
-    if let Some(o) = get_object(objs,pos)
+    if let Some(o) = self.get_object()
     {
         if let ObjectData::Keyword(s) = &o.data
         {
@@ -204,9 +240,25 @@ get_keyword(objs: &Vec<Object>, pos: usize)-> Option<&String>
 
 
 pub fn
-get_identifier(objs: &Vec<Object>, pos: usize)-> Option<&String>
+get_others_string(&self)-> Option<&String>
 {
-    if let Some(o) = get_object(objs,pos)
+    if let Some(o) = self.get_object()
+    {
+        if let ObjectData::OthersString(s) = &o.data
+        {
+          return Some(s);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+get_identifier(&self)-> Option<&String>
+{
+    if let Some(o) = self.get_object()
     {
         if let ObjectData::Identifier(s) = &o.data
         {
@@ -220,9 +272,9 @@ get_identifier(objs: &Vec<Object>, pos: usize)-> Option<&String>
 
 
 pub fn
-get_directory(objs: &Vec<Object>, pos: usize)-> Option<&Directory>
+get_directory(&self)-> Option<&Directory>
 {
-    if let Some(o) = get_object(objs,pos)
+    if let Some(o) = self.get_object()
     {
         if let ObjectData::Directory(d) = &o.data
         {
@@ -236,9 +288,9 @@ get_directory(objs: &Vec<Object>, pos: usize)-> Option<&Directory>
 
 
 pub fn
-get_directory_with_name<'a>(objs: &'a Vec<Object>, pos: usize, name: &str)-> Option<&'a Directory>
+get_directory_with_name(&self, name: &str)-> Option<&Directory>
 {
-    if let Some(o) = get_object(objs,pos)
+    if let Some(o) = self.get_object()
     {
         if let ObjectData::Directory(d) = &o.data
         {
@@ -251,6 +303,9 @@ get_directory_with_name<'a>(objs: &'a Vec<Object>, pos: usize, name: &str)-> Opt
 
 
   None
+}
+
+
 }
 
 

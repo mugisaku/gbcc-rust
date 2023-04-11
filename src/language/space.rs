@@ -1,11 +1,10 @@
 
 
-use std::rc::Rc;
 use super::statement::*;
 use super::type_expression::*;
-use crate::syntax::parser::Directory;
-use crate::syntax::parser::Cursor;
-use crate::syntax::parser::ObjectData;
+use crate::syntax::{
+  Directory
+};
 
 
 

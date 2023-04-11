@@ -3,6 +3,7 @@
 use crate::token::print_string;
 
 
+#[derive(Clone)]
 pub enum
 Operand
 {
@@ -108,6 +109,7 @@ print(&self)
 
 
 
+#[derive(Clone,Copy)]
 pub enum
 UnaryOperator
 {
@@ -136,6 +138,7 @@ print(&self)
 }
 
 
+#[derive(Clone)]
 pub struct
 UnaryOperation
 {
@@ -177,6 +180,7 @@ print(&self)
 
 
 
+#[derive(Clone,Copy)]
 pub enum
 BinaryOperator
 {
@@ -209,6 +213,7 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub struct
 BinaryOperation
 {
@@ -280,6 +285,7 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub enum
 Expression
 {
@@ -327,6 +333,7 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub struct
 Definition
 {
@@ -390,6 +397,7 @@ pub struct
 Dictionary
 {
   pub(crate) definition_list: Vec<Definition>,
+  pub(crate) main_index: usize,
 
 }
 
@@ -402,7 +410,7 @@ Dictionary
 pub fn
 new()-> Dictionary
 {
-  Dictionary{definition_list: Vec::new()}
+  Dictionary{definition_list: Vec::new(), main_index: 0}
 }
 
 
@@ -416,9 +424,33 @@ make_from_string(s: &str)-> Result<Dictionary,()>
 
 
 pub fn
-get_first(&self)-> Option<&Definition>
+get_main(&self)-> Option<&Definition>
 {
-  self.definition_list.first()
+    if self.main_index < self.definition_list.len()
+    {
+      return Some(&self.definition_list[self.main_index]);
+    }
+
+
+  None
+}
+
+
+pub fn
+set_main(&mut self, name: &str)-> Result<(),()>
+{
+    for i in 0..self.definition_list.len()
+    {
+        if self.definition_list[i].get_name() == name
+        {
+          self.main_index = i;
+
+          return Ok(());
+        }
+    }
+
+
+  Err(())
 }
 
 
@@ -442,6 +474,16 @@ pub fn
 add(&mut self, def: Definition)
 {
   self.definition_list.push(def);
+}
+
+
+pub fn
+copy_from(&mut self, src: &Dictionary)
+{
+    for def in &src.definition_list
+    {
+      self.add(def.clone());
+    }
 }
 
 
