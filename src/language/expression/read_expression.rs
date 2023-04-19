@@ -7,7 +7,7 @@ use crate::syntax::{
 };
 
 
-use super::expression::{
+use crate::language::expression::{
   OperandCore,
   Operand,
   PrefixOperator,
@@ -163,6 +163,9 @@ read_postfix_operator(dir: &Directory)-> Result<PostfixOperator,()>
            if name == "access"   {return read_access(subdir);}
       else if name == "subscript"{return read_subscript(subdir);}
       else if name == "call"     {return read_call(subdir);}
+      else if name == "name_qresolution"{return read_name_resolution(subdir);}
+      else if name == "increment"       {return Ok(PostfixOperator::Increment);}
+      else if name == "decrement"       {return Ok(PostfixOperator::Increment);}
     }
 
 
@@ -254,6 +257,23 @@ read_call(dir: &Directory)-> Result<PostfixOperator,()>
 
 
   Ok(PostfixOperator::Call(args))
+}
+
+
+pub fn
+read_name_resolution(dir: &Directory)-> Result<PostfixOperator,()>
+{
+  let  mut cur = Cursor::new(dir);
+
+  cur.advance(1);
+
+    if let Some(s) = cur.get_identifier()
+    {
+      return Ok(PostfixOperator::NameResolution(s.clone()));
+    }
+
+
+  Err(())
 }
 
 

@@ -1,17 +1,64 @@
 
 
-use std::rc::Rc;
 use super::expression::Expression;
-use crate::syntax::parser::ObjectData;
-use crate::syntax::parser::Directory;
-use crate::syntax::parser::Cursor;
+
+
+pub struct
+Var
+{
+  name: String,
+
+//  type: Type,
+
+  expression: Option<Expression>,
+
+}
+
+
+pub struct
+Fn
+{
+  name: String,
+
+  parameter_list: Vec<Parameter>,
+
+//  return_type: Type,
+
+  block: Block,
+
+}
+
+
+pub struct
+Struct
+{
+}
+
+
+pub struct
+Enum
+{
+}
+
+
+pub struct
+Union
+{
+}
+
 
 pub enum
 Statement
 {
   Empty,
+  Var(Var),
+  Fn(Fn),
+  Struct(Struct),
+  Enum(Enum),
+  Union(Union),
   Block(Block),
   If(Vec<Block>),
+  For(Block),
   While(Block),
   Break,
   Continue,

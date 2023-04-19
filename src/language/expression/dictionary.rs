@@ -26,11 +26,14 @@ binary_operator:
   | "!="
   ;
 
-access   : "." & .Identifier;
-subscript: "[" & expression & "]";
-call     : "(" & [expression & [{"," & expression}]] & ")";
+name_resolution: "::" & .Identifier;
+access         : "." & .Identifier;
+subscript      : "[" & expression & "]";
+call           : "(" & [expression & [{"," & expression}]] & ")";
+increment      : "++";
+decrement      : "++";
 
-postfix_operator: access | subscript | call;
+postfix_operator: access | subscript | call | name_resolution | increment | decrement;
 
 operand: [{prefix_operator}] & operand_core & [{postfix_operator}];
 

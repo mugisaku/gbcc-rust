@@ -29,6 +29,7 @@ print_indent(n: usize)
 
 
 
+#[derive(Clone)]
 pub struct
 Directory
 {
@@ -80,6 +81,9 @@ print(&self, n: usize)
 }
 
 
+
+
+#[derive(Clone)]
 pub enum
 ObjectData
 {
@@ -99,6 +103,7 @@ ObjectData
 }
 
 
+#[derive(Clone)]
 pub struct
 Object
 {
@@ -304,6 +309,29 @@ get_directory_with_name(&self, name: &str)-> Option<&Directory>
 
   None
 }
+
+
+pub fn
+seek_directory_with_name(&mut self, name: &str)-> Option<&Directory>
+{
+    while let None = self.get_directory_with_name(name)
+    {
+        if self.is_not_finished()
+        {
+          self.advance(1);
+        }
+
+      else
+        {
+          return None;
+        }
+    }
+
+
+  self.get_directory()
+}
+
+
 
 
 }

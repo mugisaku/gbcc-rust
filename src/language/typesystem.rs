@@ -1,39 +1,35 @@
 
 
-use crate::syntax::parser::Directory;
-use crate::syntax::parser::Cursor;
-use crate::syntax::parser::ObjectData;
-use crate::language::expression::Expression;
+pub mod r#enum;
+pub mod r#struct;
+pub mod r#union;
+pub mod function_signature;
+pub mod read_type_note;
+pub mod dictionary;
+
+use super::expression::Expression;
+use self::function_signature::FunctionSignature;
+use self::r#struct::Struct;
+use self::r#union::Union;
+use self::r#enum::Enum;
+
+use crate::token::{
+  Token,
+};
+
+use crate::syntax::{
+  Directory,
+  Cursor,
+};
 
 
-
-
-pub static  word_size: usize = 8;
-
-pub static  bool_ti: TypeInfo = TypeInfo::Boolean(1);
-pub static  char_ti: TypeInfo = TypeInfo::Character(1);
-pub static   s8_ti: TypeInfo = TypeInfo::SignedInteger(1);
-pub static  s16_ti: TypeInfo = TypeInfo::SignedInteger(2);
-pub static  s32_ti: TypeInfo = TypeInfo::SignedInteger(4);
-pub static  s64_ti: TypeInfo = TypeInfo::SignedInteger(8);
-pub static   u8_ti: TypeInfo = TypeInfo::Integer(1);
-pub static  u16_ti: TypeInfo = TypeInfo::Integer(2);
-pub static  u32_ti: TypeInfo = TypeInfo::Integer(4);
-pub static  u64_ti: TypeInfo = TypeInfo::Integer(8);
-pub static  f32_ti: TypeInfo = TypeInfo::Floating(4);
-pub static  f64_ti: TypeInfo = TypeInfo::Floating(8);
-pub static  null_ti: TypeInfo = TypeInfo::Null;
-pub static  nullptr_ti: TypeInfo = TypeInfo::NullPointer;
-pub static  geneptr_ti: TypeInfo = TypeInfo::GeneralPointer;
-pub static  void_ti: TypeInfo = TypeInfo::Void;
-pub static  ulen_ti: TypeInfo = TypeInfo::Length;
-pub static  slen_ti: TypeInfo = TypeInfo::SignedLength;
+pub const WORD_SIZE: usize = 8;
 
 
 pub fn
 get_aligned_size(sz: usize)-> usize
 {
-  (sz+(word_size-1))/word_size*word_size
+  (sz+(WORD_SIZE-1))/WORD_SIZE*WORD_SIZE
 }
 
 
@@ -44,228 +40,130 @@ get_max(a: usize, b: usize)-> usize
 }
 
 
+
+
+#[derive(Clone)]
 pub enum
-TypeInfo
+TypeNote
 {
-  Null,
-  NullPointer,
-  GeneralPointer,
+  Undefined,
+  Unspecified,
+
   Void,
-  Boolean(usize),
-  Character(usize),
-  SignedInteger(usize),
-  Integer(usize),
-  Floating(usize),
-  Length,
-  SignedLength,
 
-  Array(Box<TypeInfo>,usize),
-  Pointer(Box<TypeInfo>),
-  Reference(Box<TypeInfo>),
-  Function(Box<FunctionInfo>),
+  Bool,
+  I8, I16, I32, I64, ISize,
+  U8, U16, U32, U64, USize,
 
-  Struct(StructInfo),
-  Union(UnionInfo),
-  Enum(EnumInfo),
+  F32, F64,
 
-}
+  FunctionPointer(Box<FunctionSignature>),
 
+  Struct(Box<Struct>),
+  Union(Box<Union>),
+  Enum(Box<Enum>),
 
-impl
-PartialEq for TypeInfo
-{
+  UnknownLengthArray(Box<TypeNote>,Expression),
 
+  Array(Box<TypeNote>,usize),
 
-fn
-eq(&self, other: &Self)-> bool
-{
-  let  a =  self.make_id();
-  let  b = other.make_id();
-
-  a == b
-}
-
+  Identifier(String),
 
 }
 
 
 impl
-Clone for TypeInfo
-{
-
-
-fn
-clone(&self)-> Self
-{
-    match self
-    {
-  TypeInfo::Null=>             {return TypeInfo::Null;},
-  TypeInfo::NullPointer=>      {return TypeInfo::NullPointer;},
-  TypeInfo::GeneralPointer=>   {return TypeInfo::GeneralPointer;},
-  TypeInfo::Void=>             {return TypeInfo::Void;},
-  TypeInfo::Boolean(sz)=>      {return TypeInfo::Boolean(*sz);},
-  TypeInfo::Character(sz)=>    {return TypeInfo::Character(*sz);},
-  TypeInfo::SignedInteger(sz)=>{return TypeInfo::SignedInteger(*sz);},
-  TypeInfo::Integer(sz)=>      {return TypeInfo::Integer(*sz);}
-  TypeInfo::Floating(sz)=>     {return TypeInfo::Floating(*sz);}
-  TypeInfo::Length=>           {return TypeInfo::Length;}
-  TypeInfo::SignedLength=>     {return TypeInfo::SignedLength;}
-  TypeInfo::Array(ti,n)=>      {return TypeInfo::Array(ti.clone(),*n);},
-  TypeInfo::Pointer(ti)=>      {return TypeInfo::Pointer(ti.clone());},
-  TypeInfo::Reference(ti)=>    {return TypeInfo::Reference(ti.clone());},
-  TypeInfo::Struct(s)=>        {return TypeInfo::Struct(s.clone());},
-  TypeInfo::Union(u)=>         {return TypeInfo::Union(u.clone());},
-  TypeInfo::Enum(e)=>          {return TypeInfo::Enum(e.clone());},
-  TypeInfo::Function(f)=>      {return TypeInfo::Function(f.clone());},
-    }
-}
-
-
-}
-
-
-impl
-TypeInfo
+TypeNote
 {
 
 
 pub fn
-from(dir: &Directory)-> TypeInfo
+make_from_string(s: &str)-> Result<TypeNote,()>
 {
-  let mut  cur = Cursor::from(dir);
+  static  mut dic_opt: Option<crate::syntax::dictionary::Dictionary> = None;
 
-    if let Some(rcs) = cur.get_identifier()
+    unsafe
     {
-      let  s = rcs.as_str();
+        if let None = &mut dic_opt
+        {
+          let  mut dic = self::dictionary::get_dictionary();
 
-           if s ==  "s8"{return s8_ti.clone();}
-      else if s == "s16"{return s16_ti.clone();}
-      else if s == "s32"{return s32_ti.clone();}
-      else if s == "s64"{return s64_ti.clone();}
-      else if s ==  "u8"{return u8_ti.clone();}
-      else if s == "u16"{return u16_ti.clone();}
-      else if s == "u32"{return u32_ti.clone();}
-      else if s == "u64"{return u64_ti.clone();}
-      else if s == "f32"{return f32_ti.clone();}
-      else if s == "f64"{return f64_ti.clone();}
-      else if s == "bool"{return bool_ti.clone();}
-      else if s == "char"{return char_ti.clone();}
-      else if s == "ulen"{return ulen_ti.clone();}
-      else if s == "slen"{return slen_ti.clone();}
-      else if s == "null"{return null_ti.clone();}
-      else if s == "void"{return void_ti.clone();}
-      else if s == "nullptr"{return nullptr_ti.clone();}
-      else if s == "geneptr"{return geneptr_ti.clone();}
+          dic.set_main("type_note");
+
+          dic_opt = Some(dic);
+        }
+
+
+        if let Some(dic) = &dic_opt
+        {
+            if let Ok(dir) = crate::syntax::parse::parse_from_string(s,&dic)
+            {
+              let  cur = crate::syntax::Cursor::new(&dir);
+
+                if let Some(t_dir) = cur.get_directory()
+                {
+//                  t_dir.print(0);
+
+                  return self::read_type_note::read_type_note(&t_dir);
+                }
+            }
+
+
+          println!("make_from_string error: parse is failed");
+        }
     }
 
 
-  null_ti.clone()
+  Err(())
 }
 
 
 pub fn
-get_size(&self)-> usize
+get_size(&self)-> Option<usize>
 {
     match self
     {
-  TypeInfo::Null=>             {return 0;},
-  TypeInfo::NullPointer=>      {return 0;},
-  TypeInfo::GeneralPointer=>   {return word_size;},
-  TypeInfo::Void=>             {return 0;},
-  TypeInfo::Boolean(sz)=>      {return *sz;},
-  TypeInfo::Character(sz)=>    {return *sz;},
-  TypeInfo::SignedInteger(sz)=>{return *sz;},
-  TypeInfo::Integer(sz)=>      {return *sz;},
-  TypeInfo::Floating(sz)=>     {return *sz;},
-  TypeInfo::Length=>           {return word_size;},
-  TypeInfo::SignedLength=>     {return word_size;},
-
-  TypeInfo::Array(ti,n)=>{return ti.get_size()*n;},
-  TypeInfo::Pointer(ti)=>{return word_size;},
-  TypeInfo::Reference(ti)=>{return word_size;},
-
-  TypeInfo::Struct(s)=>{return s.get_size();},
-  TypeInfo::Union(u)=>{return u.get_size();},
-  TypeInfo::Enum(e)=>{return e.get_size();},
-  TypeInfo::Function(f)=>{return word_size;},
-    }
-}
-
-
-pub fn
-get_align(&self)-> usize
-{
-    match self
-    {
-  TypeInfo::Array(ti,n)=>{return ti.get_align();},
-  TypeInfo::Pointer(ti)=>{return word_size;},
-  TypeInfo::Reference(ti)=>{return word_size;},
-
-  TypeInfo::Struct(s)=>{return s.get_align();},
-  TypeInfo::Union(u)=>{return u.get_align();},
-  TypeInfo::Enum(e)=>{return e.get_align();},
-  TypeInfo::Function(f)=>{return word_size;},
+  TypeNote::Bool=>{return Some(1);},
+  TypeNote::I8=>{return Some(1);},
+  TypeNote::I16=>{return Some(2);},
+  TypeNote::I32=>{return Some(4);},
+  TypeNote::I64=>{return Some(8);},
+  TypeNote::ISize=>{return Some(WORD_SIZE);},
+  TypeNote::U8=>{return Some(1);},
+  TypeNote::U16=>{return Some(2);},
+  TypeNote::U32=>{return Some(4);},
+  TypeNote::U64=>{return Some(8);},
+  TypeNote::USize=>{return Some(WORD_SIZE);},
+  TypeNote::F32=>{return Some(4);},
+  TypeNote::F64=>{return Some(8);},
+  TypeNote::FunctionPointer(_)=>{return Some(WORD_SIZE);},
+  TypeNote::Struct(st)=>{return *st.get_size();},
+  TypeNote::Union(un)=>{return *un.get_size();},
+  TypeNote::Enum(en)=>{return *en.get_size();},
+  TypeNote::Array(ty,n)=>
+        {
+            if let Some(sz) = ty.get_size()
+            {
+              return Some(sz*n);
+            }
+        },
   _=>{},
     }
 
 
-  self.get_size()
+  None
 }
 
 
 pub fn
-make_id(&self)-> String
-{
-  let mut  buf = String::new();
-
-  self.print_id(&mut buf);
-
-  buf
-}
-
-
-pub fn
-print_id(&self, buf: &mut String)
+get_align(&self)-> Option<usize>
 {
     match self
     {
-  TypeInfo::Null=>             {buf.push_str("null");},
-  TypeInfo::NullPointer=>      {buf.push_str("nullptr");},
-  TypeInfo::GeneralPointer=>   {buf.push_str("geneptr");},
-  TypeInfo::Void=>             {buf.push_str("void");},
-  TypeInfo::Boolean(sz)=>      {buf.push_str(format!("bool{}",8*sz).as_str());},
-  TypeInfo::Character(sz)=>    {buf.push_str(format!("char{}",8*sz).as_str());},
-  TypeInfo::SignedInteger(sz)=>{buf.push_str(format!("i{}",8*sz).as_str());},
-  TypeInfo::Integer(sz)=>      {buf.push_str(format!("u{}",8*sz).as_str());},
-  TypeInfo::Floating(sz)=>     {buf.push_str(format!("f{}",8*sz).as_str());},
-  TypeInfo::Length=>           {buf.push_str("len");},
-  TypeInfo::SignedLength=>     {buf.push_str("slen");},
-
-  TypeInfo::Array(ti,n)=>
-        {
-          ti.print_id(buf);
-
-          let  t = format!("[{}]",n);
-
-          buf.push_str(&t);
-        },
-  TypeInfo::Pointer(ti)=>
-        {
-          ti.print_id(buf);
-
-          buf.push('*');
-        },
-  TypeInfo::Reference(ti)=>
-        {
-          ti.print_id(buf);
-
-          buf.push('&');
-        },
-
-  TypeInfo::Struct(s)=>{s.print_id(buf);},
-  TypeInfo::Union(u)=>{u.print_id(buf);},
-  TypeInfo::Enum(e)=>{e.print_id(buf);},
-  TypeInfo::Function(f)=>{f.print_id(buf);},
+  TypeNote::Struct(st)=>{*st.get_align()},
+  TypeNote::Union(un)=>{*un.get_align()},
+  TypeNote::Enum(en)=>{*en.get_align()},
+  _=>{self.get_size()},
     }
 }
 
@@ -275,453 +173,51 @@ print(&self)
 {
     match self
     {
-  TypeInfo::Array(ti,n)=>
+  TypeNote::Undefined=>{print!("undefined");},
+  TypeNote::Unspecified=>{print!("unspecified");},
+  TypeNote::Void=>{print!("void");},
+  TypeNote::Bool=>{print!("bool");},
+  TypeNote::I8=>{print!("i8");},
+  TypeNote::I16=>{print!("i16");},
+  TypeNote::I32=>{print!("i32");},
+  TypeNote::I64=>{print!("i64");},
+  TypeNote::ISize=>{print!("isize");},
+  TypeNote::U8=>{print!("u8");},
+  TypeNote::U16=>{print!("u16");},
+  TypeNote::U32=>{print!("u32");},
+  TypeNote::U64=>{print!("u64");},
+  TypeNote::USize=>{print!("usize");},
+  TypeNote::F32=>{print!("f32");},
+  TypeNote::F64=>{print!("f64");},
+  TypeNote::FunctionPointer(sig)=>
         {
-          ti.print();
-          print!("[{}]",n);
+          print!("fn");
+          sig.print();
         },
-  TypeInfo::Pointer(ti)=>
+  TypeNote::Struct(st)=>{st.print()},
+  TypeNote::Union(un)=>{un.print()},
+  TypeNote::Enum(en)=>{en.print()},
+  TypeNote::UnknownLengthArray(ty,e)=>
         {
-          ti.print();
-          print!("*");
+          print!("[");
+
+          e.print();
+
+          print!("]");
+
+          ty.print();
         },
-  TypeInfo::Reference(ti)=>
+  TypeNote::Array(ty,n)=>
         {
-          ti.print();
-          print!("&");
+          print!("[{}]",*n);
+
+          ty.print();
         },
-
-  TypeInfo::Struct(s)=>{s.print();},
-  TypeInfo::Union(u)=>{u.print();},
-  TypeInfo::Enum(e)=>{e.print();},
-  TypeInfo::Function(f)=>{f.print();},
-  _=>{}
+  TypeNote::Identifier(s)=>
+        {
+          print!("?{}",s);
+        },
     }
-
-
-  print!("{}",self.make_id());
-}
-
-
-}
-
-
-pub struct
-Parameter
-{
-  name: String,
-
-  type_info: TypeInfo,
-
-  offset: usize,
-
-}
-
-
-impl
-Clone for Parameter
-{
-
-
-fn
-clone(&self)-> Self
-{
-  Parameter{ name: self.name.clone(), type_info: self.type_info.clone(), offset: self.offset}
-}
-
-
-}
-
-
-impl
-Parameter
-{
-
-
-pub fn
-new(name: &str, ti: TypeInfo, off: usize)-> Parameter
-{
-  Parameter{ name: String::from(name), type_info: ti, offset: off}
-}
-
-
-pub fn
-get_name(&self)-> &str
-{
-  &self.name
-}
-
-
-pub fn
-get_type_info(&self)-> &TypeInfo
-{
-  &self.type_info
-}
-
-
-pub fn
-get_offset(&self)-> usize
-{
-  self.offset
-}
-
-
-pub fn
-print(&self)
-{
-  print!("{}: ",self.name);
-
-  self.type_info.print();
-
-  print!("(offset: {})",self.offset);
-}
-
-
-}
-
-
-
-
-pub struct
-StructInfo
-{
-  member_list: Vec<Parameter>,
-
-   size: usize,
-  align: usize,
-
-}
-
-
-impl
-Clone for StructInfo
-{
-
-
-fn
-clone(&self)-> Self
-{
-  StructInfo{ member_list: self.member_list.clone(), size: self.size, align: self.align}
-}
-
-
-}
-
-
-impl
-StructInfo
-{
-
-
-pub fn
-new()-> StructInfo
-{
-  StructInfo{ member_list: Vec::new(), size: 0, align: 0}
-}
-
-
-pub fn
-push(&mut self, name: String, type_info: TypeInfo)
-{
-  let  offset = self.size                                                ;
-                self.size = get_aligned_size(offset+type_info.get_size());
-
-  self.align = get_max(self.align,type_info.get_align());
-
-  self.member_list.push(Parameter{ name, type_info, offset});
-}
-
-
-pub fn   get_size(&self)-> usize{self.size}
-pub fn  get_align(&self)-> usize{self.align}
-
-pub fn  get_member_list(&self)-> &Vec<Parameter>{&self.member_list}
-
-
-pub fn
-print_id(&self, buf: &mut String)
-{
-    for m in &self.member_list
-    {
-      m.type_info.print_id(buf);
-    }
-}
-
-
-pub fn
-print(&self)
-{
-  print!("struct{{");
-
-    for m in &self.member_list
-    {
-      m.print();
-      print!(",\n");
-    }
-
-
-  print!("}}");
-}
-
-
-}
-
-
-
-
-pub struct
-UnionInfo
-{
-  member_list: Vec<Parameter>,
-
-   size: usize,
-  align: usize,
-
-}
-
-
-impl
-Clone for UnionInfo
-{
-
-
-fn
-clone(&self)-> Self
-{
-  UnionInfo{ member_list: self.member_list.clone(), size: self.size, align: self.align}
-}
-
-
-}
-
-
-impl
-UnionInfo
-{
-
-
-pub fn
-new()-> UnionInfo
-{
-  UnionInfo{ member_list: Vec::new(), size: 0, align: 0}
-}
-
-
-pub fn
-push(&mut self, name: String, type_info: TypeInfo)
-{
-  self.size = get_aligned_size(type_info.get_size());
-
-  self.align = get_max(self.align,type_info.get_align());
-
-  self.member_list.push(Parameter{ name, type_info, offset: 0});
-}
-
-
-pub fn   get_size(&self)-> usize{return self.size;}
-pub fn  get_align(&self)-> usize{return self.align;}
-
-
-pub fn
-print_id(&self, buf: &mut String)
-{
-    for m in &self.member_list
-    {
-      m.type_info.print_id(buf);
-    }
-}
-
-
-pub fn
-print(&self)
-{
-  print!("union{{");
-
-    for m in &self.member_list
-    {
-      m.print();
-      print!(",\n");
-    }
-
-
-  print!("}}");
-}
-
-
-}
-
-
-
-
-pub struct
-Enumerator
-{
-  name: String,
-
-  value: i64,
-
-}
-
-
-pub struct
-EnumInfo
-{
-  member_list: Vec<Parameter>,
-
-   size: usize,
-  align: usize,
-
-}
-
-
-impl
-Clone for EnumInfo
-{
-
-
-fn
-clone(&self)-> Self
-{
-  EnumInfo{ member_list: self.member_list.clone(), size: self.size, align: self.align}
-}
-
-
-}
-
-
-impl
-EnumInfo
-{
-
-
-pub fn
-new()-> EnumInfo
-{
-  EnumInfo{ member_list: Vec::new(), size: 0, align: 0}
-}
-
-
-pub fn   get_size(&self)-> usize{return self.size;}
-pub fn  get_align(&self)-> usize{return self.align;}
-
-
-pub fn
-print_id(&self, buf: &mut String)
-{
-    for m in &self.member_list
-    {
-      m.type_info.print_id(buf);
-    }
-}
-
-
-pub fn
-print(&self)
-{
-}
-
-
-}
-
-
-
-
-pub struct
-FunctionInfo
-{
-  parameter_list: Vec<Parameter>,
-
-  return_type_info: TypeInfo,
-
-}
-
-
-
-impl
-Clone for FunctionInfo
-{
-
-
-fn
-clone(&self)-> Self
-{
-  FunctionInfo{ parameter_list: self.parameter_list.clone(), return_type_info: self.return_type_info.clone()}
-}
-
-
-}
-
-
-impl
-FunctionInfo
-{
-
-
-pub fn
-new(parals: Vec<Parameter>, retti: TypeInfo)-> FunctionInfo
-{
-  FunctionInfo{ parameter_list: parals, return_type_info: retti}
-}
-
-
-pub fn
-get_return_type_info(&self)-> &TypeInfo
-{
-  &self.return_type_info
-}
-
-
-pub fn
-get_parameter_list(&self)-> &Vec<Parameter>
-{
-  &self.parameter_list
-}
-
-
-pub fn
-get_stack_size(&self)-> usize
-{
-  let mut  sz = get_aligned_size(self.return_type_info.get_size());
-
-    for p in &self.parameter_list
-    {
-      sz += get_aligned_size(p.get_type_info().get_size());
-    }
-
-
-  sz
-}
-
-
-pub fn
-print_id(&self, buf: &mut String)
-{
-  buf.push_str("fn");
-
-    for p in &self.parameter_list
-    {
-      p.get_type_info().print_id(buf);
-    }
-
-
-  self.return_type_info.print_id(buf);
-}
-
-
-pub fn
-print(&self)
-{
-  print!("(");
-
-    for p in &self.parameter_list
-    {
-      p.print();
-    }
-
-
-  print!(")-> ");
-
-  self.return_type_info.print();
 }
 
 

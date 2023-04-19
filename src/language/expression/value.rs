@@ -19,6 +19,11 @@ Value
   F64(f64),
   Bool(bool),
 
+  Pointer(usize),
+  Reference(usize),
+
+  NameSpace(usize),
+
 }
 
 
@@ -257,6 +262,8 @@ get_size(&self)-> Option<usize>
   Value::F32(_)=>{Some(4)}
   Value::F64(_)=>{Some(8)}
   Value::Bool(_)=>{Some(1)}
+  Value::Pointer(_)=>{Some(8)}
+  Value::Reference(_)=>{Some(8)}
   _=>{None}
     }
 }
@@ -279,6 +286,9 @@ get_id(&self)-> usize
   Value::F32(_)=>{9}
   Value::F64(_)=>{10}
   Value::Bool(_)=>{11}
+  Value::Pointer(_)=>{12}
+  Value::Reference(_)=>{13}
+  Value::NameSpace(_)=>{14}
     }
 }
 
@@ -302,6 +312,9 @@ print(&self)
   Value::F32(f)=>{print!("f32: {}",*f);}
   Value::F64(f)=>{print!("f64: {}",*f);}
   Value::Bool(b)=>{print!("bool: {}",*b);}
+  Value::Pointer(v)=>{print!("pointer: {}",*v);}
+  Value::Reference(v)=>{print!("reference: {}",*v);}
+  Value::NameSpace(i)=>{print!("name space: {}",*i);}
     }
 }
 

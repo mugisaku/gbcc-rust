@@ -33,19 +33,9 @@ block_statement   : "{" & [{statement | (variable_declaration & ["=" & expressio
 return_statement  : 'return -> [expression];
 
 
-type_expression: .Identifier;
-
-parameter: .Identifier & ":" & type_expression;
-
-function_signature: "(" & [parameter & {"," & parameter}] & ")" & ["->" & type_expression];
-
 function_definition: 'fn -> .Identifier & function_signature & block_statement;
 
 variable_declaration: 'var & parameter;
-
-struct_definition: 'struct -> .Identifier & "{" & [{}] & "}";
-
-enum_definition: 'enum -> .Identifier & "{" & [{}] &  "}";
 
 
 "##;
@@ -95,21 +85,133 @@ open_and_print_tokens()
 
 
 fn
-main()
+print_help()
+{
+  println!("e <expression> -- evaluate <expression> and print its result.");
+  println!("t <...> -- make type from <...>.");
+  println!("h -- print this text.");
+  println!("q -- quit this program.");
+}
+
+
+fn
+divide(s: &str)-> (&str,&str)
+{
+  let  mut  it = s.chars();
+  let  mut pos = 0;
+
+    while let Some(c) = it.next()
+    {
+        if ((c >= 'a') && (c <= 'z'))
+        || ((c >= 'A') && (c <= 'Z'))
+        ||  (c >= '_')
+        {
+          pos += 1;
+
+          continue;
+        }
+
+
+      break;
+    }
+
+
+  (&s[0..pos],&s[pos..])
+}
+
+
+fn
+evaluate(s: &str)
 {
   use crate::language::expression::Expression;
+  use crate::language::context::Context;
 
-    if let Ok(e) = Expression::make_from_string("1+2+3 == 5")
+    if let Ok(e) = Expression::make_from_string(s)
     {
       e.print();
 
-      let  v = e.to_value();
+      let  v = e.to_value(None);
 
       print!(" = ");
 
       v.print();
 
       print!("\n");
+    }
+}
+
+
+fn
+type_make(s: &str)
+{
+  use crate::language::typesystem::TypeNote;
+
+    if let Ok(t) = TypeNote::make_from_string(s)
+    {
+      t.print();
+
+      print!("\n");
+    }
+}
+
+
+fn
+main()
+{
+  println!("--GBCC Interactive Interpreter--");
+  println!("type <h>, list command.");
+
+  let  mut buf = String::new();
+
+    loop
+    {
+      use std::io;
+
+        if let Ok(sz) = io::stdin().read_line(&mut buf)
+        {
+            if (sz != 0) && (buf != "\n")
+            {
+              let  (cmd,arg) = divide(buf.trim());
+
+                if cmd == "q"
+                {
+                  println!("");
+
+                  return;
+                }
+
+
+              println!("\n\n** result **");
+
+                if cmd == "e"
+                {
+                  evaluate(arg);
+                }
+
+              else
+                if cmd == "t"
+                {
+                  type_make(arg);
+                }
+
+              else
+                if cmd == "h"
+                {
+                  print_help();
+                }
+
+              else
+                {
+                  println!("{} is unknown command.",cmd);
+                }
+
+
+              println!("** end of result **\n\n");
+            }
+
+
+          buf.clear();
+        }
     }
 }
 

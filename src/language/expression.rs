@@ -1,10 +1,19 @@
 
 
+pub mod read_expression;
+pub mod dictionary;
+pub mod value;
+pub mod operate;
 
 
-use super::value::Value;
+use self::value::Value;
+use super::context::{
+  Variable,
+  NameSpace,
+  Context,
+};
 
-use super::operate::{
+use self::operate::{
   operate_prefix_constant,
   operate_postfix_constant,
   operate_binary_constant,
@@ -13,6 +22,7 @@ use super::operate::{
 
 
 
+#[derive(Clone)]
 pub enum
 OperandCore
 {
@@ -32,7 +42,7 @@ OperandCore
 
 
 pub fn
-to_value(&self)-> Value
+to_value(&self, ctx_opt: Option<&Context>)-> Value
 {
     match self
     {
@@ -41,11 +51,18 @@ to_value(&self)-> Value
                if *s == "false"{return Value::Bool(false);}
           else if *s ==  "true"{return Value::Bool(true);}
           else if *s ==  "undefined"{return Value::Undefined;}
-          else {return Value::Undefined;}
+          else
+            if let Some(ctx) = ctx_opt
+            {
+              
+            }
+
+
+          return Value::Undefined;
         },
   OperandCore::Integer(u)=>{if *u <= (i64::MAX as u64){Value::I64(*u as i64)} else{Value::U64(*u)}},
   OperandCore::Floating(f)=>{Value::F64(*f)},
-  OperandCore::Expression(e)=>{e.to_value()},
+  OperandCore::Expression(e)=>{e.to_value(ctx_opt)},
   _=>{Value::Undefined},
     }
 }
@@ -76,12 +93,14 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub enum
 PostfixOperator
 {
   Access(String),
   Subscript(Box<Expression>),
   Call(Vec<Expression>),
+  NameResolution(String),
   Increment,
   Decrement,
 
@@ -118,6 +137,10 @@ print(&self)
 
           print!(")");
         },
+  PostfixOperator::NameResolution(s)=>
+        {
+          print!("::{}",s);
+        },
   PostfixOperator::Increment=>{print!("++");},
   PostfixOperator::Decrement=>{print!("--");},
     }
@@ -129,6 +152,7 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub enum
 PrefixOperator
 {
@@ -167,6 +191,7 @@ print(&self)
 }
 
 
+#[derive(Clone)]
 pub enum
 BinaryOperator
 {
@@ -253,6 +278,7 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub enum
 Operator
 {
@@ -297,6 +323,7 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub struct
 Operand
 {
@@ -315,9 +342,9 @@ Operand
 
 
 pub fn
-to_value(&self)-> Value
+to_value(&self, ctx_opt: Option<&Context>)-> Value
 {
-  let  mut v = self.core.to_value();
+  let  mut v = self.core.to_value(ctx_opt);
 
     for o in &self.postfix_operator_list
     {
@@ -362,6 +389,7 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub struct
 ExpressionTail
 {
@@ -372,6 +400,7 @@ ExpressionTail
 }
 
 
+#[derive(Clone)]
 pub struct
 Expression
 {
@@ -396,7 +425,7 @@ make_from_string(s: &str)-> Result<Expression,()>
     {
         if let None = &mut dic_opt
         {
-          let  mut dic = super::expression_dictionary::get_dictionary();
+          let  mut dic = self::dictionary::get_dictionary();
 
           dic.set_main("expression");
 
@@ -414,7 +443,7 @@ make_from_string(s: &str)-> Result<Expression,()>
                 {
 //                  e_dir.print(0);
 
-                  return super::read_expression::read_expression(&e_dir);
+                  return self::read_expression::read_expression(&e_dir);
                 }
             }
 
@@ -429,13 +458,13 @@ make_from_string(s: &str)-> Result<Expression,()>
 
 
 pub fn
-to_value(&self)-> Value
+to_value(&self, ctx_opt: Option<&Context>)-> Value
 {
-  let  mut l = self.operand.to_value();
+  let  mut l = self.operand.to_value(ctx_opt);
 
     for t in &self.tail_list
     {
-      let  r = t.operand.to_value();
+      let  r = t.operand.to_value(ctx_opt);
 
       l = operate_binary_constant(&l,&r,&t.operator);
     }

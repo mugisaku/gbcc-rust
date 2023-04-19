@@ -1,8 +1,15 @@
 
 
-use super::value::Value;
+use crate::language::expression::value::Value;
+use crate::language::context::{
+  Variable,
+  Object,
+  NameSpace,
+  Context,
+};
 
-use super::expression::{
+
+use crate::language::expression::{
    PrefixOperator,
   PostfixOperator,
   BinaryOperator,
@@ -90,6 +97,9 @@ operate_postfix_constant(v: &Value, p: &PostfixOperator)-> Value
 /*
   PostfixOperator::Subscript(o)=>{},
   PostfixOperator::Call(args)=>{},
+  PostfixOperator::NameResolution(s)=>{},
+  PostfixOperator::Increment=>{},
+  PostfixOperator::Decrement=>{},
 */
   _=>{Value::Undefined}
     }
