@@ -116,9 +116,29 @@ read_operand(toks: &Vec<Token>, pos: &mut usize)-> Option<Operand>
         {
       TokenData::Identifier(s)=>
             {
-              let  o = Operand::Identifier(s.clone());
+              let  mut d_name_opt: Option<String> = None;
 
               advance(pos);
+
+                if read_string_of_others(toks,pos,"::")
+                {
+                    if let Some(d_name) = get_identifier(toks,*pos)
+                    {
+                      advance(pos);
+
+                      d_name_opt = Some(d_name.clone());
+                    }
+
+                  else
+                    {
+                      println!("辞書名の後ろの識別子がない");
+
+                      return None;
+                    }
+                }
+
+
+              let  o = Operand::Identifier(s.clone(),d_name_opt);
 
               return Some(o);
             },
@@ -292,15 +312,33 @@ read_definition(toks: &Vec<Token>, pos: &mut usize)-> Option<Definition>
 pub fn
 read_dictionary(src: &SourceFile)-> Result<Dictionary,()>
 {
-  let  mut dic = Dictionary::new();
+  let  mut dic = Dictionary::new("");
 
     if let Ok(toks) = tokenize(src)
     {
-      let  striped = strip_spaces(toks);
+      let  stripped = strip_spaces(toks);
 
       let  mut pos: usize = 0;
 
-        while let Some(def) = read_definition(&striped,&mut pos)
+        if read_string_of_others(&stripped,&mut pos,"#")
+        {
+            if let Some(s) = get_identifier(&stripped,pos)
+            {
+              dic.name = s.clone();
+
+              advance(&mut pos);
+            }
+
+          else
+            {
+              println!("読むべき辞書名がない");
+
+              return Err(());
+            }
+        }
+
+
+        while let Some(def) = read_definition(&stripped,&mut pos)
         {
           dic.add(def);
         }

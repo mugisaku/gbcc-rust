@@ -5,7 +5,7 @@ use crate::syntax::dictionary::Dictionary;
 
 static DIC_S: &'static str =
 r##"
-
+#expression
 
 operand_core: .Identifier | .Integer | .Floating | .Character | .String | ("(" & expression & ")");
 
@@ -46,24 +46,32 @@ expression: operand & [{expression_tail}];
 
 
 pub fn
-get_dictionary()-> Dictionary
+get_dictionary()-> &'static Dictionary
 {
-    if let Ok(mut dic) = Dictionary::make_from_string(&DIC_S)
+  static  mut dic_opt: Option<Dictionary> = None;
+
+    unsafe
     {
-        if dic.test().is_ok()
+        if let None = dic_opt
         {
-            if dic.set_main("expression").is_ok()
+            if let Ok(mut tmp_dic) = Dictionary::make_from_string(&DIC_S)
             {
-              return dic;
+                if tmp_dic.test().is_ok()
+                {
+                  dic_opt = Some(tmp_dic);
+                }
             }
         }
 
 
-      println!("expression dictionary test is failed");
+        if let Some(dic) = &dic_opt
+        {
+          return dic;
+        }
     }
 
-
-   panic!("expression dictionary making error");
+ 
+  panic!("expression dictionary initialize error");
 }
 
 

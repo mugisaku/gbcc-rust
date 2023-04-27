@@ -37,7 +37,8 @@ use super::{
 struct
 Status<'a,'b>
 {
-  dictionary : &'a Dictionary,
+  dictionary_list : Vec<&'a Dictionary>,
+  dictionary_stack: Vec<&'a Dictionary>,
 
   token_string: &'b Vec<Token>,
 
@@ -53,6 +54,41 @@ Status<'a,'b>
 impl<'a,'b>
 Status<'a,'b>
 {
+
+
+fn
+open_dictionary(&mut self, name: &str)-> Result<(),()>
+{
+    for dic in &self.dictionary_list
+    {
+        if dic.name == name
+        {
+          self.dictionary_stack.push(dic);
+
+          return Ok(());
+        }
+    }
+
+
+  println!("Status::open_directory error: dictionary {} is not found",name);
+
+  Err(())
+}
+
+
+fn
+close_dictionary(&mut self)-> Result<(),()>
+{
+    if let Some(_) = self.dictionary_stack.pop()
+    {
+      return Ok(());
+    }
+
+
+  println!("Status::close_directory error: opened dictionary is none");
+
+  Err(())
+}
 
 
 fn
@@ -131,10 +167,28 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
                 }
             }
         },
-  Operand::Identifier(s)=>
+  Operand::Identifier(s,d_name_opt)=>
         {
+            if let Some(d_name) = d_name_opt
+            {
+                if self.open_dictionary(d_name).is_err()
+                {
+                  return None;
+                }
+            }
+
+
             if let Some(objs) = self.read_by_name(s)
             {
+                if let Some(_) = d_name_opt
+                {
+                    if self.close_dictionary().is_err()
+                    {
+                      return None;
+                    }
+                }
+
+
               return Some(objs);
             }
         },
@@ -350,23 +404,26 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
 fn
 read_by_name(&mut self, name: &str)-> Option<Vec<Object>>
 {
-    if let Some(def) = self.dictionary.find(name)
+    if let Some(dic) = self.dictionary_stack.last()
     {
-        if self.depth >= 800
+        if let Some(def) = dic.find(name)
         {
-          println!("read_by_name: depth limit is over");
+            if self.depth >= 800
+            {
+              println!("read_by_name: depth limit is over");
 
-          return None;
+              return None;
+            }
+
+
+          self.depth += 1;
+
+          let  res = self.read_by_definition(def);
+
+          self.depth -= 1;
+
+          return res;
         }
-
-
-      self.depth += 1;
-
-      let  res = self.read_by_definition(def);
-
-      self.depth -= 1;
-
-      return res;
     }
 
 
@@ -380,17 +437,43 @@ read_by_name(&mut self, name: &str)-> Option<Vec<Object>>
 
 
 pub fn
-parse(toks: &Vec<Token>, dic: &Dictionary)-> Result<Directory,()>
+parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Directory,()>
 {
   let  mut dir = Directory::new("/");
 
-    if let Some(main_def) = dic.get_main() 
+    if let Some(main_def) = dic.find(main_def_name) 
     {
-      let  mut st = Status{dictionary: dic, token_string: toks, position: 0, depth: 0, interruption: false};
+      let  mut st = Status{
+                      dictionary_list : Vec::new(),
+                      dictionary_stack: Vec::new(),
+                      token_string: toks,
+                      position: 0,
+                      depth: 0,
+                      interruption: false,
+                    };
+
+
+        if let Some(mut dics) = dics_opt
+        {
+          st.dictionary_list.append(&mut dics);
+        }
+
+
+      st.dictionary_stack.push(dic);
+
+      let  mut prev_pos: usize = 0;
 
         while let Some(mut objs) = st.read_by_definition(main_def)
         {
           dir.object_list.append(&mut objs);
+
+            if st.position == prev_pos
+            {
+              break;
+            }
+
+
+          prev_pos = st.position;
         }
 
 
@@ -400,6 +483,21 @@ parse(toks: &Vec<Token>, dic: &Dictionary)-> Result<Directory,()>
 
           return Err(());
         }
+
+
+        if st.position < toks.len()
+        {
+          println!("there are remained some unparsed tokens.");
+
+          return Err(());
+        }
+    }
+
+  else
+    {
+      println!("{} as main definition is nout found.",main_def_name);
+
+      return Err(());
     }
 
 
@@ -408,14 +506,14 @@ parse(toks: &Vec<Token>, dic: &Dictionary)-> Result<Directory,()>
 
 
 pub fn
-parse_from_string(s: &str, dic: &Dictionary)-> Result<Directory,()>
+parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Directory,()>
 {
     if let Ok(toks) = tokenize_from_string(s)
     {
 //crate::token::print_token_string(&toks);
       let  stripped = strip_spaces(toks);
 
-      return parse(&stripped,dic);
+      return parse(&stripped,dic,main_def_name,dics_opt);
     }
 
 

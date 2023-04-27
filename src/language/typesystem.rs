@@ -80,39 +80,26 @@ TypeNote
 pub fn
 make_from_string(s: &str)-> Result<TypeNote,()>
 {
-  static  mut dic_opt: Option<crate::syntax::dictionary::Dictionary> = None;
+  use crate::syntax::dictionary::Dictionary;
 
-    unsafe
+  let  dic = self::dictionary::get_dictionary();
+
+  let  dics: Vec<&Dictionary> = vec![dic];
+
+    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"type_note",Some(dics))
     {
-        if let None = &mut dic_opt
+      let  cur = crate::syntax::Cursor::new(&dir);
+
+        if let Some(t_dir) = cur.get_directory()
         {
-          let  mut dic = self::dictionary::get_dictionary();
-
-          dic.set_main("type_note");
-
-          dic_opt = Some(dic);
-        }
-
-
-        if let Some(dic) = &dic_opt
-        {
-            if let Ok(dir) = crate::syntax::parse::parse_from_string(s,&dic)
-            {
-              let  cur = crate::syntax::Cursor::new(&dir);
-
-                if let Some(t_dir) = cur.get_directory()
-                {
 //                  t_dir.print(0);
 
-                  return self::read_type_note::read_type_note(&t_dir);
-                }
-            }
-
-
-          println!("make_from_string error: parse is failed");
+          return self::read_type_note::read_type_note(&t_dir);
         }
     }
 
+
+  println!("make_from_string error: parse is failed");
 
   Err(())
 }

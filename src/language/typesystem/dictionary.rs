@@ -5,6 +5,7 @@ use crate::syntax::dictionary::Dictionary;
 
 static DIC_S: &'static str =
 r##"
+#typesystem
 
 
 function_pointer: 'fn & "(" & [type_note_list] & ")" & ["->" & type_note];
@@ -29,20 +30,28 @@ type_note_list: type_note & [{"," & type_note}];
 
 
 pub fn
-get_dictionary()-> Dictionary
+get_dictionary()-> &'static Dictionary
 {
-    if let Ok(mut dic) = Dictionary::make_from_string(&DIC_S)
+  static  mut dic_opt: Option<Dictionary> = None;
+
+    unsafe
     {
-        if dic.test().is_ok()
+        if let None = dic_opt
         {
-            if dic.set_main("type_note").is_ok()
+            if let Ok(mut tmp_dic) = Dictionary::make_from_string(&DIC_S)
             {
-              return dic;
+                if tmp_dic.test().is_ok()
+                {
+                  dic_opt = Some(tmp_dic);
+                }
             }
         }
 
 
-      println!("typesystem dictionary test is failed");
+        if let Some(dic) = &dic_opt
+        {
+          return dic;
+        }
     }
 
 

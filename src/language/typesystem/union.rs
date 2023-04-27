@@ -101,7 +101,7 @@ print_id(&self, buf: &mut String)
 pub fn
 print(&self)
 {
-  print!("union{{");
+  print!("{{");
 
     for m in &self.member_list
     {

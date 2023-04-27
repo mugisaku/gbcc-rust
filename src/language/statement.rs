@@ -1,16 +1,25 @@
 
 
+pub mod read_statement;
+pub mod dictionary;
+
 use super::expression::Expression;
+use super::typesystem::{
+  TypeNote,
+  r#struct::Struct,
+  r#union::Union,
+  r#enum::Enum,
+  function_signature::FunctionSignature,
+
+};
 
 
 pub struct
 Var
 {
-  name: String,
+  pub(crate) type_note: TypeNote,
 
-//  type: Type,
-
-  expression: Option<Expression>,
+  pub(crate) expression: Option<Expression>,
 
 }
 
@@ -18,44 +27,97 @@ Var
 pub struct
 Fn
 {
-  name: String,
+  pub(crate) signature: FunctionSignature,
 
-  parameter_list: Vec<Parameter>,
-
-//  return_type: Type,
-
-  block: Block,
+  pub(crate) block: Block,
 
 }
+
+
+pub enum
+Definition
+{
+  Fn(Fn),
+  Var(Var),
+  Struct(Struct),
+  Enum(Enum),
+  Union(Union),
+
+}
+
+
 
 
 pub struct
-Struct
+Declaration
 {
+  pub(crate) name: String,
+
+  pub(crate) definition: Definition,
+
 }
 
 
-pub struct
-Enum
+impl
+Declaration
 {
+
+
+pub fn
+new(name: &str, def: Definition)-> Declaration
+{
+  Declaration{name: String::from(name), definition: def}
 }
 
 
-pub struct
-Union
+pub fn
+print(&self)
 {
+    match &self.definition
+    {
+  Definition::Fn(f)=>
+        {
+          print!("fn\n{}",&self.name);
+          f.signature.print();
+          f.block.print();
+        },
+  Definition::Var(v)=>
+        {
+          print!("var\n{}: ",&self.name);
+          v.type_note.print();
+        },
+  Definition::Struct(st)=>
+        {
+          print!("struct\n{}",&self.name);
+
+          st.print();
+        },
+  Definition::Union(un)=>
+        {
+          print!("union\n{}",&self.name);
+
+          un.print();
+        },
+  Definition::Enum(en)=>
+        {
+          print!("enum\n{}",&self.name);
+
+          en.print();
+        },
+    }
 }
+
+
+}
+
+
 
 
 pub enum
 Statement
 {
   Empty,
-  Var(Var),
-  Fn(Fn),
-  Struct(Struct),
-  Enum(Enum),
-  Union(Union),
+  Declaration(Declaration),
   Block(Block),
   If(Vec<Block>),
   For(Block),
@@ -74,120 +136,57 @@ Statement
 
 
 pub fn
-read_return(dir: &Directory)-> Result<Statement,()>
+make_from_string(s: &str)-> Result<Statement,()>
 {
-  let mut  cur = Cursor::from(dir);
+  use crate::syntax::dictionary::Dictionary;
 
-    if let Some(d) = cur.seek_directory("expression")
+  let       dic = self::dictionary::get_dictionary();
+  let  expr_dic = super::expression::dictionary::get_dictionary();
+  let    ty_dic = super::typesystem::dictionary::get_dictionary();
+
+  let  dics: Vec<&Dictionary> = vec![dic,expr_dic,ty_dic];
+
+    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"statement",Some(dics))
     {
-        if let Ok(e) = Expression::build(d)
+      let  cur = crate::syntax::Cursor::new(&dir);
+
+        if let Some(e_dir) = cur.get_directory()
         {
-          return Ok(Statement::Return(Some(e)));
+//                  e_dir.print(0);
+
+          return self::read_statement::read_statement(&e_dir);
         }
     }
 
 
-  Ok(Statement::Return(None))
-}
-
-
-pub fn
-read_if(dir: &Directory)-> Result<Statement,()>
-{
-  let mut  cur = Cursor::from(dir);
-
-  cur.advance(1);
-
-    if let Some(d) = cur.get_directory_with_name("block_statement")
-    {
-    }
-
-
-  Ok(Statement::Return(None))
-}
-
-
-pub fn
-read_while(dir: &Directory)-> Result<Statement,()>
-{
-  let mut  cur = Cursor::from(dir);
-
-  cur.advance(1);
-
-    if let Some(expr_d) = cur.get_directory_with_name("expression")
-    {
-        if let Ok(e) = Expression::build(expr_d)
-        {
-          cur.advance(1);
-
-            if let Some(blk_d) = cur.get_directory_with_name("block_statement")
-            {
-                if let Ok(blk) = Block::build(blk_d)
-                {
-                  return Ok(Statement::While(blk));
-                }
-            }
-        }
-    }
-
+  println!("make_from_string error: parse is failed");
 
   Err(())
 }
 
 
 pub fn
-build(dir: &Directory)-> Result<Statement,()>
+execute(&self)
 {
-  let mut  cur = Cursor::from(dir);
-
-    if let Some(d) = cur.get_directory()
+    match self
     {
-      let  d_name = d.get_name();
-
-        if d.get_name() == "if_statement"
+  Statement::Empty=>{},
+  Statement::Declaration(decl)=>{},
+  Statement::Block(blk)=>{},
+  Statement::If(blks)=>
         {
-          return Self::read_if(d);
-        }
-
-      else
-        if d.get_name() == "block_statement"
+        },
+  Statement::For(blks)=>{},
+  Statement::While(blk)=>
         {
-            if let Ok(blk) = Block::build(d)
-            {
-              return Ok(Statement::Block(blk));
-            }
-        }
-
-      else
-        if d.get_name() == "while_statement"
+        },
+  Statement::Break=>{},
+  Statement::Continue=>{},
+  Statement::Return(op_e)=>
         {
-          return Self::read_while(d);
-        }
-
-      else
-        if d.get_name() == "break_statement"
-        {
-          return Ok(Statement::Break);
-        }
-
-      else
-        if d.get_name() == "continue_statement"
-        {
-          return Ok(Statement::Continue);
-        }
-
-      else
-        if d.get_name() == "return_statement"
-        {
-          return Self::read_return(d);
-        }
-
-
-      cur.advance(1);
+        },
+  Statement::Expression(e)=>{},
     }
-
-
-  Err(())
 }
 
 
@@ -196,7 +195,8 @@ print(&self)
 {
     match self
     {
-  Statement::Empty=>{print!("__EMPTY_STATEMENT__");},
+  Statement::Empty=>{print!(";");},
+  Statement::Declaration(decl)=>{decl.print();},
   Statement::Block(blk)=>{blk.print();},
   Statement::If(blks)=>
         {
@@ -222,6 +222,7 @@ print(&self)
                 }
             }
         },
+  Statement::For(blks)=>{},
   Statement::While(blk)=>
         {
           print!("while ");
@@ -240,7 +241,6 @@ print(&self)
             }
         },
   Statement::Expression(e)=>{e.print();},
-//  Statement::VariableDeclaration(vd)=>{vd.print();},
     }
 }
 
@@ -255,7 +255,7 @@ Block
 {
   condition: Option<Expression>,
 
-  statements: Vec<Statement>,
+  statement_list: Vec<Statement>,
 
 }
 
@@ -268,54 +268,7 @@ Block
 pub fn
 new()-> Block
 {
-  Block{ condition: None, statements: Vec::new()}
-}
-
-
-pub fn
-build(dir: &Directory)-> Result<Block,()>
-{
-  let mut  cur = Cursor::from(dir);
-
-  let mut  stmts: Vec<Statement> = Vec::new();
-
-    while let Some(o) = cur.get()
-    {
-        if let ObjectData::Directory(d) = o.get_data()
-        {
-          let  d_name = d.get_name();
-
-            if d_name == "statement"
-            {
-                if let Ok(stmt) = Statement::build(d)
-                {
-                  stmts.push(stmt);
-                }
-            }
-/*
-          else
-            if d_name == "variable_declartion"
-            {
-              let  vd = VariableDeclaration::from(d);
-
-              stmts.push(Statement::VariableDeclaration(vd));
-            }
-*/
-          else
-            if d_name == "expression"
-            {
-                if let Ok(e) = Expression::build(d)
-                {
-                  stmts.push(Statement::Expression(e));
-                }
-            }
-        }
-
-      cur.advance(1);
-    }
-
-
-  Ok(Block{ condition: None, statements: stmts})
+  Block{ condition: None, statement_list: Vec::new()}
 }
 
 
@@ -334,9 +287,19 @@ get_condition(&self)-> &Option<Expression>
 
 
 pub fn
-get_statements(&self)-> &Vec<Statement>
+get_statement_list(&self)-> &Vec<Statement>
 {
-  &self.statements
+  &self.statement_list
+}
+
+
+pub fn
+execute(&self)
+{
+    for st in &self.statement_list
+    {
+      st.execute();
+    }
 }
 
 
@@ -351,7 +314,7 @@ print(&self)
 
   print!("{}\n","{");
 
-    for stmt in &self.statements
+    for stmt in &self.statement_list
     {
       stmt.print();
 
@@ -365,6 +328,58 @@ print(&self)
 
 }
 
+
+
+
+pub struct
+Program
+{
+  pub(crate) statement_list: Vec<Statement>,
+
+}
+
+
+impl
+Program
+{
+
+
+pub fn
+make_from_string(s: &str)-> Result<Program,()>
+{
+  use crate::syntax::dictionary::Dictionary;
+
+  let       dic = self::dictionary::get_dictionary();
+  let  expr_dic = super::expression::dictionary::get_dictionary();
+  let    ty_dic = super::typesystem::dictionary::get_dictionary();
+
+  let  dics: Vec<&Dictionary> = vec![dic,expr_dic,ty_dic];
+
+    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"primary_statement",Some(dics))
+    {
+      return crate::language::statement::read_statement::read_program(&dir)
+    }
+
+
+  println!("make_from_string error: parse is failed");
+
+  Err(())
+}
+
+
+pub fn
+print(&self)
+{
+  print!("program\n\n");
+
+    for st in &self.statement_list
+    {
+      st.print();
+    }
+}
+
+
+}
 
 
 

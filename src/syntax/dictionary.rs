@@ -11,7 +11,7 @@ Operand
   Option(    Box<Expression>),
   Repetition(Box<Expression>),
 
-  Identifier(String),
+  Identifier(String,Option<String>),
   Keyword(String),
   String(String),
 
@@ -37,13 +37,16 @@ test(&self, dic: &Dictionary)-> Result<(),()>
   Operand::One(e)=>      {e.test(dic)},
   Operand::Option(e)=>   {e.test(dic)},
   Operand::Repetition(e)=>{e.test(dic)},
-  Operand::Identifier(s)=>
+  Operand::Identifier(s,d_name_opt)=>
         {
-            if let None = dic.find(s)
+            if let None = d_name_opt
             {
-              print!("definition <{}> not found.\n",s);
+                if let None = dic.find(s)
+                {
+                  print!("definition <{}> not found.\n",s);
 
-              return Err(());
+                  return Err(());
+                }
             }
 
 
@@ -83,7 +86,16 @@ print(&self)
           e.print();
           print!("{}","}");
         },
-  Operand::Identifier(s)=>{print_string(s);},
+  Operand::Identifier(s,d_name_opt)=>
+        {
+            if let Some(d_name) = d_name_opt
+            {
+              print!("{}::",d_name);
+            }
+
+
+          print_string(s);
+        },
   Operand::Keyword(s)=>
         {
           print!("\'");
@@ -396,8 +408,8 @@ print(&self)
 pub struct
 Dictionary
 {
+  pub(crate) name: String,
   pub(crate) definition_list: Vec<Definition>,
-  pub(crate) main_index: usize,
 
 }
 
@@ -408,9 +420,9 @@ Dictionary
 
 
 pub fn
-new()-> Dictionary
+new(name: &str)-> Dictionary
 {
-  Dictionary{definition_list: Vec::new(), main_index: 0}
+  Dictionary{name: String::from(name), definition_list: Vec::new()}
 }
 
 
@@ -420,37 +432,6 @@ make_from_string(s: &str)-> Result<Dictionary,()>
   let  src = crate::source_file::SourceFile::from(s);
 
   return super::read_dictionary::read_dictionary(&src);
-}
-
-
-pub fn
-get_main(&self)-> Option<&Definition>
-{
-    if self.main_index < self.definition_list.len()
-    {
-      return Some(&self.definition_list[self.main_index]);
-    }
-
-
-  None
-}
-
-
-pub fn
-set_main(&mut self, name: &str)-> Result<(),()>
-{
-    for i in 0..self.definition_list.len()
-    {
-        if self.definition_list[i].get_name() == name
-        {
-          self.main_index = i;
-
-          return Ok(());
-        }
-    }
-
-
-  Err(())
 }
 
 
@@ -508,12 +489,17 @@ test(&self)-> Result<(),()>
 pub fn
 print(&self)
 {
+  print!("dictionary\n{}\n{{\n",&self.name);
+
     for def in &self.definition_list
     {
       def.print();
 
       print!("\n\n");
     }
+
+
+  print!("}}\n\n");
 }
 
 

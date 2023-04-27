@@ -8,52 +8,6 @@ mod debug;
 use std::env;
 
 
-static DIC_S: &'static str =
-r##"
-top_element:
-  function_definition |
-    struct_definition |
-      enum_definition |
-  variable_definition;
-
-statement:
-                 ";" |
-        if_statement |
-     while_statement |
-     break_statement |
-  continue_statement |
-     block_statement |
-     return_statement;
-
-if_statement      : 'if -> expression & block_statement & [{'else & ['if] & block_statement}];
-while_statement   : 'while -> block_statement;
-break_statement   : 'break;
-continue_statement: 'continue;
-block_statement   : "{" & [{statement | (variable_declaration & ["=" & expression]) | expression}] &"}";
-return_statement  : 'return -> [expression];
-
-
-function_definition: 'fn -> .Identifier & function_signature & block_statement;
-
-variable_declaration: 'var & parameter;
-
-
-"##;
-
-
-static TXT_S: &'static str =
-r"
-
-fn
-test()-> slen
-{
-  return 1+2*3
-}
-
-
-";
-
-
 fn
 open_and_print_tokens()
 {
@@ -88,6 +42,7 @@ fn
 print_help()
 {
   println!("e <expression> -- evaluate <expression> and print its result.");
+  println!("x <statement> -- execute <statement>.");
   println!("t <...> -- make type from <...>.");
   println!("h -- print this text.");
   println!("q -- quit this program.");
@@ -135,6 +90,36 @@ evaluate(s: &str)
       print!(" = ");
 
       v.print();
+
+      print!("\n");
+    }
+}
+
+
+fn
+execute(s: &str)
+{
+  use crate::language::statement::Statement;
+  use crate::language::context::Context;
+
+    if let Ok(st) = Statement::make_from_string(s)
+    {
+      st.print();
+
+      print!("\n");
+    }
+}
+
+
+fn
+execute_program(s: &str)
+{
+  use crate::language::statement::Program;
+  use crate::language::context::Context;
+
+    if let Ok(prog) = Program::make_from_string(s)
+    {
+      prog.print();
 
       print!("\n");
     }
@@ -192,6 +177,18 @@ main()
                 if cmd == "t"
                 {
                   type_make(arg);
+                }
+
+              else
+                if cmd == "x"
+                {
+                  execute(arg);
+                }
+
+              else
+                if cmd == "p"
+                {
+                  execute_program(arg);
                 }
 
               else

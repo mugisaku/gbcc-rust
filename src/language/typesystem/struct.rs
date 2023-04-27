@@ -194,7 +194,7 @@ print_id(&self, buf: &mut String)
 pub fn
 print(&self)
 {
-  print!("struct{{");
+  print!("{{");
 
   print_member_list(&self.member_list);
 

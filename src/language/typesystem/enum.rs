@@ -88,12 +88,17 @@ print_id(&self, buf: &mut String)
 pub fn
 print(&self)
 {
+  println!("{{");
+
     for e in &self.member_list
     {
       e.print();
 
       println!(",");
     }
+
+
+  println!("}}");
 }
 
 

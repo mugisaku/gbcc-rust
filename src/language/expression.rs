@@ -419,39 +419,26 @@ Expression
 pub fn
 make_from_string(s: &str)-> Result<Expression,()>
 {
-  static  mut dic_opt: Option<crate::syntax::dictionary::Dictionary> = None;
+  use crate::syntax::dictionary::Dictionary;
 
-    unsafe
+  let  dic = self::dictionary::get_dictionary();
+
+  let  dics: Vec<&Dictionary> = vec![dic];
+
+    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"expression",Some(dics))
     {
-        if let None = &mut dic_opt
+      let  cur = crate::syntax::Cursor::new(&dir);
+
+        if let Some(e_dir) = cur.get_directory()
         {
-          let  mut dic = self::dictionary::get_dictionary();
+//          e_dir.print(0);
 
-          dic.set_main("expression");
-
-          dic_opt = Some(dic);
-        }
-
-
-        if let Some(dic) = &dic_opt
-        {
-            if let Ok(dir) = crate::syntax::parse::parse_from_string(s,&dic)
-            {
-              let  cur = crate::syntax::Cursor::new(&dir);
-
-                if let Some(e_dir) = cur.get_directory()
-                {
-//                  e_dir.print(0);
-
-                  return self::read_expression::read_expression(&e_dir);
-                }
-            }
-
-
-          println!("make_from_string error: parse is failed");
+          return self::read_expression::read_expression(&e_dir);
         }
     }
 
+
+  println!("make_from_string error: parse is failed");
 
   Err(())
 }
