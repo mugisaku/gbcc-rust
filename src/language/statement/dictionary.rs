@@ -28,13 +28,13 @@ while   : 'while -> block;
 for     : 'for -> block;
 break   : 'break;
 continue: 'continue;
-block   : "{" & [{statement}] & "}";
+block   : "{" & [statement & {statement}] & "}";
 return  : 'return -> [expression::expression];
 
 parameter: .Identifier & ":" & typesystem::type_note;
-parameter_list: "(" & [parameter & {"," & parameter}] & ")";
+parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
 
-fn    : 'fn -> .Identifier & parameter_list & block;
+fn    : 'fn -> .Identifier & parameter_list & ["->" & typesystem::type_note] & block;
 var   : 'var -> .Identifier & [":" & typesystem::type_note] & ["=" & expression::expression] & ";";
 struct: 'struct -> .Identifier;
 union : 'union -> .Identifier;

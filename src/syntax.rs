@@ -314,6 +314,8 @@ get_directory_with_name(&self, name: &str)-> Option<&Directory>
 pub fn
 seek_directory_with_name(&mut self, name: &str)-> Option<&Directory>
 {
+  let  tmp = self.position;
+
     while let None = self.get_directory_with_name(name)
     {
         if self.is_not_finished()
@@ -323,6 +325,8 @@ seek_directory_with_name(&mut self, name: &str)-> Option<&Directory>
 
       else
         {
+          self.position = tmp;
+
           return None;
         }
     }

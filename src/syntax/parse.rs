@@ -489,6 +489,18 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt:
         {
           println!("there are remained some unparsed tokens.");
 
+           for i in st.position..toks.len()
+           {
+             print!("{}: ",i);
+
+             toks[i].print();
+
+             println!();
+           }
+
+
+          println!("{} parsed",dir.object_list.len());
+
           return Err(());
         }
     }

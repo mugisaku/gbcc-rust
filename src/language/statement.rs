@@ -79,6 +79,7 @@ print(&self)
         {
           print!("fn\n{}",&self.name);
           f.signature.print();
+          print!("\n");
           f.block.print();
         },
   Definition::Var(v)=>

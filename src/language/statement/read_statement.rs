@@ -14,6 +14,7 @@ use crate::language::typesystem::{
   r#struct::Struct,
   r#union::Union,
   r#enum::Enum,
+  function_signature::FunctionSignature,
   read_type_note::read_type_note,
 };
 
@@ -104,14 +105,107 @@ read_for(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
+read_parameter(dir: &Directory)-> Result<(String,TypeNote),()>
+{
+  let  mut cur = Cursor::new(dir);
+
+    if let Some(id) = cur.get_identifier()
+    {
+      let  name = id.clone();
+
+      cur.advance(2);
+
+        if let Some(ty_d) = cur.get_directory_with_name("type_note")
+        {
+            if let Ok(ty) = read_type_note(ty_d)
+            {
+              return Ok((name,ty));
+            }
+        }
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+read_parameter_list(dir: &Directory)-> Result<Vec<(String,TypeNote)>,()>
+{
+  let  mut cur = Cursor::new(dir);
+  let  mut ls: Vec<(String,TypeNote)> = Vec::new();
+
+    while let Some(d) = cur.seek_directory_with_name("parameter")
+    {
+        if let Ok(para) = read_parameter(d)
+        {
+          ls.push(para);
+
+          cur.advance(1);
+        }
+
+      else
+        {
+          return Err(());
+        }
+    }
+
+
+  Ok(ls)
+}
+
+
+pub fn
 read_fn(dir: &Directory)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
   cur.advance(1);
 
-    if let Some(expr_d) = cur.get_directory_with_name("")
+    if let Some(id) = cur.get_identifier()
     {
+      let  name = id.clone();
+
+      let  mut fnsig = FunctionSignature::new();
+
+      cur.advance(1);
+
+        if let Some(parals_d) = cur.get_directory_with_name("parameter_list")
+        {
+            if let Ok(parals) = read_parameter_list(parals_d)
+            {
+                for para in parals
+                {
+                  fnsig.parameter.add(&para.0,para.1);
+                }
+
+
+              cur.advance(1);
+
+                if let Some(ty_d) = cur.seek_directory_with_name("type_note")
+                {
+                    if let Ok(ty) = read_type_note(ty_d)
+                    {
+                      fnsig.return_type_note = ty;
+
+                      cur.advance(1);
+                    }
+                }
+
+
+                if let Some(blk_d) = cur.seek_directory_with_name("block")
+                {
+                    if let Ok(blk) = read_block(blk_d)
+                    {
+                      let  f = Fn{signature: fnsig, block: blk};
+
+                      let  decl = Declaration::new(&name,Definition::Fn(f));
+
+                      return Ok(Statement::Declaration(decl));
+                    }
+                }
+            }
+        }
     }
 
 
@@ -205,31 +299,19 @@ read_block(dir: &Directory)-> Result<Block,()>
 
   let  mut stmts: Vec<Statement> = Vec::new();
 
-    while let Some(o) = cur.get_object()
+    while let Some(d) = cur.get_directory()
     {
-        if let ObjectData::Directory(d) = o.get_data()
+        if let Ok(stmt) = read_statement(d)
         {
-          let  d_name = d.get_name();
+          stmts.push(stmt);
 
-            if d_name == "statement"
-            {
-                if let Ok(stmt) = read_statement(d)
-                {
-                  stmts.push(stmt);
-                }
-            }
-
-          else
-            if d_name == "expression"
-            {
-                if let Ok(e) = read_expression(d)
-                {
-                  stmts.push(Statement::Expression(e));
-                }
-            }
+          cur.advance(1);
         }
 
-      cur.advance(1);
+      else
+        {
+          return Err(());
+        }
     }
 
 

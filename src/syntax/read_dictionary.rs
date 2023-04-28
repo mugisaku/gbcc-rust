@@ -116,17 +116,21 @@ read_operand(toks: &Vec<Token>, pos: &mut usize)-> Option<Operand>
         {
       TokenData::Identifier(s)=>
             {
+              let  mut name = String::new();
+
               let  mut d_name_opt: Option<String> = None;
 
               advance(pos);
 
                 if read_string_of_others(toks,pos,"::")
                 {
-                    if let Some(d_name) = get_identifier(toks,*pos)
+                    if let Some(last_name) = get_identifier(toks,*pos)
                     {
                       advance(pos);
 
-                      d_name_opt = Some(d_name.clone());
+                      name = last_name.clone();
+
+                      d_name_opt = Some(s.clone());
                     }
 
                   else
@@ -137,8 +141,13 @@ read_operand(toks: &Vec<Token>, pos: &mut usize)-> Option<Operand>
                     }
                 }
 
+              else
+                {
+                  name = s.clone();
+                }
 
-              let  o = Operand::Identifier(s.clone(),d_name_opt);
+
+              let  o = Operand::Identifier(name,d_name_opt);
 
               return Some(o);
             },
