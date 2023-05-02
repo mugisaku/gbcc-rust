@@ -423,7 +423,7 @@ make_from_string(s: &str)-> Result<Expression,()>
 
   let  dic = self::dictionary::get_dictionary();
 
-  let  dics: Vec<&Dictionary> = vec![dic];
+  let  dics: Vec<&Dictionary> = vec![];
 
     if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"expression",Some(dics))
     {

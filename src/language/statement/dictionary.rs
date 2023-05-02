@@ -17,6 +17,8 @@ statement: ";"
   | return
   | fn
   | var
+  | static
+  | const
   | struct
   | union
   | enum
@@ -24,27 +26,28 @@ statement: ";"
   ;
 
 if      : 'if -> expression::expression & block & [{'else & ['if] & block}];
-while   : 'while -> block;
+while   : 'while -> expression::expression & block;
 for     : 'for -> block;
 break   : 'break;
 continue: 'continue;
-block   : "{" & [statement & {statement}] & "}";
+block   : "{" & [{statement}] & "}";
 return  : 'return -> [expression::expression];
 
 parameter: .Identifier & ":" & typesystem::type_note;
 parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
 
 fn    : 'fn -> .Identifier & parameter_list & ["->" & typesystem::type_note] & block;
-var   : 'var -> .Identifier & [":" & typesystem::type_note] & ["=" & expression::expression] & ";";
+var   : 'var -> .Identifier & [":" & typesystem::type_note] & ["=" & expression::expression];
+static: 'static -> .Identifier & ":" & typesystem::type_note & "=" & expression::expression;
+const : 'const  -> .Identifier & ":" & typesystem::type_note & "=" & expression::expression;
 struct: 'struct -> .Identifier;
 union : 'union -> .Identifier;
 enum  : 'enum -> .Identifier;
 
-primary_statement: fn | var | struct | union | enum;
+primary_statement: fn | var | static | const | struct | union | enum;
 
 
 "##;
-
 
 
 

@@ -19,7 +19,7 @@ Var
 {
   pub(crate) type_note: TypeNote,
 
-  pub(crate) expression: Option<Expression>,
+  pub(crate) expression_opt: Option<Expression>,
 
 }
 
@@ -39,6 +39,8 @@ Definition
 {
   Fn(Fn),
   Var(Var),
+  Static(Var),
+  Const(Var),
   Struct(Struct),
   Enum(Enum),
   Union(Union),
@@ -86,6 +88,34 @@ print(&self)
         {
           print!("var\n{}: ",&self.name);
           v.type_note.print();
+
+            if let Some(e) = &v.expression_opt
+            {
+              print!(" = ");
+              e.print();
+            }
+        },
+  Definition::Static(v)=>
+        {
+          print!("static\n{}: ",&self.name);
+          v.type_note.print();
+
+            if let Some(e) = &v.expression_opt
+            {
+              print!(" = ");
+              e.print();
+            }
+        },
+  Definition::Const(v)=>
+        {
+          print!("const\n{}: ",&self.name);
+          v.type_note.print();
+
+            if let Some(e) = &v.expression_opt
+            {
+              print!(" = ");
+              e.print();
+            }
         },
   Definition::Struct(st)=>
         {
@@ -354,7 +384,7 @@ make_from_string(s: &str)-> Result<Program,()>
   let  expr_dic = super::expression::dictionary::get_dictionary();
   let    ty_dic = super::typesystem::dictionary::get_dictionary();
 
-  let  dics: Vec<&Dictionary> = vec![dic,expr_dic,ty_dic];
+  let  dics: Vec<&Dictionary> = vec![expr_dic,ty_dic];
 
     if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"primary_statement",Some(dics))
     {
@@ -376,6 +406,8 @@ print(&self)
     for st in &self.statement_list
     {
       st.print();
+
+      print!("\n\n");
     }
 }
 

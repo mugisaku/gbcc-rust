@@ -127,6 +127,30 @@ execute_program(s: &str)
 
 
 fn
+load()
+{
+  use crate::language::statement::Program;
+  use crate::language::context::Context;
+
+  use std::io::Read;
+
+    if let Ok(mut f) = std::fs::File::open("test.g")
+    {
+      let  mut s = String::new();
+
+      let  _ = f.read_to_string(&mut s);
+
+        if let Ok(prog) = Program::make_from_string(&s)
+        {
+          prog.print();
+
+          print!("\n");
+        }
+    }
+}
+
+
+fn
 type_make(s: &str)
 {
   use crate::language::typesystem::TypeNote;
@@ -189,6 +213,12 @@ main()
                 if cmd == "p"
                 {
                   execute_program(arg);
+                }
+
+              else
+                if cmd == "l"
+                {
+                  load();
                 }
 
               else

@@ -214,14 +214,93 @@ read_fn(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_var(dir: &Directory)-> Result<Statement,()>
+read_Var(dir: &Directory)-> Result<(String,Var),()>
 {
   let  mut cur = Cursor::new(dir);
 
   cur.advance(1);
 
-    if let Some(expr_d) = cur.get_directory_with_name("")
+    if let Some(id) = cur.get_identifier()
     {
+      let  name = id.clone();
+
+      let  mut var = Var{type_note: TypeNote::Unspecified, expression_opt: None};
+
+      cur.advance(1);
+
+        if let Some(ty_d) = cur.seek_directory_with_name("type_note")
+        {
+            if let Ok(ty) = read_type_note(ty_d)
+            {
+              var.type_note = ty;
+            }
+
+
+          cur.advance(1);
+        }
+
+
+        if let Some(e_d) = cur.seek_directory_with_name("expression")
+        {
+            if let Ok(e) = read_expression(e_d)
+            {
+              var.expression_opt = Some(e);
+            }
+        }
+
+
+      return Ok((name,var));
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+read_var(dir: &Directory)-> Result<Statement,()>
+{
+    if let Ok((name,var)) = read_Var(dir)
+    {
+      let  def = Definition::Var(var);
+
+      let  decl = Declaration::new(&name,def);
+
+      return Ok(Statement::Declaration(decl));
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+read_static(dir: &Directory)-> Result<Statement,()>
+{
+    if let Ok((name,var)) = read_Var(dir)
+    {
+      let  def = Definition::Static(var);
+
+      let  decl = Declaration::new(&name,def);
+
+      return Ok(Statement::Declaration(decl));
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+read_const(dir: &Directory)-> Result<Statement,()>
+{
+    if let Ok((name,var)) = read_Var(dir)
+    {
+      let  def = Definition::Const(var);
+
+      let  decl = Declaration::new(&name,def);
+
+      return Ok(Statement::Declaration(decl));
     }
 
 
@@ -397,6 +476,18 @@ read_statement(dir: &Directory)-> Result<Statement,()>
         if d_name == "var"
         {
           return read_var(d);
+        }
+
+      else
+        if d_name == "static"
+        {
+          return read_static(d);
+        }
+
+      else
+        if d_name == "const"
+        {
+          return read_const(d);
         }
 
       else

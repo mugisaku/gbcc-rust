@@ -77,15 +77,18 @@ open_dictionary(&mut self, name: &str)-> Result<(),()>
 
 
 fn
-close_dictionary(&mut self)-> Result<(),()>
+close_dictionary(&mut self, name: &str)-> Result<(),()>
 {
-    if let Some(_) = self.dictionary_stack.pop()
+    if let Some(dic) = self.dictionary_stack.pop()
     {
-      return Ok(());
+        if dic.name == name
+        {
+          return Ok(());
+        }
     }
 
 
-  println!("Status::close_directory error: opened dictionary is none");
+  println!("Status::close_directory error: opened dictionary {} is none",name);
 
   Err(())
 }
@@ -95,6 +98,19 @@ fn
 advance(&mut self)
 {
   self.position += 1;
+}
+
+
+pub fn
+print_indent(&self)
+{
+    for _ in 0..self.depth
+    {
+      print!("--|");
+    }
+
+
+  print!(">> ");
 }
 
 
@@ -121,6 +137,39 @@ read_by_string(&mut self, s: &str)-> Option<Vec<Object>>
   self.position = old_pos;
 
   None
+}
+
+
+fn
+read_by_identifier(&mut self, id: &str, d_name_opt: &Option<String>)-> Option<Vec<Object>>
+{
+   if let Some(d_name) = d_name_opt
+   {
+       if self.open_dictionary(d_name).is_err()
+       {
+         return None;
+       }
+   }
+
+
+  let  mut objs_opt: Option<Vec<Object>> = None;
+
+   if let Some(objs) = self.read_by_name(id)
+   {
+     objs_opt = Some(objs);
+   }
+
+
+   if let Some(d_name) = d_name_opt
+   {
+       if self.close_dictionary(d_name).is_err()
+       {
+         return None;
+       }
+   }
+
+
+  objs_opt
 }
 
 
@@ -169,28 +218,7 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         },
   Operand::Identifier(s,d_name_opt)=>
         {
-            if let Some(d_name) = d_name_opt
-            {
-                if self.open_dictionary(d_name).is_err()
-                {
-                  return None;
-                }
-            }
-
-
-            if let Some(objs) = self.read_by_name(s)
-            {
-                if let Some(_) = d_name_opt
-                {
-                    if self.close_dictionary().is_err()
-                    {
-                      return None;
-                    }
-                }
-
-
-              return Some(objs);
-            }
+          return self.read_by_identifier(s,d_name_opt);
         },
   Operand::String(s)=>
         {
@@ -326,6 +354,8 @@ read_by_binary_operation(&mut self, op: &BinaryOperation)-> Option<Vec<Object>>
                 }
 
 
+              println!("確定構文の解析が失敗した");
+
               self.interruption = true;
             }
         },
@@ -383,15 +413,33 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
     {
       let  old_pos = self.position;
 
+      self.print_indent();
+
+      println!("{}としての解析を開始({})",&def.name,self.dictionary_stack.len());
+
+      self.depth += 1;
+
         if let Some(objs) = self.read_by_expression(def.get_expression())
         {
           let  dir = Directory{ name: def.name.clone(), object_list: objs};
 
           let  obj = Object{ token_info: None, data: ObjectData::Directory(dir)};
 
+          self.depth -= 1;
+
+          self.print_indent();
+
+          println!("{}としての解析に成功",&def.name);
+
           return Some(vec![obj]);
         }
 
+
+      self.depth -= 1;
+
+      self.print_indent();
+
+      println!("{}としての解析に失敗",&def.name);
 
       self.position = old_pos;
     }
@@ -416,13 +464,7 @@ read_by_name(&mut self, name: &str)-> Option<Vec<Object>>
             }
 
 
-          self.depth += 1;
-
-          let  res = self.read_by_definition(def);
-
-          self.depth -= 1;
-
-          return res;
+          return self.read_by_definition(def);
         }
     }
 
@@ -453,6 +495,8 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt:
                     };
 
 
+      st.dictionary_list.push(&dic);
+
         if let Some(mut dics) = dics_opt
         {
           st.dictionary_list.append(&mut dics);
@@ -469,12 +513,18 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt:
 
             if st.position == prev_pos
             {
+              println!("parse is stopped");
+
               break;
             }
 
 
           prev_pos = st.position;
+
+          println!("\n--\n");
         }
+
+      println!("parse is end");
 
 
         if st.interruption
