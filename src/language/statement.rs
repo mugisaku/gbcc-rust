@@ -1,6 +1,7 @@
 
 
 pub mod read_statement;
+pub mod read_declaration;
 pub mod dictionary;
 
 use super::expression::Expression;
@@ -157,9 +158,10 @@ Statement
   Empty,
   Declaration(Declaration),
   Block(Block),
-  If(Vec<Block>),
+  If(ConditionalBlock,Vec<ConditionalBlock>,Option<Block>),
   For(Block),
-  While(Block),
+  While(ConditionalBlock),
+  Loop(Block),
   Break,
   Continue,
   Return(Option<Expression>),
@@ -204,31 +206,6 @@ make_from_string(s: &str)-> Result<Statement,()>
 
 
 pub fn
-execute(&self)
-{
-    match self
-    {
-  Statement::Empty=>{},
-  Statement::Declaration(decl)=>{},
-  Statement::Block(blk)=>{},
-  Statement::If(blks)=>
-        {
-        },
-  Statement::For(blks)=>{},
-  Statement::While(blk)=>
-        {
-        },
-  Statement::Break=>{},
-  Statement::Continue=>{},
-  Statement::Return(op_e)=>
-        {
-        },
-  Statement::Expression(e)=>{},
-    }
-}
-
-
-pub fn
 print(&self)
 {
     match self
@@ -236,34 +213,37 @@ print(&self)
   Statement::Empty=>{print!(";");},
   Statement::Declaration(decl)=>{decl.print();},
   Statement::Block(blk)=>{blk.print();},
-  Statement::If(blks)=>
+  Statement::If(top,elif_ls,el_opt)=>
         {
           print!("if ");
 
-          let mut  it = blks.iter();
+          top.print();
 
-            if let Some(first_blk) = it.next()
+            for condblk in elif_ls
             {
-              first_blk.print();
+              print!("else if ");
 
-                while let Some(blk) = it.next()
-                {
-                  print!("else");
-
-                    if let Some(cond) = &blk.condition
-                    {
-                      print!("if ");
-                    }
+              condblk.print();
+            }
 
 
-                  blk.print();
-                }
+            if let Some(condblk) = el_opt
+            {
+              print!("else ");
+
+              condblk.print();
             }
         },
   Statement::For(blks)=>{},
-  Statement::While(blk)=>
+  Statement::While(condblk)=>
         {
           print!("while ");
+
+          condblk.print();
+        },
+  Statement::Loop(blk)=>
+        {
+          print!("loop\n");
 
           blk.print();
         },
@@ -291,9 +271,7 @@ print(&self)
 pub struct
 Block
 {
-  condition: Option<Expression>,
-
-  statement_list: Vec<Statement>,
+  pub(crate) statement_list: Vec<Statement>,
 
 }
 
@@ -306,21 +284,7 @@ Block
 pub fn
 new()-> Block
 {
-  Block{ condition: None, statement_list: Vec::new()}
-}
-
-
-pub fn
-set_condition(&mut self, e: Expression)
-{
-  self.condition = Some(e);
-}
-
-
-pub fn
-get_condition(&self)-> &Option<Expression>
-{
-  &self.condition
+  Block{statement_list: Vec::new()}
 }
 
 
@@ -332,25 +296,9 @@ get_statement_list(&self)-> &Vec<Statement>
 
 
 pub fn
-execute(&self)
-{
-    for st in &self.statement_list
-    {
-      st.execute();
-    }
-}
-
-
-pub fn
 print(&self)
 {
-    if let Some(cond) = &self.condition
-    {
-      cond.print();
-    }
-
-
-  print!("{}\n","{");
+  print!("{{\n");
 
     for stmt in &self.statement_list
     {
@@ -360,7 +308,37 @@ print(&self)
     }
 
 
-  print!("{}\n","}");
+  print!("}}\n");
+}
+
+
+}
+
+
+
+
+pub struct
+ConditionalBlock
+{
+  pub(crate) expression: Expression,
+  pub(crate) block: Block,
+
+}
+
+
+impl
+ConditionalBlock
+{
+
+
+pub fn
+print(&self)
+{
+  self.expression.print();
+
+  print!("\n");
+
+  self.block.print();
 }
 
 

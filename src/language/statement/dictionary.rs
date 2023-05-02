@@ -9,6 +9,7 @@ r##"
 
 statement: ";"
   |  if
+  | loop
   | while
   | for
   | break
@@ -26,13 +27,18 @@ statement: ";"
   | expression::expression
   ;
 
-if      : 'if -> expression::expression & block & [{'else & ['if] & block}];
-while   : 'while -> expression::expression & block;
+else    : 'else & block;
+else_if : 'else & 'if & conditional_block;
+if      : 'if -> conditional_block & [{else_if}] & [else];
+loop    : 'loop -> block;
+while   : 'while -> conditional_block;
 for     : 'for -> block;
 break   : 'break;
 continue: 'continue;
 block   : "{" & [{statement}] & "}";
 return  : 'return -> [expression::expression];
+
+conditional_block: expression::expression & block;
 
 parameter: .Identifier & ":" & typesystem::type_note;
 parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
