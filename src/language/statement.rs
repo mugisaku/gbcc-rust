@@ -42,8 +42,9 @@ Definition
   Static(Var),
   Const(Var),
   Struct(Struct),
-  Enum(Enum),
   Union(Union),
+  Enum(Enum),
+  Alias(TypeNote),
 
 }
 
@@ -134,6 +135,12 @@ print(&self)
           print!("enum\n{}",&self.name);
 
           en.print();
+        },
+  Definition::Alias(ty)=>
+        {
+          print!("alias\n{}: ",&self.name);
+
+          ty.print();
         },
     }
 }

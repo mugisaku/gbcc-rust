@@ -1,15 +1,50 @@
 
 
 use super::TypeNote;
+use super::r#struct::Struct;
+use crate::language::expression::Expression;
+
+
+#[derive(Clone)]
+pub enum
+Value
+{
+  Unspecified,
+  Expression(Expression),
+  Struct(Struct),
+
+}
+
+
+impl
+Value
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Value::Unspecified=>{}
+  Value::Expression(e)=>{}
+  Value::Struct(st)=>{}
+    }
+}
+
+
+}
+
+
 
 
 #[derive(Clone)]
 pub struct
 Enumerator
 {
-  name: String,
+  pub(crate) name: String,
 
-  value: i64,
+  pub(crate) value: Value,
 
 }
 
@@ -22,7 +57,9 @@ Enumerator
 pub fn
 print(&self)
 {
-  print!("{} = {}",&self.name,self.value);
+  print!("{}",&self.name);
+
+  self.value.print();
 }
 
 
@@ -55,18 +92,25 @@ new()-> Enum
 }
 
 
+pub fn
+from(ls: Vec<Enumerator>)-> Enum
+{
+  Enum{ member_list: ls, size: None, align: None}
+}
+
+
 pub fn   get_size(&self)-> &Option<usize>{&self.size}
 pub fn  get_align(&self)-> &Option<usize>{&self.align}
 
 
 pub fn
-find(&self, name: &str)-> Option<i64>
+find(&self, name: &str)-> Option<&Value>
 {
     for e in &self.member_list
     {
         if e.name == name
         {
-          return Some(e.value);
+          return Some(&e.value);
         }
     }
 

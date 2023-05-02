@@ -22,6 +22,7 @@ statement: ";"
   | struct
   | union
   | enum
+  | alias
   | expression::expression
   ;
 
@@ -40,11 +41,17 @@ fn    : 'fn -> .Identifier & parameter_list & ["->" & typesystem::type_note] & b
 var   : 'var -> .Identifier & [":" & typesystem::type_note] & ["=" & expression::expression];
 static: 'static -> .Identifier & ":" & typesystem::type_note & "=" & expression::expression;
 const : 'const  -> .Identifier & ":" & typesystem::type_note & "=" & expression::expression;
-struct: 'struct -> .Identifier;
-union : 'union -> .Identifier;
-enum  : 'enum -> .Identifier;
+struct: 'struct -> .Identifier & member_list;
+union : 'union -> .Identifier & member_list;
+enum  : 'enum -> .Identifier & enumerator_list;
+alias : 'alias -> .Identifier & ":" & typesystem::type_note;
 
-primary_statement: fn | var | static | const | struct | union | enum;
+member_list: "{" & [{parameter & [","]}] & "}";
+
+enumerator: .Identifier & ["=" & expression::expression];
+enumerator_list: "{" & [{enumerator & [","]}] & "}";
+
+primary_statement: fn | var | static | const | struct | union | enum | alias;
 
 
 "##;

@@ -37,6 +37,21 @@ new()-> Union
 
 
 pub fn
+from(ls: Vec<(String,TypeNote)>)-> Union
+{
+  let  mut un = Union::new();
+
+    for e in ls
+    {
+      un.member_list.push(Member{name: e.0, type_note: e.1, offset: None});
+    }
+
+
+  un
+}
+
+
+pub fn
 push(&mut self, name: &str, t: TypeNote)
 {
   self.member_list.push(Member{ name: String::from(name), type_note: t, offset: None});

@@ -90,6 +90,21 @@ new()-> Struct
 
 
 pub fn
+from(ls: Vec<(String,TypeNote)>)-> Struct
+{
+  let  mut st = Struct::new();
+
+    for e in ls
+    {
+      st.member_list.push(Member{name: e.0, type_note: e.1, offset: None});
+    }
+
+
+  st
+}
+
+
+pub fn
 push(&mut self, m: Member)
 {
   self.member_list.push(m);
