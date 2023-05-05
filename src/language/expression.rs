@@ -2,22 +2,6 @@
 
 pub mod read_expression;
 pub mod dictionary;
-pub mod value;
-pub mod operate;
-
-
-use self::value::Value;
-use super::context::{
-  Variable,
-  NameSpace,
-  Context,
-};
-
-use self::operate::{
-  operate_prefix_constant,
-  operate_postfix_constant,
-  operate_binary_constant,
-};
 
 
 
@@ -39,33 +23,6 @@ OperandCore
 impl
 OperandCore
 {
-
-
-pub fn
-to_value(&self, ctx_opt: Option<&Context>)-> Value
-{
-    match self
-    {
-  OperandCore::Identifier(s)=>
-        {
-               if *s == "false"{return Value::Bool(false);}
-          else if *s ==  "true"{return Value::Bool(true);}
-          else if *s ==  "undefined"{return Value::Undefined;}
-          else
-            if let Some(ctx) = ctx_opt
-            {
-              
-            }
-
-
-          return Value::Undefined;
-        },
-  OperandCore::Integer(u)=>{if *u <= (i64::MAX as u64){Value::I64(*u as i64)} else{Value::U64(*u)}},
-  OperandCore::Floating(f)=>{Value::F64(*f)},
-  OperandCore::Expression(e)=>{e.to_value(ctx_opt)},
-  _=>{Value::Undefined},
-    }
-}
 
 
 pub fn
@@ -342,31 +299,6 @@ Operand
 
 
 pub fn
-to_value(&self, ctx_opt: Option<&Context>)-> Value
-{
-  let  mut v = self.core.to_value(ctx_opt);
-
-    for o in &self.postfix_operator_list
-    {
-      v = operate_postfix_constant(&v,o);
-    }
-
-
-  let  l = self.prefix_operator_list.len();
-
-    for i in 0..l
-    {
-      let  o = &self.prefix_operator_list[l-1-i];
-
-      v = operate_prefix_constant(&v,o);
-    }
-
-
-  v
-}
-
-
-pub fn
 print(&self)
 {
     for o in &self.prefix_operator_list
@@ -441,23 +373,6 @@ make_from_string(s: &str)-> Result<Expression,()>
   println!("make_from_string error: parse is failed");
 
   Err(())
-}
-
-
-pub fn
-to_value(&self, ctx_opt: Option<&Context>)-> Value
-{
-  let  mut l = self.operand.to_value(ctx_opt);
-
-    for t in &self.tail_list
-    {
-      let  r = t.operand.to_value(ctx_opt);
-
-      l = operate_binary_constant(&l,&r,&t.operator);
-    }
-
-
-  l
 }
 
 

@@ -2,7 +2,7 @@ mod token;
 mod source_file;
 mod syntax;
 mod language;
-//mod ir;
+mod ir;
 mod debug;
 
 use std::env;
@@ -79,18 +79,18 @@ fn
 evaluate(s: &str)
 {
   use crate::language::expression::Expression;
-  use crate::language::context::Context;
 
     if let Ok(e) = Expression::make_from_string(s)
     {
       e.print();
 
+/*
       let  v = e.to_value(None);
 
       print!(" = ");
 
       v.print();
-
+*/
       print!("\n");
     }
 }
@@ -100,7 +100,6 @@ fn
 execute(s: &str)
 {
   use crate::language::statement::Statement;
-  use crate::language::context::Context;
 
     if let Ok(st) = Statement::make_from_string(s)
     {
@@ -115,7 +114,6 @@ fn
 execute_program(s: &str)
 {
   use crate::language::statement::Program;
-  use crate::language::context::Context;
 
     if let Ok(prog) = Program::make_from_string(s)
     {
@@ -130,7 +128,6 @@ fn
 load()
 {
   use crate::language::statement::Program;
-  use crate::language::context::Context;
 
   use std::io::Read;
 

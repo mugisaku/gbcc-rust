@@ -85,7 +85,7 @@ read_parameter_list(dir: &Directory)-> Result<Vec<(String,TypeNote)>,()>
 
 
 pub fn
-read_fn(dir: &Directory)-> Result<Statement,()>
+read_fn(dir: &Directory)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -130,7 +130,7 @@ read_fn(dir: &Directory)-> Result<Statement,()>
 
                       let  decl = Declaration::new(&name,Definition::Fn(f));
 
-                      return Ok(Statement::Declaration(decl));
+                      return Ok(decl);
                     }
                 }
             }
@@ -187,7 +187,7 @@ read_Var(dir: &Directory)-> Result<(String,Var),()>
 
 
 pub fn
-read_var(dir: &Directory)-> Result<Statement,()>
+read_var(dir: &Directory)-> Result<Declaration,()>
 {
     if let Ok((name,var)) = read_Var(dir)
     {
@@ -195,7 +195,7 @@ read_var(dir: &Directory)-> Result<Statement,()>
 
       let  decl = Declaration::new(&name,def);
 
-      return Ok(Statement::Declaration(decl));
+      return Ok(decl);
     }
 
 
@@ -204,7 +204,7 @@ read_var(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_static(dir: &Directory)-> Result<Statement,()>
+read_static(dir: &Directory)-> Result<Declaration,()>
 {
     if let Ok((name,var)) = read_Var(dir)
     {
@@ -212,7 +212,7 @@ read_static(dir: &Directory)-> Result<Statement,()>
 
       let  decl = Declaration::new(&name,def);
 
-      return Ok(Statement::Declaration(decl));
+      return Ok(decl);
     }
 
 
@@ -221,7 +221,7 @@ read_static(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_const(dir: &Directory)-> Result<Statement,()>
+read_const(dir: &Directory)-> Result<Declaration,()>
 {
     if let Ok((name,var)) = read_Var(dir)
     {
@@ -229,7 +229,7 @@ read_const(dir: &Directory)-> Result<Statement,()>
 
       let  decl = Declaration::new(&name,def);
 
-      return Ok(Statement::Declaration(decl));
+      return Ok(decl);
     }
 
 
@@ -238,7 +238,7 @@ read_const(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_struct(dir: &Directory)-> Result<Statement,()>
+read_struct(dir: &Directory)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -260,7 +260,7 @@ read_struct(dir: &Directory)-> Result<Statement,()>
 
               let  decl = Declaration::new(&name,def);
 
-              return Ok(Statement::Declaration(decl));
+              return Ok(decl);
             }
         }
     }
@@ -271,7 +271,7 @@ read_struct(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_union(dir: &Directory)-> Result<Statement,()>
+read_union(dir: &Directory)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -293,7 +293,7 @@ read_union(dir: &Directory)-> Result<Statement,()>
 
               let  decl = Declaration::new(&name,def);
 
-              return Ok(Statement::Declaration(decl));
+              return Ok(decl);
             }
         }
     }
@@ -360,7 +360,7 @@ read_enumerator_list(dir: &Directory)-> Result<Vec<Enumerator>,()>
 
 
 pub fn
-read_enum(dir: &Directory)-> Result<Statement,()>
+read_enum(dir: &Directory)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -382,7 +382,7 @@ read_enum(dir: &Directory)-> Result<Statement,()>
 
               let  decl = Declaration::new(&name,def);
 
-              return Ok(Statement::Declaration(decl));
+              return Ok(decl);
             }
         }
     }
@@ -393,7 +393,7 @@ read_enum(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_alias(dir: &Directory)-> Result<Statement,()>
+read_alias(dir: &Directory)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -413,8 +413,70 @@ read_alias(dir: &Directory)-> Result<Statement,()>
 
               let  decl = Declaration::new(&name,def);
 
-              return Ok(Statement::Declaration(decl));
+              return Ok(decl);
             }
+        }
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+read_declaration(dir: &Directory)-> Result<Declaration,()>
+{
+  let  mut cur = Cursor::new(dir);
+
+    if let Some(d) = cur.get_directory()
+    {
+      let  d_name = d.get_name();
+
+        if d_name == "fn"
+        {
+          return read_fn(d);
+        }
+
+      else
+        if d_name == "var"
+        {
+          return read_var(d);
+        }
+
+      else
+        if d_name == "static"
+        {
+          return read_static(d);
+        }
+
+      else
+        if d_name == "const"
+        {
+          return read_const(d);
+        }
+
+      else
+        if d_name == "struct"
+        {
+          return read_struct(d);
+        }
+
+      else
+        if d_name == "union"
+        {
+          return read_union(d);
+        }
+
+      else
+        if d_name == "enum"
+        {
+          return read_enum(d);
+        }
+
+      else
+        if d_name == "alias"
+        {
+          return read_alias(d);
         }
     }
 

@@ -350,7 +350,7 @@ print(&self)
 pub struct
 Program
 {
-  pub(crate) statement_list: Vec<Statement>,
+  pub(crate) declaration_list: Vec<Declaration>,
 
 }
 
@@ -358,6 +358,13 @@ Program
 impl
 Program
 {
+
+
+pub fn
+new()-> Program
+{
+  Program{declaration_list: Vec::new()}
+}
 
 
 pub fn
@@ -371,9 +378,29 @@ make_from_string(s: &str)-> Result<Program,()>
 
   let  dics: Vec<&Dictionary> = vec![expr_dic,ty_dic];
 
-    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"primary_statement",Some(dics))
+    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"declaration",Some(dics))
     {
-      return crate::language::statement::read_statement::read_program(&dir)
+      let  mut prog = Program::new();
+
+      let  mut cur = crate::syntax::Cursor::new(&dir);
+
+        while let Some(decl_d) = cur.get_directory()
+        {
+            if let Ok(decl) = crate::language::statement::read_declaration::read_declaration(decl_d)
+            {
+              prog.declaration_list.push(decl);
+
+              cur.advance(1);
+            }
+
+          else
+            {
+              return Err(());
+            }
+        }
+
+
+      return Ok(prog);
     }
 
 
@@ -388,7 +415,7 @@ print(&self)
 {
   print!("program\n\n");
 
-    for st in &self.statement_list
+    for st in &self.declaration_list
     {
       st.print();
 

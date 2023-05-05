@@ -311,49 +311,73 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "fn"
         {
-          return read_fn(d);
+            if let Ok(decl) = read_fn(d)
+            {
+              return Ok(Statement::Declaration(decl));
+            }
         }
 
       else
         if d_name == "var"
         {
-          return read_var(d);
+            if let Ok(decl) = read_var(d)
+            {
+              return Ok(Statement::Declaration(decl));
+            }
         }
 
       else
         if d_name == "static"
         {
-          return read_static(d);
+            if let Ok(decl) = read_static(d)
+            {
+              return Ok(Statement::Declaration(decl));
+            }
         }
 
       else
         if d_name == "const"
         {
-          return read_const(d);
+            if let Ok(decl) = read_const(d)
+            {
+              return Ok(Statement::Declaration(decl));
+            }
         }
 
       else
         if d_name == "struct"
         {
-          return read_struct(d);
+            if let Ok(decl) = read_struct(d)
+            {
+              return Ok(Statement::Declaration(decl));
+            }
         }
 
       else
         if d_name == "union"
         {
-          return read_union(d);
+            if let Ok(decl) = read_union(d)
+            {
+              return Ok(Statement::Declaration(decl));
+            }
         }
 
       else
         if d_name == "enum"
         {
-          return read_enum(d);
+            if let Ok(decl) = read_enum(d)
+            {
+              return Ok(Statement::Declaration(decl));
+            }
         }
 
       else
         if d_name == "alias"
         {
-          return read_alias(d);
+            if let Ok(decl) = read_alias(d)
+            {
+              return Ok(Statement::Declaration(decl));
+            }
         }
 
       else
@@ -368,33 +392,6 @@ read_statement(dir: &Directory)-> Result<Statement,()>
 
 
   Err(())
-}
-
-
-pub fn
-read_program(dir: &Directory)-> Result<Program,()>
-{
-  let  mut cur = Cursor::new(dir);
-
-  let  mut ls: Vec<Statement> = Vec::new();
-
-    while let Some(d) = cur.get_directory()
-    {
-        if let Ok(st) = read_statement(d)
-        {
-          ls.push(st);
-
-          cur.advance(1);
-        }
-
-      else
-        {
-          return Err(());
-        }
-    }
-
-
-  Ok(Program{statement_list: ls})
 }
 
 
