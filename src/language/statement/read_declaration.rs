@@ -1,5 +1,13 @@
 
 
+use std::cell::Cell;
+
+use crate::language::library::{
+  ExpressionIndex,
+  StringIndex,
+  Library
+};
+
 use crate::syntax::{
   Directory,
   Object,
@@ -10,14 +18,14 @@ use crate::syntax::{
 use crate::language::expression::Expression;
 use crate::language::expression::read_expression::read_expression;
 use crate::language::typesystem::{
-  TypeNote,
+  Type,
   r#struct::Struct,
   r#union::Union,
   r#enum::Enum,
   r#enum::Enumerator,
   r#enum::Value,
   function_signature::FunctionSignature,
-  read_type_note::read_type_note,
+  read_type::read_type,
 };
 
 
@@ -34,7 +42,7 @@ use crate::language::statement::read_statement::{
 
 
 pub fn
-read_parameter(dir: &Directory)-> Result<(String,TypeNote),()>
+read_parameter(dir: &Directory, lib: &mut Library)-> Result<(String,Type),()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -44,9 +52,9 @@ read_parameter(dir: &Directory)-> Result<(String,TypeNote),()>
 
       cur.advance(2);
 
-        if let Some(ty_d) = cur.get_directory_with_name("type_note")
+        if let Some(ty_d) = cur.get_directory_with_name("type")
         {
-            if let Ok(ty) = read_type_note(ty_d)
+            if let Ok(ty) = read_type(ty_d,lib)
             {
               return Ok((name,ty));
             }
@@ -59,14 +67,14 @@ read_parameter(dir: &Directory)-> Result<(String,TypeNote),()>
 
 
 pub fn
-read_parameter_list(dir: &Directory)-> Result<Vec<(String,TypeNote)>,()>
+read_parameter_list(dir: &Directory, lib: &mut Library)-> Result<Vec<(String,Type)>,()>
 {
   let  mut cur = Cursor::new(dir);
-  let  mut ls: Vec<(String,TypeNote)> = Vec::new();
+  let  mut ls: Vec<(String,Type)> = Vec::new();
 
     while let Some(d) = cur.seek_directory_with_name("parameter")
     {
-        if let Ok(para) = read_parameter(d)
+        if let Ok(para) = read_parameter(d,lib)
         {
           ls.push(para);
 
@@ -85,7 +93,7 @@ read_parameter_list(dir: &Directory)-> Result<Vec<(String,TypeNote)>,()>
 
 
 pub fn
-read_fn(dir: &Directory)-> Result<Declaration,()>
+read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -101,21 +109,25 @@ read_fn(dir: &Directory)-> Result<Declaration,()>
 
         if let Some(parals_d) = cur.get_directory_with_name("parameter_list")
         {
-            if let Ok(parals) = read_parameter_list(parals_d)
+            if let Ok(parals) = read_parameter_list(parals_d,lib)
             {
+              let  mut name_ls: Vec<String> = Vec::new();
+
                 for para in parals
                 {
-                  fnsig.parameter.add(&para.0,para.1);
+                  name_ls.push(para.0);
+
+                  fnsig.parameter_list.push(para.1);
                 }
 
 
               cur.advance(1);
 
-                if let Some(ty_d) = cur.seek_directory_with_name("type_note")
+                if let Some(ty_d) = cur.seek_directory_with_name("type")
                 {
-                    if let Ok(ty) = read_type_note(ty_d)
+                    if let Ok(ty) = read_type(ty_d,lib)
                     {
-                      fnsig.return_type_note = ty;
+                      fnsig.return_type = ty;
 
                       cur.advance(1);
                     }
@@ -124,9 +136,9 @@ read_fn(dir: &Directory)-> Result<Declaration,()>
 
                 if let Some(blk_d) = cur.seek_directory_with_name("block")
                 {
-                    if let Ok(blk) = read_block(blk_d)
+                    if let Ok(blk) = read_block(blk_d,lib)
                     {
-                      let  f = Fn{signature: fnsig, block: blk};
+                      let  f = Fn{signature: fnsig, parameter_name_list: name_ls, block: blk, index_optcel: Cell::new(None)};
 
                       let  decl = Declaration::new(&name,Definition::Fn(f));
 
@@ -143,7 +155,7 @@ read_fn(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_Var(dir: &Directory)-> Result<(String,Var),()>
+read_Var(dir: &Directory, lib: &mut Library)-> Result<(String,Var),()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -153,15 +165,15 @@ read_Var(dir: &Directory)-> Result<(String,Var),()>
     {
       let  name = id.clone();
 
-      let  mut var = Var{type_note: TypeNote::Unspecified, expression_opt: None};
+      let  mut var = Var{r#type: Type::Void, expression_index_opt: None, value_optcel: Cell::new(None), address_optcel: Cell::new(None)};
 
       cur.advance(1);
 
-        if let Some(ty_d) = cur.seek_directory_with_name("type_note")
+        if let Some(ty_d) = cur.seek_directory_with_name("type")
         {
-            if let Ok(ty) = read_type_note(ty_d)
+            if let Ok(ty) = read_type(ty_d,lib)
             {
-              var.type_note = ty;
+              var.r#type = ty;
             }
 
 
@@ -171,9 +183,9 @@ read_Var(dir: &Directory)-> Result<(String,Var),()>
 
         if let Some(e_d) = cur.seek_directory_with_name("expression")
         {
-            if let Ok(e) = read_expression(e_d)
+            if let Ok(e) = read_expression(e_d,lib)
             {
-              var.expression_opt = Some(e);
+              var.expression_index_opt = Some(lib.push_expression(e));
             }
         }
 
@@ -187,9 +199,9 @@ read_Var(dir: &Directory)-> Result<(String,Var),()>
 
 
 pub fn
-read_var(dir: &Directory)-> Result<Declaration,()>
+read_var(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
-    if let Ok((name,var)) = read_Var(dir)
+    if let Ok((name,var)) = read_Var(dir,lib)
     {
       let  def = Definition::Var(var);
 
@@ -204,9 +216,9 @@ read_var(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_static(dir: &Directory)-> Result<Declaration,()>
+read_static(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
-    if let Ok((name,var)) = read_Var(dir)
+    if let Ok((name,var)) = read_Var(dir,lib)
     {
       let  def = Definition::Static(var);
 
@@ -221,9 +233,9 @@ read_static(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_const(dir: &Directory)-> Result<Declaration,()>
+read_const(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
-    if let Ok((name,var)) = read_Var(dir)
+    if let Ok((name,var)) = read_Var(dir,lib)
     {
       let  def = Definition::Const(var);
 
@@ -238,7 +250,7 @@ read_const(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_struct(dir: &Directory)-> Result<Declaration,()>
+read_struct(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -252,7 +264,8 @@ read_struct(dir: &Directory)-> Result<Declaration,()>
 
         if let Some(ls_d) = cur.seek_directory_with_name("member_list")
         {
-            if let Ok(ls) = read_parameter_list(ls_d)
+/*
+            if let Ok(ls) = read_parameter_list(ls_d,lib)
             {
               let  st = Struct::from(ls);
 
@@ -262,6 +275,7 @@ read_struct(dir: &Directory)-> Result<Declaration,()>
 
               return Ok(decl);
             }
+*/
         }
     }
 
@@ -271,7 +285,7 @@ read_struct(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_union(dir: &Directory)-> Result<Declaration,()>
+read_union(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -285,8 +299,9 @@ read_union(dir: &Directory)-> Result<Declaration,()>
 
         if let Some(ls_d) = cur.seek_directory_with_name("member_list")
         {
-            if let Ok(ls) = read_parameter_list(ls_d)
+            if let Ok(ls) = read_parameter_list(ls_d,lib)
             {
+/*
               let  un = Union::from(ls);
 
               let  def = Definition::Union(un);
@@ -294,6 +309,7 @@ read_union(dir: &Directory)-> Result<Declaration,()>
               let  decl = Declaration::new(&name,def);
 
               return Ok(decl);
+*/
             }
         }
     }
@@ -304,7 +320,7 @@ read_union(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_enumerator(dir: &Directory)-> Result<Enumerator,()>
+read_enumerator(dir: &Directory, lib: &mut Library)-> Result<Enumerator,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -318,9 +334,9 @@ read_enumerator(dir: &Directory)-> Result<Enumerator,()>
 
         if let Some(expr_d) = cur.get_directory_with_name("expression")
         {
-            if let Ok(expr) = read_expression(expr_d)
+            if let Ok(expr) = read_expression(expr_d,lib)
             {
-              en.value = Value::Expression(expr);
+              en.value = Value::Expression(lib.push_expression(expr));
             }
         }
 
@@ -334,14 +350,14 @@ read_enumerator(dir: &Directory)-> Result<Enumerator,()>
 
 
 pub fn
-read_enumerator_list(dir: &Directory)-> Result<Vec<Enumerator>,()>
+read_enumerator_list(dir: &Directory, lib: &mut Library)-> Result<Vec<Enumerator>,()>
 {
   let  mut cur = Cursor::new(dir);
   let  mut ls: Vec<Enumerator> = Vec::new();
 
     while let Some(d) = cur.seek_directory_with_name("enumerator")
     {
-        if let Ok(en) = read_enumerator(d)
+        if let Ok(en) = read_enumerator(d,lib)
         {
           ls.push(en);
 
@@ -360,7 +376,7 @@ read_enumerator_list(dir: &Directory)-> Result<Vec<Enumerator>,()>
 
 
 pub fn
-read_enum(dir: &Directory)-> Result<Declaration,()>
+read_enum(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -374,7 +390,7 @@ read_enum(dir: &Directory)-> Result<Declaration,()>
 
         if let Some(ls_d) = cur.seek_directory_with_name("enumerator_list")
         {
-            if let Ok(ls) = read_enumerator_list(ls_d)
+            if let Ok(ls) = read_enumerator_list(ls_d,lib)
             {
               let  en = Enum::from(ls);
 
@@ -393,7 +409,7 @@ read_enum(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_alias(dir: &Directory)-> Result<Declaration,()>
+read_alias(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -405,9 +421,9 @@ read_alias(dir: &Directory)-> Result<Declaration,()>
 
       cur.advance(2);
 
-        if let Some(ty_d) = cur.get_directory_with_name("type_note")
+        if let Some(ty_d) = cur.get_directory_with_name("type")
         {
-            if let Ok(ty) = read_type_note(ty_d)
+            if let Ok(ty) = read_type(ty_d,lib)
             {
               let  def = Definition::Alias(ty);
 
@@ -424,7 +440,7 @@ read_alias(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_declaration(dir: &Directory)-> Result<Declaration,()>
+read_declaration(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -434,49 +450,49 @@ read_declaration(dir: &Directory)-> Result<Declaration,()>
 
         if d_name == "fn"
         {
-          return read_fn(d);
+          return read_fn(d,lib);
         }
 
       else
         if d_name == "var"
         {
-          return read_var(d);
+          return read_var(d,lib);
         }
 
       else
         if d_name == "static"
         {
-          return read_static(d);
+          return read_static(d,lib);
         }
 
       else
         if d_name == "const"
         {
-          return read_const(d);
+          return read_const(d,lib);
         }
 
       else
         if d_name == "struct"
         {
-          return read_struct(d);
+          return read_struct(d,lib);
         }
 
       else
         if d_name == "union"
         {
-          return read_union(d);
+          return read_union(d,lib);
         }
 
       else
         if d_name == "enum"
         {
-          return read_enum(d);
+          return read_enum(d,lib);
         }
 
       else
         if d_name == "alias"
         {
-          return read_alias(d);
+          return read_alias(d,lib);
         }
     }
 

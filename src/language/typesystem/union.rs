@@ -1,9 +1,15 @@
 
 
 use super::{
-  TypeNote,
-  get_max,
-  get_aligned_size,
+  Type,
+};
+
+use std::cell::Cell;
+
+use crate::language::library::{
+  ExpressionIndex,
+  StringIndex,
+  Library
 };
 
 use super::r#struct::{
@@ -12,14 +18,10 @@ use super::r#struct::{
 };
 
 
-#[derive(Clone)]
 pub struct
 Union
 {
-  member_list: Vec<Member>,
-
-   size: Option<usize>,
-  align: Option<usize>,
+  pub(crate) member_list: Vec<Member>,
 
 }
 
@@ -32,18 +34,18 @@ Union
 pub fn
 new()-> Union
 {
-  Union{ member_list: Vec::new(), size: None, align: None}
+  Union{ member_list: Vec::new()}
 }
 
 
 pub fn
-from(ls: Vec<(String,TypeNote)>)-> Union
+from(ls: Vec<(String,Type)>)-> Union
 {
   let  mut un = Union::new();
 
     for e in ls
     {
-      un.member_list.push(Member{name: e.0, type_note: e.1, offset: None});
+      un.member_list.push(Member{name: e.0, r#type: e.1, offset_optcel: Cell::new(None)});
     }
 
 
@@ -52,9 +54,9 @@ from(ls: Vec<(String,TypeNote)>)-> Union
 
 
 pub fn
-push(&mut self, name: &str, t: TypeNote)
+push(&mut self, name: &str, t: Type)
 {
-  self.member_list.push(Member{ name: String::from(name), type_note: t, offset: None});
+  self.member_list.push(Member{name: String::from(name), r#type: t, offset_optcel: Cell::new(None)});
 }
 
 
@@ -69,58 +71,13 @@ merge(&mut self, ls: Vec<Member>)
 
 
 pub fn
-fix(&mut self)-> Result<(),()>
-{
-  let  mut sz: usize = 0;
-  let  mut al: usize = 0;
-
-    for m in &self.member_list
-    {
-        if let Some(m_sz) = m.type_note.get_size() {
-        if let Some(m_al) = m.type_note.get_align(){
-          sz = get_max(sz,get_aligned_size(m_sz));
-          al = get_max(al,m_al);
-
-          continue;
-        }}
-
-
-      self.size  = None;
-      self.align = None;
-
-      return Err(());
-    }
-
-
-  self.size  = Some(sz);
-  self.align = Some(al);
-
-  Ok(())
-}
-
-
-pub fn   get_size(&self)-> &Option<usize>{&self.size}
-pub fn  get_align(&self)-> &Option<usize>{&self.align}
-
-
-pub fn
-print_id(&self, buf: &mut String)
-{
-    for m in &self.member_list
-    {
-//      m.type_info.print_id(buf);
-    }
-}
-
-
-pub fn
-print(&self)
+print(&self, lib: &Library)
 {
   print!("{{");
 
     for m in &self.member_list
     {
-      m.print();
+      m.print(lib);
       println!(",");
     }
 

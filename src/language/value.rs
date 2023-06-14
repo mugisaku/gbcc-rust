@@ -1,7 +1,9 @@
 
 
+use super::fixer::DeclarationIndex;
 
 
+#[derive(Clone,Copy)]
 pub enum
 Value
 {
@@ -22,7 +24,7 @@ Value
   Pointer(usize),
   Reference(usize),
 
-  NameSpace(usize),
+  DeclarationIndex(DeclarationIndex),
 
 }
 
@@ -30,6 +32,19 @@ Value
 impl
 Value
 {
+
+
+pub fn
+is_undefined(&self)-> bool
+{
+    if let Value::Undefined = self
+    {
+      return true;
+    }
+
+
+  false
+}
 
 
 pub fn
@@ -288,7 +303,7 @@ get_id(&self)-> usize
   Value::Bool(_)=>{11}
   Value::Pointer(_)=>{12}
   Value::Reference(_)=>{13}
-  Value::NameSpace(_)=>{14}
+  _=>{0}
     }
 }
 
@@ -314,7 +329,10 @@ print(&self)
   Value::Bool(b)=>{print!("bool: {}",*b);}
   Value::Pointer(v)=>{print!("pointer: {}",*v);}
   Value::Reference(v)=>{print!("reference: {}",*v);}
-  Value::NameSpace(i)=>{print!("name space: {}",*i);}
+  Value::DeclarationIndex(di)=>
+        {
+          print!("declaration");
+        }
     }
 }
 

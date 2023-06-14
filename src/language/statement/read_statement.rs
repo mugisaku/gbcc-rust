@@ -7,6 +7,11 @@ use crate::syntax::{
   Cursor,
 };
 
+use crate::language::library::{
+  ExpressionIndex,
+  StringIndex,
+  Library
+};
 use crate::language::expression::Expression;
 use crate::language::expression::read_expression::read_expression;
 
@@ -29,15 +34,15 @@ use crate::language::statement::read_declaration::{
 
 
 pub fn
-read_return(dir: &Directory)-> Result<Statement,()>
+read_return(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
     if let Some(d) = cur.seek_directory_with_name("expression")
     {
-        if let Ok(e) = read_expression(d)
+        if let Ok(e) = read_expression(d,lib)
         {
-          return Ok(Statement::Return(Some(e)));
+          return Ok(Statement::Return(Some(lib.push_expression(e))));
         }
     }
 
@@ -47,7 +52,7 @@ read_return(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_else_if(dir: &Directory)-> Result<ConditionalBlock,()>
+read_else_if(dir: &Directory, lib: &mut Library)-> Result<ConditionalBlock,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -55,7 +60,7 @@ read_else_if(dir: &Directory)-> Result<ConditionalBlock,()>
 
     if let Some(blk_d) = cur.get_directory_with_name("conditional_block")
     {
-      return read_conditional_block(blk_d);
+      return read_conditional_block(blk_d,lib);
     }
 
 
@@ -64,7 +69,7 @@ read_else_if(dir: &Directory)-> Result<ConditionalBlock,()>
 
 
 pub fn
-read_else(dir: &Directory)-> Result<Block,()>
+read_else(dir: &Directory, lib: &mut Library)-> Result<Block,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -72,7 +77,7 @@ read_else(dir: &Directory)-> Result<Block,()>
 
     if let Some(blk_d) = cur.get_directory_with_name("block")
     {
-      return read_block(blk_d);
+      return read_block(blk_d,lib);
     }
 
 
@@ -81,7 +86,7 @@ read_else(dir: &Directory)-> Result<Block,()>
 
 
 pub fn
-read_if(dir: &Directory)-> Result<Statement,()>
+read_if(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -89,7 +94,7 @@ read_if(dir: &Directory)-> Result<Statement,()>
 
     if let Some(blk_d) = cur.get_directory_with_name("conditional_block")
     {
-        if let Ok(top_blk) = read_conditional_block(blk_d)
+        if let Ok(top_blk) = read_conditional_block(blk_d,lib)
         {
           cur.advance(1);
 
@@ -98,7 +103,7 @@ read_if(dir: &Directory)-> Result<Statement,()>
 
             while let Some(elif_d) = cur.seek_directory_with_name("else_if")
             {
-                if let Ok(elif) = read_else_if(elif_d)
+                if let Ok(elif) = read_else_if(elif_d,lib)
                 {
                   elif_ls.push(elif);
 
@@ -109,7 +114,7 @@ read_if(dir: &Directory)-> Result<Statement,()>
 
             if let Some(el_d) = cur.seek_directory_with_name("else")
             {
-                if let Ok(el) = read_else(el_d)
+                if let Ok(el) = read_else(el_d,lib)
                 {
                   el_opt = Some(el);
                 }
@@ -126,7 +131,7 @@ read_if(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_while(dir: &Directory)-> Result<Statement,()>
+read_while(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -134,7 +139,7 @@ read_while(dir: &Directory)-> Result<Statement,()>
 
     if let Some(blk_d) = cur.get_directory_with_name("conditional_block")
     {
-        if let Ok(blk) = read_conditional_block(blk_d)
+        if let Ok(blk) = read_conditional_block(blk_d,lib)
         {
           return Ok(Statement::While(blk));
         }
@@ -146,7 +151,7 @@ read_while(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_loop(dir: &Directory)-> Result<Statement,()>
+read_loop(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -154,7 +159,7 @@ read_loop(dir: &Directory)-> Result<Statement,()>
 
     if let Some(blk_d) = cur.get_directory_with_name("block")
     {
-        if let Ok(blk) = read_block(blk_d)
+        if let Ok(blk) = read_block(blk_d,lib)
         {
           return Ok(Statement::Loop(blk));
         }
@@ -166,21 +171,21 @@ read_loop(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_conditional_block(dir: &Directory)-> Result<ConditionalBlock,()>
+read_conditional_block(dir: &Directory, lib: &mut Library)-> Result<ConditionalBlock,()>
 {
   let  mut cur = Cursor::new(dir);
 
     if let Some(expr_d) = cur.get_directory_with_name("expression")
     {
-        if let Ok(e) = read_expression(expr_d)
+        if let Ok(e) = read_expression(expr_d,lib)
         {
           cur.advance(1);
 
             if let Some(blk_d) = cur.get_directory_with_name("block")
             {
-                if let Ok(blk) = read_block(blk_d)
+                if let Ok(blk) = read_block(blk_d,lib)
                 {
-                  return Ok(ConditionalBlock{expression: e, block: blk});
+                  return Ok(ConditionalBlock{expression_index: lib.push_expression(e), block: blk});
                 }
             }
         }
@@ -192,7 +197,7 @@ read_conditional_block(dir: &Directory)-> Result<ConditionalBlock,()>
 
 
 pub fn
-read_for(dir: &Directory)-> Result<Statement,()>
+read_for(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -208,7 +213,7 @@ read_for(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_block(dir: &Directory)-> Result<Block,()>
+read_block(dir: &Directory, lib: &mut Library)-> Result<Block,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -216,7 +221,7 @@ read_block(dir: &Directory)-> Result<Block,()>
 
     while let Some(d) = cur.get_directory()
     {
-        if let Ok(stmt) = read_statement(d)
+        if let Ok(stmt) = read_statement(d,lib)
         {
           stmts.push(stmt);
 
@@ -235,7 +240,7 @@ read_block(dir: &Directory)-> Result<Block,()>
 
 
 pub fn
-read_statement(dir: &Directory)-> Result<Statement,()>
+read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -254,13 +259,13 @@ read_statement(dir: &Directory)-> Result<Statement,()>
 
         if d.get_name() == "if"
         {
-          return read_if(d);
+          return read_if(d,lib);
         }
 
       else
         if d_name == "block"
         {
-            if let Ok(blk) = read_block(d)
+            if let Ok(blk) = read_block(d,lib)
             {
               return Ok(Statement::Block(blk));
             }
@@ -269,25 +274,25 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "if"
         {
-          return read_if(d);
+          return read_if(d,lib);
         }
 
       else
         if d_name == "while"
         {
-          return read_while(d);
+          return read_while(d,lib);
         }
 
       else
         if d_name == "loop"
         {
-          return read_loop(d);
+          return read_loop(d,lib);
         }
 
       else
         if d_name == "for"
         {
-          return read_for(d);
+          return read_for(d,lib);
         }
 
       else
@@ -305,13 +310,13 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "return"
         {
-          return read_return(d);
+          return read_return(d,lib);
         }
 
       else
         if d_name == "fn"
         {
-            if let Ok(decl) = read_fn(d)
+            if let Ok(decl) = read_fn(d,lib)
             {
               return Ok(Statement::Declaration(decl));
             }
@@ -320,7 +325,7 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "var"
         {
-            if let Ok(decl) = read_var(d)
+            if let Ok(decl) = read_var(d,lib)
             {
               return Ok(Statement::Declaration(decl));
             }
@@ -329,7 +334,7 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "static"
         {
-            if let Ok(decl) = read_static(d)
+            if let Ok(decl) = read_static(d,lib)
             {
               return Ok(Statement::Declaration(decl));
             }
@@ -338,7 +343,7 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "const"
         {
-            if let Ok(decl) = read_const(d)
+            if let Ok(decl) = read_const(d,lib)
             {
               return Ok(Statement::Declaration(decl));
             }
@@ -347,7 +352,7 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "struct"
         {
-            if let Ok(decl) = read_struct(d)
+            if let Ok(decl) = read_struct(d,lib)
             {
               return Ok(Statement::Declaration(decl));
             }
@@ -356,7 +361,7 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "union"
         {
-            if let Ok(decl) = read_union(d)
+            if let Ok(decl) = read_union(d,lib)
             {
               return Ok(Statement::Declaration(decl));
             }
@@ -365,7 +370,7 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "enum"
         {
-            if let Ok(decl) = read_enum(d)
+            if let Ok(decl) = read_enum(d,lib)
             {
               return Ok(Statement::Declaration(decl));
             }
@@ -374,7 +379,7 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "alias"
         {
-            if let Ok(decl) = read_alias(d)
+            if let Ok(decl) = read_alias(d,lib)
             {
               return Ok(Statement::Declaration(decl));
             }
@@ -383,9 +388,9 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "expression"
         {
-            if let Ok(e) = crate::language::expression::read_expression::read_expression(d)
+            if let Ok(e) = crate::language::expression::read_expression::read_expression(d,lib)
             {
-              return Ok(Statement::Expression(e));
+              return Ok(Statement::Expression(lib.push_expression(e)));
             }
         }
     }

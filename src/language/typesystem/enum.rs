@@ -1,17 +1,25 @@
 
 
-use super::TypeNote;
+use super::{
+  Type,
+};
+
+
+use crate::language::library::{
+  ExpressionIndex,
+  StringIndex,
+  Library
+};
+
 use super::r#struct::Struct;
 use crate::language::expression::Expression;
 
 
-#[derive(Clone)]
 pub enum
 Value
 {
   Unspecified,
-  Expression(Expression),
-  Struct(Struct),
+  Expression(ExpressionIndex),
 
 }
 
@@ -22,13 +30,12 @@ Value
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
     match self
     {
   Value::Unspecified=>{}
-  Value::Expression(e)=>{}
-  Value::Struct(st)=>{}
+  Value::Expression(ei)=>{}
     }
 }
 
@@ -38,7 +45,6 @@ print(&self)
 
 
 
-#[derive(Clone)]
 pub struct
 Enumerator
 {
@@ -55,11 +61,11 @@ Enumerator
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
   print!("{}",&self.name);
 
-  self.value.print();
+  self.value.print(lib);
 }
 
 
@@ -68,14 +74,10 @@ print(&self)
 
 
 
-#[derive(Clone)]
 pub struct
 Enum
 {
-  member_list: Vec<Enumerator>,
-
-   size: Option<usize>,
-  align: Option<usize>,
+  pub(crate) member_list: Vec<Enumerator>,
 
 }
 
@@ -88,19 +90,15 @@ Enum
 pub fn
 new()-> Enum
 {
-  Enum{ member_list: Vec::new(), size: None, align: None}
+  Enum{ member_list: Vec::new()}
 }
 
 
 pub fn
 from(ls: Vec<Enumerator>)-> Enum
 {
-  Enum{ member_list: ls, size: None, align: None}
+  Enum{member_list: ls}
 }
-
-
-pub fn   get_size(&self)-> &Option<usize>{&self.size}
-pub fn  get_align(&self)-> &Option<usize>{&self.align}
 
 
 pub fn
@@ -120,23 +118,13 @@ find(&self, name: &str)-> Option<&Value>
 
 
 pub fn
-print_id(&self, buf: &mut String)
-{
-    for m in &self.member_list
-    {
-//      m.type_info.print_id(buf);
-    }
-}
-
-
-pub fn
-print(&self)
+print(&self, lib: &Library)
 {
   println!("{{");
 
     for e in &self.member_list
     {
-      e.print();
+      e.print(lib);
 
       println!(",");
     }

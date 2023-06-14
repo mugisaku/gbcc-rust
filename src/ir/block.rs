@@ -1,7 +1,8 @@
 
 
-use std::convert::From;
-use super::memory::Word;
+use super::memory::{
+  Word,
+};
 
 
 
@@ -41,7 +42,7 @@ print(&self)
 
 #[derive(Clone)]
 pub enum
-OperandLiteral
+Operand
 {
   Identifier(String),
 
@@ -51,15 +52,8 @@ OperandLiteral
 
 
 impl
-OperandLiteral
+Operand
 {
-
-
-pub fn
-from(name: &str)-> OperandLiteral
-{
-  OperandLiteral::Identifier(String::from(name))
-}
 
 
 pub fn
@@ -67,142 +61,9 @@ print(&self)
 {
     match self
     {
-  OperandLiteral::Identifier(s)=>{print!("{}",s);},
-  OperandLiteral::ImmediateValue(w)=>{print!("(imm, i:{})",w.get_i64());},
+  Operand::Identifier(s)=>{print!("{}",s);},
+  Operand::ImmediateValue(w)=>{print!("(imm, i:{})",w.get_i64());},
     }
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-Operand
-{
-  pub(crate) literal: OperandLiteral,
-
-  pub(crate) address_source: Option<AddressSource>,
-
-}
-
-
-impl
-Operand
-{
-
-
-pub fn
-print(&self)
-{
-  self.literal.print();
-
-  print!("(");
-
-    if let Some(adr_src) = &self.address_source
-    {
-      adr_src.print();
-    }
-
-  else
-    {
-      print!("?");
-    }
-
-
-  print!(")");
-}
-
-
-}
-
-
-impl
-From<&str> for Operand
-{
-
-
-fn
-from(id: &str)-> Operand
-{
-  Operand{ literal: OperandLiteral::from(id), address_source: None}
-}
-
-
-}
-
-
-impl
-From<i64> for Operand
-{
-
-
-fn
-from(i: i64)-> Operand
-{
-  Operand{ literal: OperandLiteral::ImmediateValue(Word::from(i)), address_source: None}
-}
-
-
-}
-
-
-impl
-From<u64> for Operand
-{
-
-
-fn
-from(u: u64)-> Operand
-{
-  Operand{ literal: OperandLiteral::ImmediateValue(Word::from(u)), address_source: None}
-}
-
-
-}
-
-
-impl
-From<f64> for Operand
-{
-
-
-fn
-from(f: f64)-> Operand
-{
-  Operand{ literal: OperandLiteral::ImmediateValue(Word::from(f)), address_source: None}
-}
-
-
-}
-
-
-impl
-From<i32> for Operand
-{
-
-
-fn
-from(i: i32)-> Operand
-{
-  Operand{ literal: OperandLiteral::ImmediateValue(Word::from(i)), address_source: None}
-}
-
-
-}
-
-
-impl
-From<f32> for Operand
-{
-
-
-fn
-from(f: f32)-> Operand
-{
-  Operand{ literal: OperandLiteral::ImmediateValue(Word::from(f)), address_source: None}
 }
 
 
@@ -215,94 +76,6 @@ pub fn
 new_operand_list()-> Vec<Operand>
 {
   Vec::new()
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-VariableLink
-{
-  pub(crate) name: String,
-
-  pub(crate) address_source: Option<AddressSource>,
-
-}
-
-
-impl
-VariableLink
-{
-
-
-pub fn
-new(name: &str)-> VariableLink
-{
-  VariableLink{ name: String::from(name), address_source: None}
-}
-
-
-pub fn
-print(&self)
-{
-  print!("{}(",&self.name);
-
-    if let Some(adr_src) = &self.address_source
-    {
-      adr_src.print();
-    }
-
-  else
-    {
-      print!("?");
-    }
-
-
-  print!(")");
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-BlockLink
-{
-  pub(crate) name: String,
-
-  pub(crate) index: Option<u64>,
-
-}
-
-
-impl
-BlockLink
-{
-
-
-pub fn
-new(name: &str)-> BlockLink
-{
-  BlockLink{ name: String::from(name), index: None}
-}
-
-
-pub fn
-print(&self)
-{
-  print!("{}",&self.name);
-
-    if let Some(i) = self.index
-    {
-      print!("({})",i);
-    }
-}
-
-
 }
 
 
@@ -339,7 +112,7 @@ pub fn  print(&self){print!("({} bytes)",self.get_size());}
 pub struct
 CallInfo
 {
-  pub(crate) target: VariableLink,
+  pub(crate) target: String,
 
   pub(crate) return_word_count: WordCount,
 
@@ -356,7 +129,7 @@ CallInfo
 pub fn
 new(name: &str, ret_wc: WordCount)-> CallInfo
 {
-  CallInfo{ target: VariableLink::new(name), return_word_count: ret_wc, argument_list: Vec::new()}
+  CallInfo{ target: String::from(name), return_word_count: ret_wc, argument_list: Vec::new()}
 }
 
 
@@ -370,9 +143,7 @@ push(&mut self, o: Operand)
 pub fn
 print(&self)
 {
-  self.target.print();
-
-  print!(" ");
+  print!("{} ",&self.target);
 
   self.return_word_count.print();
 
@@ -393,10 +164,10 @@ print(&self)
 pub struct
 BranchInfo
 {
-  pub(crate) condition: VariableLink,
+  pub(crate) condition: String,
 
-  pub(crate) on_true:  BlockLink,
-  pub(crate) on_false: BlockLink,
+  pub(crate) on_true:  String,
+  pub(crate) on_false: String,
 
 }
 
@@ -409,22 +180,14 @@ BranchInfo
 pub fn
 new(cond: &str, on_true: &str, on_false: &str)-> BranchInfo
 {
-  BranchInfo{ condition: VariableLink::new(cond), on_true: BlockLink::new(on_true), on_false: BlockLink::new(on_false)}
+  BranchInfo{ condition: String::from(cond), on_true: String::from(on_true), on_false: String::from(on_false)}
 }
 
 
 pub fn
 print(&self)
 {
-  self.condition.print();
-
-  print!(" ");
-
-  self.on_true.print();
-
-  print!(" ");
-
-  self.on_false.print();
+  print!("{} {} {}",&self.condition,&self.on_true,&self.on_false);
 }
 
 
@@ -576,7 +339,7 @@ AllocatingOperation
 
   Allocate(WordCount),
 
-  Address(VariableLink),
+  Address(String),
 
   Phi(Vec<PhiOperand>),
   Call(CallInfo),
@@ -635,9 +398,7 @@ print(&self)
         },
   AllocatingOperation::Address(o)=>
         {
-          print!("address ");
-
-          o.print();
+          print!("address {}",o);
         },
   AllocatingOperation::Phi(ops)=>
         {
@@ -645,9 +406,7 @@ print(&self)
 
             for o in ops
             {
-              o.from.print();
-
-              print!(" ");
+              print!("{} ",&o.from);
 
               o.value.print();
 
@@ -668,10 +427,10 @@ print(&self)
 pub enum
 NonAllocatingOperation
 {
-  CopyWord(VariableLink,VariableLink),
-  CopyString(VariableLink,VariableLink,usize),
+  CopyWord(String,String),
+  CopyString(String,String,usize),
   Message(String),
-  Print(VariableLink,char),
+  Print(String,char),
 
 }
 
@@ -688,25 +447,11 @@ print(&self)
     {
   NonAllocatingOperation::CopyWord(src,dst)=>
         {
-          print!("copy_word (src)");
-
-          src.print();
-
-          print!(" (dst)");
-
-          dst.print();
+          print!("copy_word (src){} (dst){}",src,dst);
         },
   NonAllocatingOperation::CopyString(dst,src,sz)=>
         {
-          print!("copy_string (src)");
-
-          src.print();
-
-          print!(" (dst)");
-
-          dst.print();
-
-          print!("{}",*sz);
+          print!("copy_string (src){} (dst){} {}",src,dst,*sz);
         },
   NonAllocatingOperation::Message(s)=>
         {
@@ -714,11 +459,7 @@ print(&self)
         },
   NonAllocatingOperation::Print(target,c)=>
         {
-          print!("print ");
-
-          target.print();
-
-          print!(" {}",c);
+          print!("print {} {}",target,c);
         },
     }
 }
@@ -732,7 +473,7 @@ print(&self)
 pub enum
 Line
 {
-     AllocatingOperation(VariableLink,AllocatingOperation),
+     AllocatingOperation(String,AllocatingOperation),
   NonAllocatingOperation(NonAllocatingOperation),
 
 }
@@ -748,11 +489,9 @@ print(&self)
 {
     match self
     {
-  Line::AllocatingOperation(vl,ao)=>
+  Line::AllocatingOperation(dst,ao)=>
         {
-          vl.print();
-
-          print!(" = ");
+          print!("{} = ",dst);
 
           ao.print();
         }
@@ -772,7 +511,7 @@ print(&self)
 pub enum
 Terminator
 {
-  Jump(BlockLink),
+  Jump(String),
   Branch(BranchInfo),
   Return(Option<Operand>),
 
@@ -789,20 +528,14 @@ print(&self)
 {
     match self
     {
-  Terminator::Jump(ln)=>
+  Terminator::Jump(dst)=>
         {
-          print!("jmp ");
-
-          ln.print();
+          print!("jmp {}",dst);
         },
   Terminator::Branch(bi)=>
         {
           print!("br ");
-          bi.condition.print();
-          print!(" ");
-          bi.on_true.print();
-          print!(" ");
-          bi.on_false.print();
+          bi.print();
         },
   Terminator::Return(o_opt)=>
         {
@@ -825,7 +558,7 @@ print(&self)
 pub struct
 PhiOperand
 {
-  pub(crate)  from: BlockLink,
+  pub(crate)  from: String,
   pub(crate) value: Operand,
 
 }
@@ -839,7 +572,7 @@ PhiOperand
 pub fn
 make(blk_name: &str, o: Operand)-> PhiOperand
 {
-  PhiOperand{ from: BlockLink::new(blk_name), value: o}
+  PhiOperand{ from: String::from(blk_name), value: o}
 }
 
 
@@ -884,14 +617,14 @@ new(name: &str)-> Block
 pub fn
 set_jmp(&mut self, label: &str)
 {
-  self.terminator = Some(Terminator::Jump(BlockLink::new(label)));
+  self.terminator = Some(Terminator::Jump(String::from(label)));
 }
 
 
 pub fn
 set_br(&mut self, var_name: &str, on_true: &str, on_false: &str)
 {
-  let  bi = BranchInfo{ condition: VariableLink::new(var_name), on_true: BlockLink::new(on_true), on_false: BlockLink::new(on_false)};
+  let  bi = BranchInfo{ condition: String::from(var_name), on_true: String::from(on_true), on_false: String::from(on_false)};
 
   self.terminator = Some(Terminator::Branch(bi));
 }

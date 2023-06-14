@@ -8,9 +8,9 @@ r##"
 #typesystem
 
 
-function_pointer: 'fn & "(" & [type_note_list] & ")" & ["->" & type_note];
+function_pointer: 'fn & "(" & [type_list] & ")" & ["->" & type];
 
-tuple: "(" & [type_note_list] & ")";
+tuple: "(" & [type_list] & ")";
 
 primitive:
     'bool
@@ -20,9 +20,9 @@ primitive:
   ;
 
 
-type_note: primitive | tuple | function_pointer | .Identifier;
+type: primitive | tuple | function_pointer | .Identifier;
 
-type_note_list: type_note & [{"," & type_note}];
+type_list: type & [{"," & type}];
 
 
 "##;

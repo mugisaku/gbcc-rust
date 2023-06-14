@@ -40,17 +40,17 @@ return  : 'return -> [expression::expression];
 
 conditional_block: expression::expression & block;
 
-parameter: .Identifier & ":" & typesystem::type_note;
+parameter: .Identifier & ":" & typesystem::type;
 parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
 
-fn    : 'fn -> .Identifier & parameter_list & ["->" & typesystem::type_note] & block;
-var   : 'var -> .Identifier & [":" & typesystem::type_note] & ["=" & expression::expression];
-static: 'static -> .Identifier & ":" & typesystem::type_note & "=" & expression::expression;
-const : 'const  -> .Identifier & ":" & typesystem::type_note & "=" & expression::expression;
+fn    : 'fn -> .Identifier & parameter_list & ["->" & typesystem::type] & block;
+var   : 'var -> .Identifier & [":" & typesystem::type] & ["=" & expression::expression];
+static: 'static -> .Identifier & ":" & typesystem::type & "=" & expression::expression;
+const : 'const  -> .Identifier & ":" & typesystem::type & "=" & expression::expression;
 struct: 'struct -> .Identifier & member_list;
 union : 'union -> .Identifier & member_list;
 enum  : 'enum -> .Identifier & enumerator_list;
-alias : 'alias -> .Identifier & ":" & typesystem::type_note;
+alias : 'alias -> .Identifier & ":" & typesystem::type;
 
 member_list: "{" & [{parameter & [","]}] & "}";
 

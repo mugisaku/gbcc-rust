@@ -3,8 +3,11 @@
 pub mod read_expression;
 pub mod dictionary;
 
-
-
+use super::library::{
+  ExpressionIndex,
+  StringIndex,
+  Library
+};
 
 #[derive(Clone)]
 pub enum
@@ -14,8 +17,8 @@ OperandCore
   Integer(u64),
   Floating(f64),
   Character(char),
-  String(String),
-  Expression(Box<Expression>),
+  String(StringIndex),
+  Expression(ExpressionIndex),
 
 }
 
@@ -26,7 +29,7 @@ OperandCore
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
     match self
     {
@@ -34,12 +37,21 @@ print(&self)
   OperandCore::Integer(u)=>{print!("{}",u);},
   OperandCore::Floating(f)=>{print!("{}",f);},
   OperandCore::Character(c)=>{print!("{}",c);},
-  OperandCore::String(s)=>{print!("\"{}\"",s);},
-  OperandCore::Expression(e)=>
+  OperandCore::String(i)=>
         {
-          print!("(");
-          e.print();
-          print!(")");
+            if let Some(s) = lib.get_string(*i)
+            {
+              print!("\"{}\"",s);
+            }
+        },
+  OperandCore::Expression(i)=>
+        {
+            if let Some(e) = lib.get_expression(*i)
+            {
+              print!("(");
+              e.print(lib);
+              print!(")");
+            }
         },
     }
 }
@@ -55,8 +67,8 @@ pub enum
 PostfixOperator
 {
   Access(String),
-  Subscript(Box<Expression>),
-  Call(Vec<Expression>),
+  Subscript(ExpressionIndex),
+  Call(Vec<ExpressionIndex>),
   NameResolution(String),
   Increment,
   Decrement,
@@ -70,24 +82,31 @@ PostfixOperator
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
     match self
     {
   PostfixOperator::Access(s)=>{print!(".{}",s);},
-  PostfixOperator::Subscript(o)=>
+  PostfixOperator::Subscript(i)=>
         {
-          print!("[");
-          o.print();
-          print!("]");
+            if let Some(e) = lib.get_expression(*i)
+            {
+              print!("[");
+              e.print(lib);
+              print!("]");
+            }
         },
   PostfixOperator::Call(args)=>
         {
           print!("(");
 
-            for o in args
+            for i in args
             {
-              o.print();
+                if let Some(e) = lib.get_expression(*i)
+                {
+                  e.print(lib);
+                }
+
 
               print!(", ");
             }
@@ -148,6 +167,8 @@ print(&self)
 }
 
 
+
+
 #[derive(Clone)]
 pub enum
 BinaryOperator
@@ -170,18 +191,6 @@ BinaryOperator
   Gteq,
   LogicalOr,
   LogicalAnd,
-
-  Assign,
-  AddAssign,
-  SubAssign,
-  MulAssign,
-  DivAssign,
-  RemAssign,
-  ShlAssign,
-  ShrAssign,
-  AndAssign,
-  OrAssign,
-  XorAssign,
 
 }
 
@@ -214,18 +223,55 @@ print(&self)
   BinaryOperator::Gteq=>{print!(">=");},
   BinaryOperator::LogicalAnd=>{print!("&&");},
   BinaryOperator::LogicalOr=>{print!("||");},
+    }
+}
 
-  BinaryOperator::Assign=>{print!("=");},
-  BinaryOperator::AddAssign=>{print!("+=");},
-  BinaryOperator::SubAssign=>{print!("-=");},
-  BinaryOperator::MulAssign=>{print!("*=");},
-  BinaryOperator::DivAssign=>{print!("/=");},
-  BinaryOperator::RemAssign=>{print!("%=");},
-  BinaryOperator::ShlAssign=>{print!("<<=");},
-  BinaryOperator::ShrAssign=>{print!(">>=");},
-  BinaryOperator::AndAssign=>{print!("&=");},
-  BinaryOperator::OrAssign=>{print!("|=");},
-  BinaryOperator::XorAssign=>{print!("^=");},
+
+}
+
+
+
+
+#[derive(Clone)]
+pub enum
+AssignOperator
+{
+  Nop,
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Rem,
+  Shl,
+  Shr,
+  And,
+  Or,
+  Xor,
+
+}
+
+
+impl
+AssignOperator
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  AssignOperator::Nop=>{print!("=");},
+  AssignOperator::Add=>{print!("+=");},
+  AssignOperator::Sub=>{print!("-=");},
+  AssignOperator::Mul=>{print!("*=");},
+  AssignOperator::Div=>{print!("/=");},
+  AssignOperator::Rem=>{print!("%=");},
+  AssignOperator::Shl=>{print!("<<=");},
+  AssignOperator::Shr=>{print!(">>=");},
+  AssignOperator::And=>{print!("&=");},
+  AssignOperator::Or=>{print!("|=");},
+  AssignOperator::Xor=>{print!("^=");},
     }
 }
 
@@ -264,11 +310,11 @@ get_priority(&self)-> usize
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
     match self
     {
-  Operator::Postfix(o)=>{o.print();},
+  Operator::Postfix(o)=>{o.print(lib);},
   Operator::Prefix(o)=>{o.print();},
   Operator::Binary(o)=>{o.print();},
     }
@@ -299,7 +345,7 @@ Operand
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
     for o in &self.prefix_operator_list
     {
@@ -307,11 +353,11 @@ print(&self)
     }
 
 
-  self.core.print();
+  self.core.print(lib);
 
     for o in &self.postfix_operator_list
     {
-      o.print();
+      o.print(lib);
     }
 }
 
@@ -340,6 +386,8 @@ Expression
 
   pub(crate) tail_list: Vec<ExpressionTail>,
 
+  pub(crate) assign_part_opt: Option<(AssignOperator,ExpressionIndex)>,
+
 }
 
 
@@ -349,7 +397,7 @@ Expression
 
 
 pub fn
-make_from_string(s: &str)-> Result<Expression,()>
+make_from_string(s: &str, lib: &mut Library)-> Result<Expression,()>
 {
   use crate::syntax::dictionary::Dictionary;
 
@@ -357,7 +405,7 @@ make_from_string(s: &str)-> Result<Expression,()>
 
   let  dics: Vec<&Dictionary> = vec![];
 
-    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"expression",Some(dics))
+    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"expression_with_assign",Some(dics))
     {
       let  cur = crate::syntax::Cursor::new(&dir);
 
@@ -365,7 +413,7 @@ make_from_string(s: &str)-> Result<Expression,()>
         {
 //          e_dir.print(0);
 
-          return self::read_expression::read_expression(&e_dir);
+          return self::read_expression::read_expression(&e_dir,lib);
         }
     }
 
@@ -377,14 +425,25 @@ make_from_string(s: &str)-> Result<Expression,()>
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
-  self.operand.print();
+  self.operand.print(lib);
 
     for t in &self.tail_list
     {
       t.operator.print();
-      t.operand.print();
+      t.operand.print(lib);
+    }
+
+
+    if let Some((a,ei)) = &self.assign_part_opt
+    {
+      a.print();
+
+        if let Some(e) = lib.get_expression(*ei)
+        {
+          e.print(lib);
+        }
     }
 }
 

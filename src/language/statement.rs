@@ -4,9 +4,18 @@ pub mod read_statement;
 pub mod read_declaration;
 pub mod dictionary;
 
+use super::library::{
+  ExpressionIndex,
+  StringIndex,
+  Library
+};
+
+use std::cell::Cell;
+use super::get_aligned_size;
 use super::expression::Expression;
+use super::value::Value;
 use super::typesystem::{
-  TypeNote,
+  Type,
   r#struct::Struct,
   r#union::Union,
   r#enum::Enum,
@@ -18,11 +27,17 @@ use super::typesystem::{
 pub struct
 Var
 {
-  pub(crate) type_note: TypeNote,
+  pub(crate) r#type: Type,
 
-  pub(crate) expression_opt: Option<Expression>,
+  pub(crate) expression_index_opt: Option<ExpressionIndex>,
+
+  pub(crate) value_optcel: Cell<Option<Value>>,
+
+  pub(crate) address_optcel: Cell<Option<i64>>,
 
 }
+
+
 
 
 pub struct
@@ -30,9 +45,15 @@ Fn
 {
   pub(crate) signature: FunctionSignature,
 
+  pub(crate) parameter_name_list: Vec<String>,
+
   pub(crate) block: Block,
 
+  pub(crate) index_optcel: Cell<Option<usize>>,
+
 }
+
+
 
 
 pub enum
@@ -42,14 +63,26 @@ Definition
   Var(Var),
   Static(Var),
   Const(Var),
+  Argument(Var),
   Struct(Struct),
   Union(Union),
   Enum(Enum),
-  Alias(TypeNote),
+  Alias(Type),
 
 }
 
 
+
+
+#[derive(Clone,Copy)]
+pub enum
+Status
+{
+  Completed,
+    Touched,
+  Untouched,
+
+}
 
 
 pub struct
@@ -58,6 +91,8 @@ Declaration
   pub(crate) name: String,
 
   pub(crate) definition: Definition,
+
+  pub(crate) status_cell: Cell<Status>,
 
 }
 
@@ -70,78 +105,112 @@ Declaration
 pub fn
 new(name: &str, def: Definition)-> Declaration
 {
-  Declaration{name: String::from(name), definition: def}
+  Declaration{name: String::from(name), definition: def, status_cell: Cell::new(Status::Untouched)}
 }
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
     match &self.definition
     {
   Definition::Fn(f)=>
         {
           print!("fn\n{}",&self.name);
-          f.signature.print();
+
+          f.signature.print_with_name_list(&f.parameter_name_list,lib);
+
           print!("\n");
-          f.block.print();
+
+          f.block.print(lib);
         },
   Definition::Var(v)=>
         {
           print!("var\n{}: ",&self.name);
-          v.type_note.print();
 
-            if let Some(e) = &v.expression_opt
+          v.r#type.print(lib);
+
+            if let Some(ei) = &v.expression_index_opt
             {
               print!(" = ");
-              e.print();
+
+                if let Some(e) = lib.get_expression(*ei)
+                {
+                  e.print(lib);
+                }
             }
         },
   Definition::Static(v)=>
         {
           print!("static\n{}: ",&self.name);
-          v.type_note.print();
 
-            if let Some(e) = &v.expression_opt
+          v.r#type.print(lib);
+
+            if let Some(ei) = &v.expression_index_opt
             {
               print!(" = ");
-              e.print();
+
+                if let Some(e) = lib.get_expression(*ei)
+                {
+                  e.print(lib);
+                }
             }
         },
   Definition::Const(v)=>
         {
           print!("const\n{}: ",&self.name);
-          v.type_note.print();
 
-            if let Some(e) = &v.expression_opt
+          v.r#type.print(lib);
+
+            if let Some(ei) = &v.expression_index_opt
             {
               print!(" = ");
-              e.print();
+
+                if let Some(e) = lib.get_expression(*ei)
+                {
+                  e.print(lib);
+                }
+            }
+        },
+  Definition::Argument(v)=>
+        {
+          print!("arg\n{}: ",&self.name);
+
+          v.r#type.print(lib);
+
+            if let Some(ei) = &v.expression_index_opt
+            {
+              print!(" = ");
+
+                if let Some(e) = lib.get_expression(*ei)
+                {
+                  e.print(lib);
+                }
             }
         },
   Definition::Struct(st)=>
         {
           print!("struct\n{}",&self.name);
 
-          st.print();
+          st.print(lib);
         },
   Definition::Union(un)=>
         {
           print!("union\n{}",&self.name);
 
-          un.print();
+          un.print(lib);
         },
   Definition::Enum(en)=>
         {
           print!("enum\n{}",&self.name);
 
-          en.print();
+          en.print(lib);
         },
   Definition::Alias(ty)=>
         {
           print!("alias\n{}: ",&self.name);
 
-          ty.print();
+          ty.print(lib);
         },
     }
 }
@@ -164,8 +233,8 @@ Statement
   Loop(Block),
   Break,
   Continue,
-  Return(Option<Expression>),
-  Expression(Expression),
+  Return(Option<ExpressionIndex>),
+  Expression(ExpressionIndex),
 
 }
 
@@ -176,7 +245,7 @@ Statement
 
 
 pub fn
-make_from_string(s: &str)-> Result<Statement,()>
+make_from_string(s: &str, lib: &mut Library)-> Result<Statement,()>
 {
   use crate::syntax::dictionary::Dictionary;
 
@@ -194,7 +263,7 @@ make_from_string(s: &str)-> Result<Statement,()>
         {
 //                  e_dir.print(0);
 
-          return self::read_statement::read_statement(&e_dir);
+          return self::read_statement::read_statement(&e_dir,lib);
         }
     }
 
@@ -206,32 +275,32 @@ make_from_string(s: &str)-> Result<Statement,()>
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
     match self
     {
   Statement::Empty=>{print!(";");},
-  Statement::Declaration(decl)=>{decl.print();},
-  Statement::Block(blk)=>{blk.print();},
+  Statement::Declaration(decl)=>{decl.print(lib);},
+  Statement::Block(blk)=>{blk.print(lib);},
   Statement::If(top,elif_ls,el_opt)=>
         {
           print!("if ");
 
-          top.print();
+          top.print(lib);
 
             for condblk in elif_ls
             {
               print!("else if ");
 
-              condblk.print();
+              condblk.print(lib);
             }
 
 
-            if let Some(condblk) = el_opt
+            if let Some(blk) = el_opt
             {
               print!("else ");
 
-              condblk.print();
+              blk.print(lib);
             }
         },
   Statement::For(blks)=>{},
@@ -239,26 +308,35 @@ print(&self)
         {
           print!("while ");
 
-          condblk.print();
+          condblk.print(lib);
         },
   Statement::Loop(blk)=>
         {
           print!("loop\n");
 
-          blk.print();
+          blk.print(lib);
         },
   Statement::Break=>{print!("break");},
   Statement::Continue=>{print!("continue");},
-  Statement::Return(op_e)=>
+  Statement::Return(ei_opt)=>
         {
           print!("return ");
 
-            if let Some(e) = op_e
+            if let Some(ei) = ei_opt
             {
-              e.print();
+                if let Some(e) = lib.get_expression(*ei)
+                {
+                  e.print(lib);
+                }
             }
         },
-  Statement::Expression(e)=>{e.print();},
+  Statement::Expression(ei)=>
+        {
+            if let Some(e) = lib.get_expression(*ei)
+            {
+              e.print(lib);
+            }
+        },
     }
 }
 
@@ -296,13 +374,13 @@ get_statement_list(&self)-> &Vec<Statement>
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
   print!("{{\n");
 
     for stmt in &self.statement_list
     {
-      stmt.print();
+      stmt.print(lib);
 
       print!("\n");
     }
@@ -320,7 +398,7 @@ print(&self)
 pub struct
 ConditionalBlock
 {
-  pub(crate) expression: Expression,
+  pub(crate) expression_index: ExpressionIndex,
   pub(crate) block: Block,
 
 }
@@ -332,13 +410,16 @@ ConditionalBlock
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
-  self.expression.print();
+    if let Some(e) = lib.get_expression(self.expression_index)
+    {
+      e.print(lib);
 
-  print!("\n");
+      print!("\n");
 
-  self.block.print();
+      self.block.print(lib);
+    }
 }
 
 
@@ -368,7 +449,7 @@ new()-> Program
 
 
 pub fn
-make_from_string(s: &str)-> Result<Program,()>
+make_from_string(s: &str, lib: &mut Library)-> Result<Program,()>
 {
   use crate::syntax::dictionary::Dictionary;
 
@@ -386,7 +467,7 @@ make_from_string(s: &str)-> Result<Program,()>
 
         while let Some(decl_d) = cur.get_directory()
         {
-            if let Ok(decl) = crate::language::statement::read_declaration::read_declaration(decl_d)
+            if let Ok(decl) = crate::language::statement::read_declaration::read_declaration(decl_d,lib)
             {
               prog.declaration_list.push(decl);
 
@@ -411,13 +492,28 @@ make_from_string(s: &str)-> Result<Program,()>
 
 
 pub fn
-print(&self)
+fix(&mut self)-> Result<(),()>
+{
+  let  mut decl_ls: Vec<&Declaration> = Vec::new();
+
+    for decl in &self.declaration_list
+    {
+      decl_ls.push(decl);
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+print(&self, lib: &Library)
 {
   print!("program\n\n");
 
     for st in &self.declaration_list
     {
-      st.print();
+      st.print(lib);
 
       print!("\n\n");
     }

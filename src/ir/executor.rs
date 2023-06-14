@@ -20,46 +20,22 @@ use super::function::{
 
 
 pub struct
-Library
+Directory
 {
-  function_list: Vec<Function>,
-
-  variable_info_list: Vec<VariableInfo>,
+  pub(crate) index_list: Vec<usize>,
 
 }
 
 
 impl
-Library
+Directory
 {
 
 
 pub fn
-new()-> Library
+new()-> Directory
 {
-  Library{ function_list: Vec::new(), variable_info_list: Vec::new()}
-}
-
-
-pub fn
-get_variable_info_list(&self)-> &Vec<VariableInfo>
-{
-  &self.variable_info_list
-}
-
-
-pub fn
-get_next_offset(&self)-> i64
-{
-    if let Some(vi) = self.variable_info_list.last()
-    {
-      get_word_size_aligned(vi.offset+(vi.size as i64))
-    }
-
-  else
-    {
-      0
-    }
+  Directory{index_list: Vec::new()}
 }
 
 
@@ -87,6 +63,168 @@ find_function(&self, name: &str)-> Option<&Function>
 
 
   None
+}
+
+
+}
+
+
+
+
+pub enum
+ObjectData
+{
+  Function(Function),
+  VariableInfo(VariableInfo),
+  TypeInfo(TypeInfo),
+  Directory(Directory),
+
+};
+
+
+pub struct
+Object
+{
+  pub(crate) name: String,
+
+  pub(crate) data: ObjectData,
+
+};
+
+
+impl
+Object
+{
+
+
+pub fn
+new(name: &str, dat: ObjectData)-> Object
+{
+  Object{name: String::from(name), data: dat}
+}
+
+
+pub fn
+get_function(&self)-> Option<&Function>
+{
+    if let ObjectData::Function(f) = &seld.data
+    {
+      return Some(f);
+    }
+
+
+  None
+}
+
+
+pub fn
+get_variable_info(&self)-> Option<&VariableInfo>
+{
+    if let ObjectData::VariableInfo(vi) = &seld.data
+    {
+      return Some(vi);
+    }
+
+
+  None
+}
+
+
+pub fn
+get_type_info(&self)-> Option<&TypeInfo>
+{
+    if let ObjectData::TypeInfo(ti) = &seld.data
+    {
+      return Some(ti);
+    }
+
+
+  None
+}
+
+
+pub fn
+get_directory(&self)-> Option<&Directory>
+{
+    if let ObjectData::Directory(dir) = &seld.data
+    {
+      return Some(dir);
+    }
+
+
+  None
+}
+
+
+pub fn
+get_directory_mut(&mut self)-> Option<&mut Directory>
+{
+    if let ObjectData::Directory(dir) = &mut seld.data
+    {
+      return Some(dir);
+    }
+
+
+  None
+}
+
+
+}
+
+
+
+
+pub struct
+Library
+{
+  object_list: Vec<Object>,
+
+}
+
+
+impl
+Library
+{
+
+
+pub fn
+new()-> Library
+{
+  let  mut lib = Library{object_list: Vec::new()};
+
+  let  root_dir = Directory::new();
+
+  let  first_o = Object::new("",ObjectData::Directory(root_dir));
+
+  lib.object_list.push(first_o);
+
+  lib
+}
+
+
+pub fn
+get_root_directory(&self)-> &Directory
+{
+    if let Some(dir) = lib.object_list[0].get_directory()
+    {
+      return dir;
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+get_root_directory_mut(&mut self)-> &mut Directory
+{
+    if let Some(dir) = lib.object_list[0].get_directory_mut()
+    {
+      return dir;
+    }
+
+
+  panic!();
 }
 
 

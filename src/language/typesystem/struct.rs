@@ -1,21 +1,27 @@
 
 
+use std::cell::Cell;
+
 use super::{
-  TypeNote,
-  get_aligned_size,
-  get_max,
+  Type,
 };
 
 
-#[derive(Clone)]
+use crate::language::library::{
+  ExpressionIndex,
+  StringIndex,
+  Library
+};
+
+
 pub struct
 Member
 {
   pub(crate) name: String,
 
-  pub(crate) type_note: TypeNote,
+  pub(crate) r#type: Type,
 
-  pub(crate) offset: Option<usize>,
+  pub(crate) offset_optcel: Cell<Option<usize>>,
 
 }
 
@@ -26,7 +32,7 @@ Member
 
 
 pub fn
-print(&self)
+print(&self, lib: &Library)
 {
     if self.name.len() != 0
     {
@@ -34,11 +40,11 @@ print(&self)
     }
 
 
-  self.type_note.print();
+  self.r#type.print(lib);
 
   print!("(off: ");
 
-    if let Some(off) = self.offset
+    if let Some(off) = self.offset_optcel.get()
     {
       print!("{}",off);
     }
@@ -52,11 +58,11 @@ print(&self)
 
 
 pub fn
-print_member_list(ls: &Vec<Member>)
+print_member_list(ls: &Vec<Member>, lib: &Library)
 {
     for m in ls
     {
-      m.print();
+      m.print(lib);
 
       println!(",");
     }
@@ -65,14 +71,10 @@ print_member_list(ls: &Vec<Member>)
 
 
 
-#[derive(Clone)]
 pub struct
 Struct
 {
   pub(crate) member_list: Vec<Member>,
-
-  pub(crate)  size: Option<usize>,
-  pub(crate) align: Option<usize>,
 
 }
 
@@ -85,18 +87,18 @@ Struct
 pub fn
 new()-> Struct
 {
-  Struct{member_list: Vec::new(), size: None, align: None}
+  Struct{member_list: Vec::new()}
 }
 
 
 pub fn
-from(ls: Vec<(String,TypeNote)>)-> Struct
+from(ls: Vec<(String,Type)>)-> Struct
 {
   let  mut st = Struct::new();
 
     for e in ls
     {
-      st.member_list.push(Member{name: e.0, type_note: e.1, offset: None});
+      st.member_list.push(Member{name: e.0, r#type: e.1, offset_optcel: Cell::new(None)});
     }
 
 
@@ -112,9 +114,9 @@ push(&mut self, m: Member)
 
 
 pub fn
-add(&mut self, name: &str, t: TypeNote)
+add(&mut self, name: &str, t: Type)
 {
-  self.member_list.push(Member{ name: String::from(name), type_note: t, offset: None});
+  self.member_list.push(Member{ name: String::from(name), r#type: t, offset_optcel: Cell::new(None)});
 }
 
 
@@ -127,42 +129,6 @@ merge(&mut self, ls: Vec<Member>)
     }
 }
 
-
-pub fn
-fix(&mut self)-> Result<(),()>
-{
-  let  mut off: usize = 0;
-  let  mut  al: usize = 0;
-
-    for m in &mut self.member_list
-    {
-      m.offset = Some(off);
-
-        if let Some(m_sz) = m.type_note.get_size() {
-        if let Some(m_al) = m.type_note.get_align(){
-          off = get_aligned_size(off+m_sz);
-           al = get_max(al,m_al);
-
-          continue;
-        }}
-
-
-      self.size  = None;
-      self.align = None;
-
-      return Err(());
-    }
-
-
-  self.size  = Some(off);
-  self.align = Some(al);
-
-  Ok(())
-}
-
-
-pub fn   get_size(&self)-> &Option<usize>{&self.size}
-pub fn  get_align(&self)-> &Option<usize>{&self.align}
 
 pub fn  get_member_list(&self)-> &Vec<Member>{&self.member_list}
 
@@ -197,21 +163,11 @@ get(&self, i: usize)-> Option<&Member>
 
 
 pub fn
-print_id(&self, buf: &mut String)
-{
-    for m in &self.member_list
-    {
-//      m.type_info.print_id(buf);
-    }
-}
-
-
-pub fn
-print(&self)
+print(&self, lib: &Library)
 {
   print!("{{");
 
-  print_member_list(&self.member_list);
+  print_member_list(&self.member_list,lib);
 
   print!("}}");
 }

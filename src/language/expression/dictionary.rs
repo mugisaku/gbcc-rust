@@ -12,18 +12,32 @@ operand_core: .Identifier | .Integer | .Floating | .Character | .String | ("(" &
 prefix_operator: "!" | "++" | "--" | "-" | "~" | "*" | "&";
 
 binary_operator:
-    "+=" |"+"
-  | "-=" | "-"
-  | "*=" | "*"
-  | "/=" | "/"
-  | "%=" | "%"
-  | "==" | "="
-  | "|=" | "||" | "|"
-  | "&=" | "&&" | "&"
-  | "^=" | "^"
-  | "<<=" |"<<" | "<=" | "<"
-  | ">>=" |">>" | ">=" | ">"
+    "+"
+  | "-"
+  | "*"
+  | "/"
+  | "%"
+  | "=="
+  | "||" | "|"
+  | "&&" | "&"
+  | "^"
+  | "<<" | "<=" | "<"
+  | ">>" | ">=" | ">"
   | "!="
+  ;
+
+assign_operator:
+    "="
+  | "+="
+  | "-="
+  | "*="
+  | "/="
+  | "%="
+  | "|=" 
+  | "&="
+  | "^="
+  | "<<="
+  | ">>="
   ;
 
 name_resolution: "::" & .Identifier;
@@ -39,7 +53,7 @@ operand: [{prefix_operator}] & operand_core & [{postfix_operator}];
 
 expression_tail: binary_operator & operand;
 
-expression: operand & [{expression_tail}];
+expression: operand & [{expression_tail}] & [assign_operator & operand & [{expression_tail}]];
 
 "##;
 

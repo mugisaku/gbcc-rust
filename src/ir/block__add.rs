@@ -2,7 +2,6 @@
 
 use super::block::{
   WordCount,
-  VariableLink,
   Operand,
   UnaryOperator,
   BinaryOperator,
@@ -11,7 +10,6 @@ use super::block::{
   PhiOperand,
   CallInfo,
   BranchInfo,
-  BlockLink,
   Terminator,
   Line,
   Block,
@@ -30,7 +28,7 @@ add_un(&mut self, dst: &str, o: Operand, u: UnaryOperator)
 {
   let  ao = AllocatingOperation::Unary(o,u);
 
-  let  l = Line::AllocatingOperation(VariableLink::new(dst),ao);
+  let  l = Line::AllocatingOperation(String::from(dst),ao);
 
   self.line_list.push(l);
 }
@@ -113,7 +111,7 @@ add_bin(&mut self, dst: &str, l: Operand, r: Operand, b: BinaryOperator)
 {
   let  ao = AllocatingOperation::Binary(l,r,b);
 
-  let  l = Line::AllocatingOperation(VariableLink::new(dst),ao);
+  let  l = Line::AllocatingOperation(String::from(dst),ao);
 
   self.line_list.push(l);
 }
@@ -374,38 +372,38 @@ add_logical_or(&mut self, dst: &str, l: Operand, r: Operand)
 pub fn
 add_allocate(&mut self, dst: &str, wc: WordCount)
 {
-  self.line_list.push(Line::AllocatingOperation(VariableLink::new(dst),AllocatingOperation::Allocate(wc)));
+  self.line_list.push(Line::AllocatingOperation(String::from(dst),AllocatingOperation::Allocate(wc)));
 }
 
 
 pub fn
 add_address(&mut self, dst: &str, src: &str)
 {
-  self.line_list.push(Line::AllocatingOperation(VariableLink::new(dst),AllocatingOperation::Address(VariableLink::new(src))));
+  self.line_list.push(Line::AllocatingOperation(String::from(dst),AllocatingOperation::Address(String::from(src))));
 }
 
 
 pub fn
 add_phi(&mut self, dst: &str, ops: Vec<PhiOperand>)
 {
-  self.line_list.push(Line::AllocatingOperation(VariableLink::new(dst),AllocatingOperation::Phi(ops)));
+  self.line_list.push(Line::AllocatingOperation(String::from(dst),AllocatingOperation::Phi(ops)));
 }
 
 
 pub fn
 add_call(&mut self, dst: &str, target: &str, wc: WordCount, args: Vec<Operand>)
 {
-  let  ci = CallInfo{ target: VariableLink::new(target), return_word_count: wc, argument_list: args};
+  let  ci = CallInfo{ target: String::from(target), return_word_count: wc, argument_list: args};
 
-  self.line_list.push(Line::AllocatingOperation(VariableLink::new(dst),AllocatingOperation::Call(ci)));
+  self.line_list.push(Line::AllocatingOperation(String::from(dst),AllocatingOperation::Call(ci)));
 }
 
 
 pub fn
 add_copy_word(&mut self, dst: &str, src: &str)
 {
-  let  dst_vl = VariableLink::new(dst);
-  let  src_vl = VariableLink::new(src);
+  let  dst_vl = String::from(dst);
+  let  src_vl = String::from(src);
 
   self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::CopyWord(src_vl,dst_vl)));
 }
@@ -414,8 +412,8 @@ add_copy_word(&mut self, dst: &str, src: &str)
 pub fn
 add_copy_string(&mut self, dst: &str, src: &str, sz: usize)
 {
-  let  dst_vl = VariableLink::new(dst);
-  let  src_vl = VariableLink::new(src);
+  let  dst_vl = String::from(dst);
+  let  src_vl = String::from(src);
 
   self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::CopyString(src_vl,dst_vl,sz)));
 }
@@ -431,7 +429,7 @@ add_message(&mut self, s: &str)
 pub fn
 add_print(&mut self, s: &str, c: char)
 {
-  self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::Print(VariableLink::new(s),c)));
+  self.line_list.push(Line::NonAllocatingOperation(NonAllocatingOperation::Print(String::from(s),c)));
 }
 
 

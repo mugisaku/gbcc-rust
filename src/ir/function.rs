@@ -7,15 +7,12 @@ use super::memory::{
 
 use super::block::{
   AddressSource,
-  OperandLiteral,
   Operand,
   UnaryOperator,
   BinaryOperator,
   AllocatingOperation,
   NonAllocatingOperation,
   Terminator,
-  VariableLink,
-  BlockLink,
   Block,
   Line,
   WordCount,
@@ -24,72 +21,12 @@ use super::block::{
 
 
 
-pub struct
-Parameter
-{
-  pub(crate) name: String,
-
-  pub(crate) word_count: WordCount,
-
-}
-
-
-#[derive(Clone)]
-pub enum
-StorageClass
-{
-  Global,
-  Static,
-  Argument,
-  Local,
-
-}
-
-
-#[derive()]
-pub struct
-VariableInfo
-{
-  pub(crate) name: String,
-
-  pub(crate) storage_class: StorageClass,
-
-  pub(crate) offset: i64,
-  pub(crate)   size: u64,
-
-  pub(crate) initial_value: Option<Memory>,
-
-}
-
-
-impl
-VariableInfo
-{
-
-
-pub fn
-print(&self)
-{
-  print!("{}: ({} +{})",&self.name,self.offset,self.size);
-}
-
-
-}
-
-
 
 
 pub struct
 Function
 {
-  pub(crate) name: String,
-
   pub(crate) parameter_list: Vec<Parameter>,
-
-  pub(crate)   argument_size: u64,
-  pub(crate) allocation_size: u64,
-
-  pub(crate) variable_info_list: Vec<VariableInfo>,
 
   pub(crate) return_word_count: WordCount,
 
@@ -553,15 +490,12 @@ print(&self)
 
     for p in &self.parameter_list
     {
-      print!(" {}: ({} bytes),",&p.name,p.word_count.get_size());
+//      print!(" {}: ({} bytes),",&p.name,p.word_count.get_size());
     }
 
   print!(")->");
 
   self.return_word_count.print();
-
-  print!("\nargument size: {} bytes",self.argument_size);
-  print!("\nallocation size: {} bytes",self.allocation_size);
 
   print!("\n{{\n");
 

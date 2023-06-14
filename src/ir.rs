@@ -1,12 +1,14 @@
 
 
 pub mod memory;
+pub mod directory;
 pub mod block;
 pub mod block__add;
 pub mod function;
-pub mod executor;
-pub mod test;
+//pub mod executor;
+//pub mod test;
 
+/*
 use crate::ir::{
   executor::Library,
 };
@@ -26,8 +28,17 @@ use crate::language::{
 pub fn
 compile(prog: &Program)-> Result<Library,()>
 {
+  let  mut lib = Library::new();
+
+    for decl in &prog.declaration_list
+    {
+      
+    }
+
+
   Err(())
 }
+*/
 
 
 

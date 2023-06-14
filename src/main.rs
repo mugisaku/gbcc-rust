@@ -2,7 +2,7 @@ mod token;
 mod source_file;
 mod syntax;
 mod language;
-mod ir;
+//mod ir;
 mod debug;
 
 use std::env;
@@ -79,10 +79,13 @@ fn
 evaluate(s: &str)
 {
   use crate::language::expression::Expression;
+  use crate::language::library::Library;
 
-    if let Ok(e) = Expression::make_from_string(s)
+  let  mut lib = Library::new();
+
+    if let Ok(e) = Expression::make_from_string(s,&mut lib)
     {
-      e.print();
+      e.print(&lib);
 
 /*
       let  v = e.to_value(None);
@@ -100,10 +103,13 @@ fn
 execute(s: &str)
 {
   use crate::language::statement::Statement;
+  use crate::language::library::Library;
 
-    if let Ok(st) = Statement::make_from_string(s)
+  let  mut lib = Library::new();
+
+    if let Ok(st) = Statement::make_from_string(s,&mut lib)
     {
-      st.print();
+      st.print(&lib);
 
       print!("\n");
     }
@@ -114,10 +120,13 @@ fn
 execute_program(s: &str)
 {
   use crate::language::statement::Program;
+  use crate::language::library::Library;
 
-    if let Ok(prog) = Program::make_from_string(s)
+  let  mut lib = Library::new();
+
+    if let Ok(prog) = Program::make_from_string(s,&mut lib)
     {
-      prog.print();
+      prog.print(&lib);
 
       print!("\n");
     }
@@ -128,6 +137,9 @@ fn
 load()
 {
   use crate::language::statement::Program;
+  use crate::language::library::Library;
+
+  let  mut lib = Library::new();
 
   use std::io::Read;
 
@@ -137,9 +149,9 @@ load()
 
       let  _ = f.read_to_string(&mut s);
 
-        if let Ok(prog) = Program::make_from_string(&s)
+        if let Ok(prog) = Program::make_from_string(&s,&mut lib)
         {
-          prog.print();
+          prog.print(&lib);
 
           print!("\n");
         }
@@ -150,11 +162,14 @@ load()
 fn
 type_make(s: &str)
 {
-  use crate::language::typesystem::TypeNote;
+  use crate::language::typesystem::Type;
+  use crate::language::library::Library;
 
-    if let Ok(t) = TypeNote::make_from_string(s)
+  let  mut lib = Library::new();
+
+    if let Ok(t) = Type::make_from_string(s,&mut lib)
     {
-      t.print();
+      t.print(&lib);
 
       print!("\n");
     }
