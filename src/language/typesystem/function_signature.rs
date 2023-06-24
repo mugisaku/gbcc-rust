@@ -8,16 +8,18 @@ use super::{
 use crate::language::library::{
   ExpressionIndex,
   StringIndex,
+  TypeIndex,
   Library
 };
 
 
+#[derive(PartialEq)]
 pub struct
 FunctionSignature
 {
-  pub(crate) parameter_list: Vec<Type>,
+  pub(crate) parameter_list: Vec<TypeIndex>,
 
-  pub(crate) return_type: Type,
+  pub(crate) return_type_index: TypeIndex,
 
 }
 
@@ -30,7 +32,7 @@ FunctionSignature
 pub fn
 new()-> FunctionSignature
 {
-  FunctionSignature{parameter_list: Vec::new(), return_type: Type::Void}
+  FunctionSignature{parameter_list: Vec::new(), return_type_index: TypeIndex{value: 0}}
 }
 
 
@@ -41,7 +43,7 @@ print(&self, lib: &Library)
 
     for p in &self.parameter_list
     {
-      p.print(lib);
+      lib.print_type(*p);
 
       print!(", ");
     }
@@ -49,7 +51,7 @@ print(&self, lib: &Library)
 
   print!(")-> ");
 
-  self.return_type.print(lib);
+  lib.print_type(self.return_type_index);
 }
 
 
@@ -70,7 +72,7 @@ print_with_name_list(&self, ls: &Vec<String>, lib: &Library)
     {
       print!("{}: ",&ls[i]);
 
-      self.parameter_list[i].print(lib);
+      lib.print_type(self.parameter_list[i]);
 
       print!(", ");
     }
@@ -78,7 +80,7 @@ print_with_name_list(&self, ls: &Vec<String>, lib: &Library)
 
   print!(")-> ");
 
-  self.return_type.print(lib);
+  lib.print_type(self.return_type_index);
 }
 
 

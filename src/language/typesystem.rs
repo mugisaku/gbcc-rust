@@ -10,9 +10,12 @@ pub mod dictionary;
 use super::library::{
   ExpressionIndex,
   StringIndex,
+  TypeIndex,
   Library
 };
+
 use std::cell::Cell;
+use super::get_aligned_size;
 use super::expression::Expression;
 use self::function_signature::FunctionSignature;
 use self::r#struct::Struct;
@@ -28,20 +31,18 @@ use crate::syntax::{
   Cursor,
 };
 
-use super::fixer::{
-  Fixer,
-  DeclarationIndex
-};
-
 
 pub const WORD_SIZE: usize = 8;
 
 
 
 
+#[derive(PartialEq)]
 pub enum
 Type
 {
+  Undefined,
+
   Void,
 
   Bool,Char,
@@ -50,14 +51,18 @@ Type
 
   F32, F64,
 
-  FunctionPointer(Box<FunctionSignature>),
+  FunctionPointer(FunctionSignature),
 
-  Pointer(Box<Type>),
-  Reference(Box<Type>),
+  Pointer(TypeIndex),
+  Reference(TypeIndex),
 
-  Array(Box<Type>,ExpressionIndex),
+  Array(TypeIndex,ExpressionIndex),
 
-  Tuple(Vec<Type>),
+  Tuple(Vec<TypeIndex>),
+
+  Symbol(String),
+
+  FromExpression(ExpressionIndex),
 
 }
 
@@ -100,6 +105,8 @@ print(&self, lib: &Library)
 {
     match self
     {
+  Type::Undefined=>{print!("undef");},
+  Type::FromExpression(_)=>{print!("from expr");},
   Type::Void=>{print!("void");},
   Type::Bool=>{print!("bool");},
   Type::Char=>{print!("char");},
@@ -120,23 +127,23 @@ print(&self, lib: &Library)
           print!("fn");
           sig.print(lib);
         },
-  Type::Pointer(t)=>
+  Type::Pointer(ti)=>
         {
           print!("*");
-          t.print(lib);
+          lib.print_type(*ti);
         },
-  Type::Reference(t)=>
+  Type::Reference(ti)=>
         {
           print!("&");
-          t.print(lib);
+          lib.print_type(*ti);
         },
-  Type::Tuple(ty_ls)=>
+  Type::Tuple(ti_ls)=>
         {
           print!("(");
 
-            for ty in ty_ls
+            for ti in ti_ls
             {
-              ty.print(lib);
+              lib.print_type(*ti);
 
               print!(", ");
             }
@@ -144,19 +151,19 @@ print(&self, lib: &Library)
 
           print!(")");
         },
-  Type::Array(ty,ei)=>
+  Type::Array(ti,ei)=>
         {
           print!("[");
 
-            if let Some(e) = lib.get_expression(*ei)
-            {
-              e.print(lib);
-            }
-
+          lib.print_expression(*ei);
 
           print!("]");
 
-          ty.print(lib);
+          lib.print_type(*ti);
+        },
+  Type::Symbol(name)=>
+        {
+          print!("sym {}",name);
         },
     }
 }
@@ -168,12 +175,26 @@ print(&self, lib: &Library)
 
 
 pub struct
+Field
+{
+  pub(crate) name: String,
+
+  pub(crate) offset: usize,
+
+  pub(crate) type_index: TypeIndex,
+
+}
+
+
+pub struct
 TypeInfo
 {
   pub(crate) id: String,
 
   pub(crate)  size: usize,
   pub(crate) align: usize,
+
+  pub(crate) field_list: Vec<Field>,
 
 }
 
@@ -183,120 +204,182 @@ TypeInfo
 {
 
 
-/*
 pub fn
-new(tn: &Type, e_opt: Option<&Expression>, f: &fixer)-> Type
+new()-> TypeInfo
 {
-  let  mut t = Type{kind: TypeKind::Void, id: String::new(), size: 0, align: 0};
+  TypeInfo{id: String::new(), size: 0, align: 0, field_list: Vec::new()}
+}
 
-    match tn
+
+pub fn
+make_from_type(t: &Type, lib: &Library)-> Result<TypeInfo,()>
+{
+  let  mut ti = TypeInfo::new();
+
+    if ti.update_by_type(t,lib).is_ok(){Ok(ti)}
+  else{Err(())}
+}
+
+
+pub fn
+make_from_type_index(tx: TypeIndex, lib: &Library)-> Result<TypeInfo,()>
+{
+  let  mut ti = TypeInfo::new();
+
+    if ti.update_by_type_index(tx,lib).is_ok(){Ok(ti)}
+  else{Err(())}
+}
+
+
+pub fn
+update_by_type(&mut self, t: &Type, lib: &Library)-> Result<(),()>
+{
+  self.field_list.clear();
+
+    match t
     {
-  Type::Undefined=>{t.id.push_str("UD");},
-  Type::Unspecified=>{},
+  Type::Undefined=>
+        {
+        },
+  Type::FromExpression(ei)=>
+        {
+            if let Some(e) = lib.get_expression(*ei)
+            {
+                if let Ok(eti) = e.get_type_index(lib)
+                {
+                  return Ok(());
+                }
+            }
+
+
+          return Err(());
+        },
   Type::Void=>
         {
-          t.id.push_str("voi");
+          self.id.push_str("voi");
         },
   Type::Bool=>
         {
-          t.kind = TypeKind::Bool;
-          t.id.push_str("bol");
-          t.size  = 1;
-          t.align = 1;
+          self.id.push_str("bol");
+          self.size  = 1;
+          self.align = 1;
+        },
+  Type::Char=>
+        {
+          self.id.push_str("chr");
+          self.size  = 1;
+          self.align = 1;
         },
   Type::I8=>
         {
-          t.kind = TypeKind::I8;
-          t.id.push_str("i8");
-          t.size  = 1;
-          t.align = 1;
+          self.id.push_str("i8");
+          self.size  = 1;
+          self.align = 1;
         },
   Type::I16=>
         {
-          t.kind = TypeKind::I16;
-          t.id.push_str("i16");
-          t.size  = 2;
-          t.align = 2;
+          self.id.push_str("i16");
+          self.size  = 2;
+          self.align = 2;
         },
   Type::I32=>
         {
-          t.kind = TypeKind::I32;
-          t.id.push_str("i32");
-          t.size  = 4;
-          t.align = 4;
+          self.id.push_str("i32");
+          self.size  = 4;
+          self.align = 4;
         },
   Type::I64=>
         {
-          t.kind = TypeKind::I64;
-          t.id.push_str("i64");
-          t.size  = 8;
-          t.align = 8;
+          self.id.push_str("i64");
+          self.size  = 8;
+          self.align = 8;
         },
   Type::ISize=>
         {
-          t.kind = TypeKind::ISize;
-          t.id.push_str("isz");
-          t.size  = WORD_SIZE;
-          t.align = WORD_SIZE;
+          self.id.push_str("isz");
+          self.size  = WORD_SIZE;
+          self.align = WORD_SIZE;
         },
   Type::U8=>
         {
-          t.kind = TypeKind::U8;
-          t.id.push_str("u8");
-          t.size  = 1;
-          t.align = 1;
+          self.id.push_str("u8");
+          self.size  = 1;
+          self.align = 1;
         },
   Type::U16=>
         {
-          t.kind = TypeKind::U16;
-          t.id.push_str("u16");
-          t.size  = 2;
-          t.align = 2;
+          self.id.push_str("u16");
+          self.size  = 2;
+          self.align = 2;
         },
   Type::U32=>
         {
-          t.kind = TypeKind::U32;
-          t.id.push_str("u32");
-          t.size  = 4;
-          t.align = 4;
+          self.id.push_str("u32");
+          self.size  = 4;
+          self.align = 4;
         },
   Type::U64=>
         {
-          t.kind = TypeKind::U64;
-          t.id.push_str("u64");
-          t.size  = 8;
-          t.align = 8;
+          self.id.push_str("u64");
+          self.size  = 8;
+          self.align = 8;
         },
   Type::USize=>
         {
-          t.kind = TypeKind::USize;
-          t.id.push_str("usz");
-          t.size  = WORD_SIZE;
-          t.align = WORD_SIZE;
+          self.id.push_str("usz");
+          self.size  = WORD_SIZE;
+          self.align = WORD_SIZE;
         },
   Type::F32=>
         {
-          t.kind = TypeKind::F32;
-          t.id.push_str("f32");
-          t.size  = 4;
-          t.align = 4;
+          self.id.push_str("f32");
+          self.size  = 4;
+          self.align = 4;
         },
   Type::F64=>
         {
-          t.kind = TypeKind::F64;
-          t.id.push_str("f64");
-          t.size  = 8;
-          t.align = 8;
+          self.id.push_str("f64");
+          self.size  = 8;
+          self.align = 8;
         },
   Type::FunctionPointer(sig)=>
         {
-          id.push_str("fnp");
+          self.id.push_str("fnp");
 
-            for t in &sig.parameter_list
+            for tx in &sig.parameter_list
             {
-                if let Ok(new_id) = t.scan(String::new(),f)
+                if self.update_by_type_index(*tx,lib).is_ok()
                 {
-                  id.push_str(&new_id);
+                  continue;
+                }
+
+
+              return Err(());
+            }
+
+
+          self.id.push_str("->");
+
+          return self.update_by_type_index(sig.return_type_index,lib);
+        },
+  Type::Tuple(tx_ls)=>
+        {
+          self.id.push_str("tpl");
+
+          let  mut offset: usize = 0;
+          let  mut  align: usize = 0;
+
+            for tx in tx_ls
+            {
+                if let Ok(ti) = Self::make_from_type_index(*tx,lib)
+                {
+                  align = std::cmp::max(align,ti.align);
+
+                  let  next_offset = get_aligned_size(offset+ti.size);
+
+                  self.field_list.push(Field{name: String::new(), offset, type_index: *tx});
+
+                  offset = next_offset;
                 }
 
               else
@@ -306,84 +389,82 @@ new(tn: &Type, e_opt: Option<&Expression>, f: &fixer)-> Type
             }
 
 
-          id.push_str("->");
+          self.size  = offset;
+          self.align =  align;
+        },
+  Type::Pointer(target_tx)=>
+        {
+          self.id.push_str("ptr");
 
-            if let Ok(new_id) = sig.return_type_desk.scan(String::new(),f)
+            if self.update_by_type_index(*target_tx,lib).is_err()
             {
-              id.push_str(&new_id);
+              return Err(());
+            }
 
-              return Ok(id);
+
+          self.size  = WORD_SIZE;
+          self.align = WORD_SIZE;
+        },
+  Type::Reference(target_tx)=>
+        {
+          self.id.push_str("ref");
+
+            if self.update_by_type_index(*target_tx,lib).is_err()
+            {
+              return Err(());
+            }
+
+
+          self.size  = WORD_SIZE;
+          self.align = WORD_SIZE;
+        },
+  Type::Array(target_tx,e)=>
+        {
+          self.id.push_str("arr");
+
+            if self.update_by_type_index(*target_tx,lib).is_err()
+            {
+              return Err(());
             }
         },
-  Type::Tuple(tn_ls)=>
+  Type::Symbol(name)=>
         {
-          t.id.push_str("tpl");
-
-            for t in t_ls
-            {
-              t.id.push_str("ptr");
-
-              let  target_t = Type::new(target_tn,e_opt,f);
-
-              t.id.push_str(&target_t.id);
-
-              t.size  = WORD_SIZE;
-              t.align = WORD_SIZE;
-
-              t.kind = TypeKind::Pointer(Box::new(target_t));
-            }
-        },
-  Type::Pointer(target_tn)=>
-        {
-          t.id.push_str("ptr");
-
-          let  target_t = Type::new(target_tn,e_opt,f);
-
-          t.id.push_str(&target_t.id);
-
-          t.size  = WORD_SIZE;
-          t.align = WORD_SIZE;
-
-          t.kind = TypeKind::Pointer(Box::new(target_t));
-        },
-  Type::Reference(target_tn)=>
-        {
-          t.id.push_str("ref");
-
-          let  target_t = Type::new(target_tn,e_opt,f);
-
-          t.id.push_str(&target_t.id);
-
-          t.size  = WORD_SIZE;
-          t.align = WORD_SIZE;
-
-          t.kind = TypeKind::Reference(Box::new(target_t));
-        },
-  Type::Array(t,e)=>
-        {
-          t.id.push_str("arr");
-
-            if let Ok(new_id) = t.scan(String::new(),f)
-            {
-              id.push_str(&new_id);
-
-              return Ok(id);
-            }
-        },
-  Type::Indefinite(s)=>
-        {
-          id.push_str("ID");
-
-          id.push_str(s);
-
-          return Ok(id);
+          self.id.push_str(name);
         },
     }
 
 
-  t
+  Ok(())
 }
-*/
+
+
+pub fn
+update_by_type_index(&mut self, ti: TypeIndex, lib: &Library)-> Result<(),()>
+{
+    if let Some(t) = lib.get_type(ti)
+    {
+      return self.update_by_type(t,lib);
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+get_field(&self, name: &str)-> Option<&Field>
+{
+    for f in &self.field_list
+    {
+        if f.name == name
+        {
+          return Some(f);
+        }
+    }
+
+
+  None
+}
 
 
 }

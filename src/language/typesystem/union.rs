@@ -9,6 +9,7 @@ use std::cell::Cell;
 use crate::language::library::{
   ExpressionIndex,
   StringIndex,
+  TypeIndex,
   Library
 };
 
@@ -39,13 +40,13 @@ new()-> Union
 
 
 pub fn
-from(ls: Vec<(String,Type)>)-> Union
+from(ls: Vec<(String,TypeIndex)>)-> Union
 {
   let  mut un = Union::new();
 
     for e in ls
     {
-      un.member_list.push(Member{name: e.0, r#type: e.1, offset_optcel: Cell::new(None)});
+      un.member_list.push(Member{name: e.0, type_index: e.1});
     }
 
 
@@ -54,9 +55,9 @@ from(ls: Vec<(String,Type)>)-> Union
 
 
 pub fn
-push(&mut self, name: &str, t: Type)
+push(&mut self, name: &str, ti: TypeIndex)
 {
-  self.member_list.push(Member{name: String::from(name), r#type: t, offset_optcel: Cell::new(None)});
+  self.member_list.push(Member{name: String::from(name), type_index: ti});
 }
 
 

@@ -10,6 +10,7 @@ use crate::syntax::{
 use crate::language::library::{
   ExpressionIndex,
   StringIndex,
+  TypeIndex,
   Library
 };
 use crate::language::expression::Expression;
@@ -17,7 +18,7 @@ use crate::language::expression::read_expression::read_expression;
 
 
 use super::{
-  Block, ConditionalBlock, Statement, Program,
+  Block, ConditionalBlock, Statement,
 };
 
 
@@ -318,7 +319,9 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(decl) = read_fn(d,lib)
             {
-              return Ok(Statement::Declaration(decl));
+              let  di = lib.push_declaration(decl);
+
+              return Ok(Statement::Declaration(di));
             }
         }
 
@@ -327,7 +330,9 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(decl) = read_var(d,lib)
             {
-              return Ok(Statement::Declaration(decl));
+              let  di = lib.push_declaration(decl);
+
+              return Ok(Statement::Declaration(di));
             }
         }
 
@@ -336,7 +341,9 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(decl) = read_static(d,lib)
             {
-              return Ok(Statement::Declaration(decl));
+              let  di = lib.push_declaration(decl);
+
+              return Ok(Statement::Declaration(di));
             }
         }
 
@@ -345,7 +352,9 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(decl) = read_const(d,lib)
             {
-              return Ok(Statement::Declaration(decl));
+              let  di = lib.push_declaration(decl);
+
+              return Ok(Statement::Declaration(di));
             }
         }
 
@@ -354,7 +363,9 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(decl) = read_struct(d,lib)
             {
-              return Ok(Statement::Declaration(decl));
+              let  di = lib.push_declaration(decl);
+
+              return Ok(Statement::Declaration(di));
             }
         }
 
@@ -363,7 +374,9 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(decl) = read_union(d,lib)
             {
-              return Ok(Statement::Declaration(decl));
+              let  di = lib.push_declaration(decl);
+
+              return Ok(Statement::Declaration(di));
             }
         }
 
@@ -372,7 +385,9 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(decl) = read_enum(d,lib)
             {
-              return Ok(Statement::Declaration(decl));
+              let  di = lib.push_declaration(decl);
+
+              return Ok(Statement::Declaration(di));
             }
         }
 
@@ -381,7 +396,9 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(decl) = read_alias(d,lib)
             {
-              return Ok(Statement::Declaration(decl));
+              let  di = lib.push_declaration(decl);
+
+              return Ok(Statement::Declaration(di));
             }
         }
 

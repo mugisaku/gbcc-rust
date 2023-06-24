@@ -7,6 +7,8 @@ pub mod dictionary;
 use super::library::{
   ExpressionIndex,
   StringIndex,
+  TypeIndex,
+  DeclarationIndex,
   Library
 };
 
@@ -27,13 +29,9 @@ use super::typesystem::{
 pub struct
 Var
 {
-  pub(crate) r#type: Type,
+  pub(crate) type_index: TypeIndex,
 
   pub(crate) expression_index_opt: Option<ExpressionIndex>,
-
-  pub(crate) value_optcel: Cell<Option<Value>>,
-
-  pub(crate) address_optcel: Cell<Option<i64>>,
 
 }
 
@@ -48,8 +46,6 @@ Fn
   pub(crate) parameter_name_list: Vec<String>,
 
   pub(crate) block: Block,
-
-  pub(crate) index_optcel: Cell<Option<usize>>,
 
 }
 
@@ -74,25 +70,12 @@ Definition
 
 
 
-#[derive(Clone,Copy)]
-pub enum
-Status
-{
-  Completed,
-    Touched,
-  Untouched,
-
-}
-
-
 pub struct
 Declaration
 {
   pub(crate) name: String,
 
   pub(crate) definition: Definition,
-
-  pub(crate) status_cell: Cell<Status>,
 
 }
 
@@ -105,7 +88,7 @@ Declaration
 pub fn
 new(name: &str, def: Definition)-> Declaration
 {
-  Declaration{name: String::from(name), definition: def, status_cell: Cell::new(Status::Untouched)}
+  Declaration{name: String::from(name), definition: def}
 }
 
 
@@ -128,7 +111,7 @@ print(&self, lib: &Library)
         {
           print!("var\n{}: ",&self.name);
 
-          v.r#type.print(lib);
+          lib.print_type(v.type_index);
 
             if let Some(ei) = &v.expression_index_opt
             {
@@ -144,7 +127,7 @@ print(&self, lib: &Library)
         {
           print!("static\n{}: ",&self.name);
 
-          v.r#type.print(lib);
+          lib.print_type(v.type_index);
 
             if let Some(ei) = &v.expression_index_opt
             {
@@ -160,7 +143,7 @@ print(&self, lib: &Library)
         {
           print!("const\n{}: ",&self.name);
 
-          v.r#type.print(lib);
+          lib.print_type(v.type_index);
 
             if let Some(ei) = &v.expression_index_opt
             {
@@ -176,7 +159,7 @@ print(&self, lib: &Library)
         {
           print!("arg\n{}: ",&self.name);
 
-          v.r#type.print(lib);
+          lib.print_type(v.type_index);
 
             if let Some(ei) = &v.expression_index_opt
             {
@@ -225,7 +208,7 @@ pub enum
 Statement
 {
   Empty,
-  Declaration(Declaration),
+  Declaration(DeclarationIndex),
   Block(Block),
   If(ConditionalBlock,Vec<ConditionalBlock>,Option<Block>),
   For(Block),
@@ -280,7 +263,7 @@ print(&self, lib: &Library)
     match self
     {
   Statement::Empty=>{print!(";");},
-  Statement::Declaration(decl)=>{decl.print(lib);},
+  Statement::Declaration(di)=>{lib.print_declaration(*di);},
   Statement::Block(blk)=>{blk.print(lib);},
   Statement::If(top,elif_ls,el_opt)=>
         {
@@ -419,103 +402,6 @@ print(&self, lib: &Library)
       print!("\n");
 
       self.block.print(lib);
-    }
-}
-
-
-}
-
-
-
-
-pub struct
-Program
-{
-  pub(crate) declaration_list: Vec<Declaration>,
-
-}
-
-
-impl
-Program
-{
-
-
-pub fn
-new()-> Program
-{
-  Program{declaration_list: Vec::new()}
-}
-
-
-pub fn
-make_from_string(s: &str, lib: &mut Library)-> Result<Program,()>
-{
-  use crate::syntax::dictionary::Dictionary;
-
-  let       dic = self::dictionary::get_dictionary();
-  let  expr_dic = super::expression::dictionary::get_dictionary();
-  let    ty_dic = super::typesystem::dictionary::get_dictionary();
-
-  let  dics: Vec<&Dictionary> = vec![expr_dic,ty_dic];
-
-    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"declaration",Some(dics))
-    {
-      let  mut prog = Program::new();
-
-      let  mut cur = crate::syntax::Cursor::new(&dir);
-
-        while let Some(decl_d) = cur.get_directory()
-        {
-            if let Ok(decl) = crate::language::statement::read_declaration::read_declaration(decl_d,lib)
-            {
-              prog.declaration_list.push(decl);
-
-              cur.advance(1);
-            }
-
-          else
-            {
-              return Err(());
-            }
-        }
-
-
-      return Ok(prog);
-    }
-
-
-  println!("make_from_string error: parse is failed");
-
-  Err(())
-}
-
-
-pub fn
-fix(&mut self)-> Result<(),()>
-{
-  let  mut decl_ls: Vec<&Declaration> = Vec::new();
-
-    for decl in &self.declaration_list
-    {
-      decl_ls.push(decl);
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-print(&self, lib: &Library)
-{
-  print!("program\n\n");
-
-    for st in &self.declaration_list
-    {
-      st.print(lib);
-
-      print!("\n\n");
     }
 }
 

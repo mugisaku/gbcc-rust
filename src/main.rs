@@ -119,14 +119,11 @@ execute(s: &str)
 fn
 execute_program(s: &str)
 {
-  use crate::language::statement::Program;
   use crate::language::library::Library;
 
-  let  mut lib = Library::new();
-
-    if let Ok(prog) = Program::make_from_string(s,&mut lib)
+    if let Ok(lib) = Library::make_from_string(s)
     {
-      prog.print(&lib);
+      lib.print();
 
       print!("\n");
     }
@@ -136,7 +133,6 @@ execute_program(s: &str)
 fn
 load()
 {
-  use crate::language::statement::Program;
   use crate::language::library::Library;
 
   let  mut lib = Library::new();
@@ -149,9 +145,9 @@ load()
 
       let  _ = f.read_to_string(&mut s);
 
-        if let Ok(prog) = Program::make_from_string(&s,&mut lib)
+        if let Ok(lib) = Library::make_from_string(&s)
         {
-          prog.print(&lib);
+          lib.print();
 
           print!("\n");
         }

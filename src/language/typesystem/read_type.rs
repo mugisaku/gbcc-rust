@@ -73,7 +73,7 @@ read_member(dir: &Directory, lib: &mut Library)-> Result<Member,()>
         {
             if let Ok(t) = read_type(&subdir,lib)
             {
-              return Ok(Member{name: s, r#type: t, offset_optcel: Cell::new(None)});
+              return Ok(Member{name: s, type_index: lib.push_type(t)});
             }
         }
     }
@@ -148,7 +148,7 @@ read_tuple(dir: &Directory, lib: &mut Library)-> Result<Type,()>
     {
         if let Ok(ls) = read_type_list(&subdir,lib)
         {
-          return Ok(Type::Tuple(ls));
+          return Ok(Type::Tuple(lib.push_type_list(ls)));
         }
     }
 
@@ -170,7 +170,7 @@ read_function_pointer(dir: &Directory, lib: &mut Library)-> Result<Type,()>
     {
         if let Ok(ls) = read_type_list(&subdir,lib)
         {
-          fnsig.parameter_list = ls;
+          fnsig.parameter_list = lib.push_type_list(ls);
 
           cur.advance(1);
         }
@@ -186,7 +186,7 @@ read_function_pointer(dir: &Directory, lib: &mut Library)-> Result<Type,()>
     {
         if let Ok(t) = read_type(&subdir,lib)
         {
-          fnsig.return_type = t;
+          fnsig.return_type_index = lib.push_type(t);
         }
 
       else
@@ -196,7 +196,7 @@ read_function_pointer(dir: &Directory, lib: &mut Library)-> Result<Type,()>
     }
 
 
-  Ok(Type::FunctionPointer(Box::new(fnsig)))
+  Ok(Type::FunctionPointer(fnsig))
 }
 
 

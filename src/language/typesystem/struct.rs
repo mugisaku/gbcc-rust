@@ -10,6 +10,7 @@ use super::{
 use crate::language::library::{
   ExpressionIndex,
   StringIndex,
+  TypeIndex,
   Library
 };
 
@@ -19,9 +20,7 @@ Member
 {
   pub(crate) name: String,
 
-  pub(crate) r#type: Type,
-
-  pub(crate) offset_optcel: Cell<Option<usize>>,
+  pub(crate) type_index: TypeIndex,
 
 }
 
@@ -40,15 +39,7 @@ print(&self, lib: &Library)
     }
 
 
-  self.r#type.print(lib);
-
-  print!("(off: ");
-
-    if let Some(off) = self.offset_optcel.get()
-    {
-      print!("{}",off);
-    }
-
+  lib.print_type(self.type_index);
 
   print!(")");
 }
@@ -92,13 +83,13 @@ new()-> Struct
 
 
 pub fn
-from(ls: Vec<(String,Type)>)-> Struct
+from(ls: Vec<(String,TypeIndex)>)-> Struct
 {
   let  mut st = Struct::new();
 
     for e in ls
     {
-      st.member_list.push(Member{name: e.0, r#type: e.1, offset_optcel: Cell::new(None)});
+      st.member_list.push(Member{name: e.0, type_index: e.1});
     }
 
 
@@ -114,9 +105,9 @@ push(&mut self, m: Member)
 
 
 pub fn
-add(&mut self, name: &str, t: Type)
+add(&mut self, name: &str, ti: TypeIndex)
 {
-  self.member_list.push(Member{ name: String::from(name), r#type: t, offset_optcel: Cell::new(None)});
+  self.member_list.push(Member{ name: String::from(name), type_index: ti});
 }
 
 

@@ -5,6 +5,7 @@ use std::cell::Cell;
 use crate::language::library::{
   ExpressionIndex,
   StringIndex,
+  TypeIndex,
   Library
 };
 
@@ -42,7 +43,7 @@ use crate::language::statement::read_statement::{
 
 
 pub fn
-read_parameter(dir: &Directory, lib: &mut Library)-> Result<(String,Type),()>
+read_parameter(dir: &Directory, lib: &mut Library)-> Result<(String,TypeIndex),()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -56,7 +57,7 @@ read_parameter(dir: &Directory, lib: &mut Library)-> Result<(String,Type),()>
         {
             if let Ok(ty) = read_type(ty_d,lib)
             {
-              return Ok((name,ty));
+              return Ok((name,lib.push_type(ty)));
             }
         }
     }
@@ -67,10 +68,10 @@ read_parameter(dir: &Directory, lib: &mut Library)-> Result<(String,Type),()>
 
 
 pub fn
-read_parameter_list(dir: &Directory, lib: &mut Library)-> Result<Vec<(String,Type)>,()>
+read_parameter_list(dir: &Directory, lib: &mut Library)-> Result<Vec<(String,TypeIndex)>,()>
 {
   let  mut cur = Cursor::new(dir);
-  let  mut ls: Vec<(String,Type)> = Vec::new();
+  let  mut ls: Vec<(String,TypeIndex)> = Vec::new();
 
     while let Some(d) = cur.seek_directory_with_name("parameter")
     {
@@ -127,7 +128,7 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
                 {
                     if let Ok(ty) = read_type(ty_d,lib)
                     {
-                      fnsig.return_type = ty;
+                      fnsig.return_type_index = lib.push_type(ty);
 
                       cur.advance(1);
                     }
@@ -136,13 +137,22 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 
                 if let Some(blk_d) = cur.seek_directory_with_name("block")
                 {
+                  let  _ = lib.open_space(name.as_str());
+
                     if let Ok(blk) = read_block(blk_d,lib)
                     {
-                      let  f = Fn{signature: fnsig, parameter_name_list: name_ls, block: blk, index_optcel: Cell::new(None)};
+                      let  f = Fn{signature: fnsig, parameter_name_list: name_ls, block: blk};
 
                       let  decl = Declaration::new(&name,Definition::Fn(f));
 
+                      let  _ = lib.close_space();
+
                       return Ok(decl);
+                    }
+
+                  else
+                    {
+                      let  _ = lib.close_space();
                     }
                 }
             }
@@ -165,7 +175,7 @@ read_Var(dir: &Directory, lib: &mut Library)-> Result<(String,Var),()>
     {
       let  name = id.clone();
 
-      let  mut var = Var{r#type: Type::Void, expression_index_opt: None, value_optcel: Cell::new(None), address_optcel: Cell::new(None)};
+      let  mut var = Var{type_index: TypeIndex{value: 0}, expression_index_opt: None};
 
       cur.advance(1);
 
@@ -173,7 +183,7 @@ read_Var(dir: &Directory, lib: &mut Library)-> Result<(String,Var),()>
         {
             if let Ok(ty) = read_type(ty_d,lib)
             {
-              var.r#type = ty;
+              var.type_index = lib.push_type(ty);
             }
 
 
