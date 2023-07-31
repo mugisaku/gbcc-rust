@@ -2,7 +2,7 @@ mod token;
 mod source_file;
 mod syntax;
 mod language;
-//mod ir;
+mod ir;
 mod debug;
 
 use std::env;
@@ -175,6 +175,11 @@ type_make(s: &str)
 fn
 main()
 {
+  if ir::test::test_call().is_ok()
+  {
+  }
+/*
+
   println!("--GBCC Interactive Interpreter--");
   println!("type <h>, list command.");
 
@@ -248,6 +253,7 @@ main()
           buf.clear();
         }
     }
+*/
 }
 
 

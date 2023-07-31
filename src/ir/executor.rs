@@ -1,296 +1,48 @@
 
 
-use std::cmp;
-use super::block::*;
+use super::allocation::{
+  Allocation,
+  AllocationLink,
+};
+
+use super::line::{
+  NonAllocatingOperation,
+  Line,
+};
+
+use super::allocating_operation::{
+  AllocatingOperation,
+  UnaryOperator,
+  BinaryOperator,
+  Operand,
+  PhiOperand,
+  CallInfo,
+};
+
+use super::block::{
+  Terminator,
+  Block,
+  BlockLink,
+  BranchInfo,
+};
+
 use super::memory::{
   Memory,
   Word,
   WORD_SIZE,
-  get_word_size_aligned,
+  get_aligned,
 };
 
 
 use super::function::{
   Function,
-  VariableInfo,
-  StorageClass,
+  FunctionLink,
 };
 
 
-
-
-pub struct
-Directory
-{
-  pub(crate) index_list: Vec<usize>,
-
-}
-
-
-impl
-Directory
-{
-
-
-pub fn
-new()-> Directory
-{
-  Directory{index_list: Vec::new()}
-}
-
-
-pub fn
-add_function(&mut self, f: Function)
-{
-  let  fi = self.function_list.len();
-
-  self.allocate_word(&f.name,Word::from_u64(fi as u64));
-
-  self.function_list.push(f);
-}
-
-
-pub fn
-find_function(&self, name: &str)-> Option<&Function>
-{
-    for f in &self.function_list
-    {
-        if f.name == name
-        {
-          return Some(f);
-        }
-    }
-
-
-  None
-}
-
-
-}
-
-
-
-
-pub enum
-ObjectData
-{
-  Function(Function),
-  VariableInfo(VariableInfo),
-  TypeInfo(TypeInfo),
-  Directory(Directory),
-
+use super::collection::{
+  Collection,
 };
-
-
-pub struct
-Object
-{
-  pub(crate) name: String,
-
-  pub(crate) data: ObjectData,
-
-};
-
-
-impl
-Object
-{
-
-
-pub fn
-new(name: &str, dat: ObjectData)-> Object
-{
-  Object{name: String::from(name), data: dat}
-}
-
-
-pub fn
-get_function(&self)-> Option<&Function>
-{
-    if let ObjectData::Function(f) = &seld.data
-    {
-      return Some(f);
-    }
-
-
-  None
-}
-
-
-pub fn
-get_variable_info(&self)-> Option<&VariableInfo>
-{
-    if let ObjectData::VariableInfo(vi) = &seld.data
-    {
-      return Some(vi);
-    }
-
-
-  None
-}
-
-
-pub fn
-get_type_info(&self)-> Option<&TypeInfo>
-{
-    if let ObjectData::TypeInfo(ti) = &seld.data
-    {
-      return Some(ti);
-    }
-
-
-  None
-}
-
-
-pub fn
-get_directory(&self)-> Option<&Directory>
-{
-    if let ObjectData::Directory(dir) = &seld.data
-    {
-      return Some(dir);
-    }
-
-
-  None
-}
-
-
-pub fn
-get_directory_mut(&mut self)-> Option<&mut Directory>
-{
-    if let ObjectData::Directory(dir) = &mut seld.data
-    {
-      return Some(dir);
-    }
-
-
-  None
-}
-
-
-}
-
-
-
-
-pub struct
-Library
-{
-  object_list: Vec<Object>,
-
-}
-
-
-impl
-Library
-{
-
-
-pub fn
-new()-> Library
-{
-  let  mut lib = Library{object_list: Vec::new()};
-
-  let  root_dir = Directory::new();
-
-  let  first_o = Object::new("",ObjectData::Directory(root_dir));
-
-  lib.object_list.push(first_o);
-
-  lib
-}
-
-
-pub fn
-get_root_directory(&self)-> &Directory
-{
-    if let Some(dir) = lib.object_list[0].get_directory()
-    {
-      return dir;
-    }
-
-
-  panic!();
-}
-
-
-pub fn
-get_root_directory_mut(&mut self)-> &mut Directory
-{
-    if let Some(dir) = lib.object_list[0].get_directory_mut()
-    {
-      return dir;
-    }
-
-
-  panic!();
-}
-
-
-pub fn
-fix(&mut self)-> Result<(),()>
-{
-    for f in &mut self.function_list
-    {
-        if f.fix(&self.variable_info_list).is_err()
-        {
-          return Err(());
-        }
-    }
-
-
-  Ok(())
-}
-
-
-pub fn
-allocate_word(&mut self, name: &str, w: Word)
-{
-  let  off = self.get_next_offset();
-
-  self.variable_info_list.push(VariableInfo{ name: String::from(name), storage_class: StorageClass::Global, offset: off, size: WORD_SIZE as u64, initial_value: Some(Memory::from_word(w))});
-}
-
-
-pub fn
-allocate_memory(&mut self, name: &str, m: Memory)
-{
-  let  off = self.get_next_offset();
-
-  let  sz = m.get_size();
-
-  self.variable_info_list.push(VariableInfo{ name: String::from(name), storage_class: StorageClass::Global, offset: off, size: sz as u64, initial_value: Some(m)});
-}
-
-
-pub fn
-allocate_space(&mut self, name: &str, sz: usize)
-{
-  let  off = self.get_next_offset();
-
-  self.variable_info_list.push(VariableInfo{ name: String::from(name), storage_class: StorageClass::Global, offset: off, size: sz as u64, initial_value: None});
-}
-
-
-pub fn
-find_variable_info(&self, name: &str)-> Option<&VariableInfo>
-{
-    for vi in &self.variable_info_list
-    {
-        if vi.name == name
-        {
-          return Some(vi);
-        }
-    }
-
-
-  None
-}
-
-
-
-}
 
 
 
@@ -322,8 +74,6 @@ Executor
 
   address_of_return_value: u64,
 
-  word_count_list: Vec<WordCount>,
-
   ap: u64,//ArgumentPointer
 
   halt_flag: bool,
@@ -352,7 +102,6 @@ new(memsz: usize)-> Executor
             calling_depth: 0,
             next_fi: None,
             address_of_return_value: 0,
-            word_count_list: Vec::new(),
             ap: 0,
             halt_flag: true,
           }
@@ -367,65 +116,56 @@ pub fn  is_halted(&mut self)-> bool{self.halt_flag}
 pub fn
 change_bi(&mut self, bl: &BlockLink)
 {
-    if let Some(i) = bl.index
+    if let BlockLink::Resolved(i) = bl
     {
-      self.pbi = self.bi           ;
-                 self.bi = i as u64;
+      self.pbi = self.bi            ;
+                 self.bi = *i as u64;
 
       self.pc = 0;
-    }
-
-  else
-    {
-      print!("change_bi error: BlockLink {} has no index",&bl.name);
     }
 }
 
 
 pub fn
-get_absolute_address(&self, adr_src_opt: &Option<AddressSource>)-> u64
+get_absolute_address(&self, ln: &AllocationLink)-> u64
 {
-    if let Some(adr_src) = adr_src_opt
+/*
+    match ln
     {
-        match adr_src
-        {
-      AddressSource::GlobalOffset(off)=>{*off as u64}
-      AddressSource::LocalOffset(off)=> {((self.bp as i64)+(Self::SYSTEM_RESERVED_SIZE as i64)+*off) as u64}
-      AddressSource::ArgumentOffset(off)=> {((self.bp as i64)+*off) as u64}
-        }
+  AddressSource::GlobalOffset(off)=>{*off as u64}
+  AddressSource::LocalOffset(off)=> {((self.bp as i64)+(Self::SYSTEM_RESERVED_SIZE as i64)+*off) as u64}
+  AddressSource::ArgumentOffset(off)=> {((self.bp as i64)+*off) as u64}
     }
-
-  else
-    {
-      0
-    }
+*/
+0
 }
 
 
 pub fn
 get_word(&self, o: &Operand)-> Word
 {
-    if let OperandLiteral::ImmediateValue(v) = &o.literal
+    if let Operand::ImmediateValue(v) = o
     {
       return *v;
     }
 
-
-  let  addr = self.get_absolute_address(&o.address_source);
-
-    if addr != 0
-    {
-//self.print_context();
-//println!("\naddr: {}",addr);
-      self.memory.get_word(addr)
-    }
-
   else
+    if let Operand::AllocationLink(ln) = o
     {
-      println!("unkown operand");
+      let  addr = self.get_absolute_address(ln);
 
-      Word::from_u64(0)
+        if addr != 0
+        {
+    //self.print_context();
+    //println!("\naddr: {}",addr);
+          return self.memory.get_word(addr);
+        }
     }
+
+
+  println!("unkown operand");
+
+  Word::from_u64(0)
 }
 
 
@@ -458,7 +198,7 @@ put_word(&mut self, addr: u64, w: Word)
 
 
 pub fn
-reset(&mut self, lib: &Library)-> Result<(),()>
+reset(&mut self, coll: &Collection)-> Result<(),()>
 {
   self.pc  = 0;
   self.fi  = 0;
@@ -467,24 +207,25 @@ reset(&mut self, lib: &Library)-> Result<(),()>
   self.calling_depth = 0;
   self.next_fi = None;
   self.address_of_return_value = 0;
-  self.word_count_list.clear();
 
   self.memory.zerofill();
 
-    for vi in &lib.variable_info_list
+    for alo in &coll.allocation_list
     {
-        if let Some(m) = &vi.initial_value
+/*
+        if let Some(m) = &alo.initial_value
         {
             if self.memory.read(vi.offset as u64,m,0,None).is_err()
             {
               return Err(());
             }
         }
+*/
     }
 
 
-            self.bp = lib.get_next_offset() as u64;
-  self.sp = self.bp                               ;
+//            self.bp = coll.get_next_offset() as u64;
+//  self.sp = self.bp                                ;
 
   Ok(())
 }
@@ -493,8 +234,9 @@ reset(&mut self, lib: &Library)-> Result<(),()>
 
 
 pub fn
-push_argument(&mut self, lib: &Library, arg: Operand)-> Result<(),()>
+push_argument(&mut self, coll: &Collection, arg: Operand)-> Result<(),()>
 {
+/*
     if let Some(wc) = self.word_count_list.pop()
     {
 //println!("argument is pushed to address {}",self.ap);
@@ -507,6 +249,7 @@ push_argument(&mut self, lib: &Library, arg: Operand)-> Result<(),()>
 
       return Ok(());
     }
+*/
 
 
   println!("needed no more operand");
@@ -516,26 +259,28 @@ push_argument(&mut self, lib: &Library, arg: Operand)-> Result<(),()>
 
 
 pub fn
-prepare_first_call(&mut self, lib: &Library, fn_name: &str)-> Result<(),()>
+prepare_first_call(&mut self, coll: &Collection, fn_name: &str)-> Result<(),()>
 {
-    if let Some(vi) = lib.find_variable_info(fn_name)
+    if let Some(alo) = coll.find_allocation(fn_name)
     {
       let  dst_addr = self.sp+(WORD_SIZE as u64);
 
+/*
         if let Some(init_v) = &vi.initial_value
         {
           let  fi = init_v.get_u64(0);
 
-          let  f = &lib.function_list[fi as usize];
+          let  f = &coll.function_list[fi as usize];
 
-          let  sz = f.return_word_count.get_size();
+          let  sz = f.return_size as u64;
 
           self.memory.put_u64(self.bp,sz);
 
           self.sp += (WORD_SIZE as u64)+sz;
 
-          return self.prepare_call(lib,dst_addr,fi);
+          return self.prepare_call(coll,dst_addr,fi);
         }
+*/
     }
 
 
@@ -544,21 +289,21 @@ prepare_first_call(&mut self, lib: &Library, fn_name: &str)-> Result<(),()>
 
 
 pub fn
-prepare_call(&mut self, lib: &Library, dst_addr: u64, f_index: u64)-> Result<(),()>
+prepare_call(&mut self, coll: &Collection, dst_addr: u64, f_index: u64)-> Result<(),()>
 {
-    if (f_index as usize) < lib.function_list.len()
+    if (f_index as usize) < coll.function_list.len()
     {
       self.next_fi = Some(f_index);
 
-      let  f = &lib.function_list[f_index as usize];
+      let  f = &coll.function_list[f_index as usize];
 
       self.address_of_return_value = dst_addr;
 
-      self.word_count_list.clear();
+//      self.word_count_list.clear();
 
         for p in &f.parameter_list
         {
-          self.word_count_list.push(p.word_count.clone());
+//          self.word_count_list.push(p.word_count.clone());
         }
 
 
@@ -575,15 +320,16 @@ prepare_call(&mut self, lib: &Library, dst_addr: u64, f_index: u64)-> Result<(),
 
 
 pub fn
-raise_call(&mut self, lib: &Library)-> Result<(),()>
+raise_call(&mut self, coll: &Collection)-> Result<(),()>
 {
     if let Some(fi) = self.next_fi
     {
-      let  f = &lib.function_list[fi as usize];
+      let  f = &coll.function_list[fi as usize];
 
-        if self.word_count_list.len() == 0
+/*
+        if 0
         {
-          self.new_frame(lib);
+          self.new_frame(coll);
 
           return Ok(());
         }
@@ -592,6 +338,7 @@ raise_call(&mut self, lib: &Library)-> Result<(),()>
         {
           println!("number of arguments is not enough");
         }
+*/
     }
 
   else
@@ -605,11 +352,11 @@ raise_call(&mut self, lib: &Library)-> Result<(),()>
 
 
 pub fn
-new_frame(&mut self, lib: &Library)
+new_frame(&mut self, coll: &Collection)
 {
     if let Some(fi) = self.next_fi
     {
-      let  f = &lib.function_list[fi as usize];
+      let  f = &coll.function_list[fi as usize];
 
       let  new_bp = self.ap;
 
@@ -623,7 +370,7 @@ new_frame(&mut self, lib: &Library)
 
       self.pc  = 0;
       self.bp  = new_bp;
-      self.sp  = new_bp+(Self::SYSTEM_RESERVED_SIZE as u64)+f.allocation_size;
+      self.sp  = new_bp+(Self::SYSTEM_RESERVED_SIZE as u64)+(f.get_allocation_size() as u64);
       self.fi  = fi;
       self.bi  = 0;
       self.pbi = 0;
@@ -728,9 +475,9 @@ operate_binary(&mut self, dst_addr: u64, lo: &Operand, ro: &Operand, b: BinaryOp
 
 
 pub fn
-operate_address(&mut self, dst_addr: u64, target: &VariableLink)
+operate_address(&mut self, dst_addr: u64, target: &AllocationLink)
 {
-  let  addr = self.get_absolute_address(&target.address_source);
+  let  addr = self.get_absolute_address(&target);
 
     if addr != 0
     {
@@ -744,9 +491,9 @@ operate_phi(&mut self, dst_addr: u64, opls: &Vec<PhiOperand>)
 {
     for o in opls
     {
-        if let Some(bi) = o.from.index
+        if let BlockLink::Resolved(bi) = o.from
         {
-            if bi == self.pbi
+            if bi == (self.pbi as usize)
             {
               self.put_word(dst_addr,self.get_word(&o.value));
 
@@ -763,60 +510,49 @@ operate_phi(&mut self, dst_addr: u64, opls: &Vec<PhiOperand>)
 
 
 pub fn
-operate_call(&mut self, lib: &Library, dst_addr: u64, ci: &CallInfo)
+operate_call(&mut self, coll: &Collection, dst_addr: u64, ci: &CallInfo)
 {
-  let  fnptr_addr = self.get_absolute_address(&ci.target.address_source);
-
-    if fnptr_addr == 0
+    if let FunctionLink::Resolved(i) = &ci.target
     {
-      println!("{} is not found",&ci.target.name);
-
-      self.halt();
-
-      return;
-    }
-
-
-  let  fnptr = self.memory.get_u64(fnptr_addr);
-
-    if self.prepare_call(lib,dst_addr,fnptr).is_err()
-    {
-      self.halt();
-
-      return;
-    }
-
-
-  let  l = ci.argument_list.len();
-
-    for i in 0..l
-    {
-      let  o = ci.argument_list[l-(1+i)].clone();
-
-        if self.push_argument(lib,o).is_err()
+        if self.prepare_call(coll,dst_addr,*i as u64).is_err()
         {
           self.halt();
 
           return;
         }
-    }
 
 
-    if self.raise_call(lib).is_err()
-    {
-      self.halt();
+      let  l = ci.argument_list.len();
+
+        for i in 0..l
+        {
+          let  o = ci.argument_list[l-(1+i)].clone();
+
+            if self.push_argument(coll,o).is_err()
+            {
+              self.halt();
+
+              return;
+            }
+        }
+
+
+        if self.raise_call(coll).is_err()
+        {
+          self.halt();
+        }
     }
 }
 
 
 pub fn
-operate(&mut self, lib: &Library, ln: &Line)-> StepResult
+operate(&mut self, coll: &Collection, ln: &Line)-> StepResult
 {
     match ln
     {
-  Line::AllocatingOperation(vl,ao)=>
+  Line::AllocatingOperation(ln,ao)=>
         {
-          let  dst_addr = self.get_absolute_address(&vl.address_source);
+          let  dst_addr = self.get_absolute_address(&ln);
 
             match ao
             {
@@ -825,26 +561,26 @@ operate(&mut self, lib: &Library, ln: &Line)-> StepResult
           AllocatingOperation::Allocate(wc)=>{},
           AllocatingOperation::Address(target)=>{self.operate_address(dst_addr,target);},
           AllocatingOperation::Phi(opls)=>{self.operate_phi(dst_addr,opls);},
-          AllocatingOperation::Call(ci)=>{self.operate_call(lib,dst_addr,ci);},
+          AllocatingOperation::Call(ci)=>{self.operate_call(coll,dst_addr,ci);},
             }
         }
   Line::NonAllocatingOperation(nao)=>
         {
             match nao
             {
-          NonAllocatingOperation::CopyWord(src,dst)=>
+          NonAllocatingOperation::CopyWord(dst,src)=>
                 {
-                  let  dst_addr = self.get_absolute_address(&dst.address_source);
-                  let  src_addr = self.get_absolute_address(&src.address_source);
+                  let  dst_addr = self.get_absolute_address(dst);
+                  let  src_addr = self.get_absolute_address(src);
 
                   let  v = self.memory.get_word(src_addr);
 
                   self.memory.put_word(dst_addr,v);
                 }
-          NonAllocatingOperation::CopyString(src,dst,sz)=>
+          NonAllocatingOperation::CopyString(dst,src,sz)=>
                 {
-                  let  dst_addr = self.get_absolute_address(&dst.address_source);
-                  let  src_addr = self.get_absolute_address(&src.address_source);
+                  let  dst_addr = self.get_absolute_address(dst);
+                  let  src_addr = self.get_absolute_address(src);
 
                     for off in 0..*sz
                     {
@@ -859,6 +595,7 @@ operate(&mut self, lib: &Library, ln: &Line)-> StepResult
                 }
           NonAllocatingOperation::Print(target,c)=>
                 {
+/*
                   let  src_addr = self.get_absolute_address(&target.address_source);
 
                     if src_addr != 0
@@ -873,6 +610,7 @@ operate(&mut self, lib: &Library, ln: &Line)-> StepResult
                       _=>{}
                         }
                     }
+*/
                 }
             }
         }
@@ -884,7 +622,7 @@ operate(&mut self, lib: &Library, ln: &Line)-> StepResult
 
 
 pub fn
-terminate(&mut self, lib: &Library, tm: &Terminator)-> StepResult
+terminate(&mut self, coll: &Collection, tm: &Terminator)-> StepResult
 {
     match tm
     {
@@ -896,7 +634,7 @@ terminate(&mut self, lib: &Library, tm: &Terminator)-> StepResult
         },
   Terminator::Branch(bi)=>
         {
-          let  addr = self.get_absolute_address(&bi.condition.address_source);
+          let  addr = self.get_absolute_address(&bi.condition);
 
             if addr != 0
             {
@@ -909,13 +647,6 @@ terminate(&mut self, lib: &Library, tm: &Terminator)-> StepResult
                 {
                   self.change_bi(&bi.on_false);
                 }
-            }
-
-          else
-            {
-              println!("condition {} is not found",&bi.condition.name);
-
-              self.halt();
             }
 
 
@@ -936,19 +667,16 @@ terminate(&mut self, lib: &Library, tm: &Terminator)-> StepResult
           return StepResult::Continue;
         },
     }
-
-
-  StepResult::NoContinue
 }
 
 
 pub fn
-step(&mut self, lib: &Library)-> StepResult
+step(&mut self, coll: &Collection)-> StepResult
 {
     if self.calling_depth != 0
     {
 //self.print_context();
-      let  f = &lib.function_list[self.fi as usize];
+      let  f = &coll.function_list[self.fi as usize];
 
       let  blk = &f.block_list[self.bi as usize];
 
@@ -958,13 +686,12 @@ step(&mut self, lib: &Library)-> StepResult
 
           self.pc += 1;
 
-          return self.operate(lib,ln);
+          return self.operate(coll,ln);
         }
 
       else
-        if let Some(t) = &blk.terminator
         {
-          return self.terminate(lib,t);
+          return self.terminate(coll,&blk.terminator);
         }
     }
 
@@ -974,7 +701,7 @@ step(&mut self, lib: &Library)-> StepResult
 
 
 pub fn
-run(&mut self, lib: &Library, count_opt: Option<usize>)
+run(&mut self, coll: &Collection, count_opt: Option<usize>)
 {
   self.halt_flag = false;
 
@@ -992,7 +719,7 @@ run(&mut self, lib: &Library, count_opt: Option<usize>)
         }
 
 
-        if let StepResult::NoContinue = self.step(lib)
+        if let StepResult::NoContinue = self.step(coll)
         {
           break;
         }
@@ -1030,20 +757,17 @@ get_return_value(&self)-> Option<Memory>
 
 
 pub fn
-print_local_variables(&self, lib: &Library)
+print_local_variables(&self, coll: &Collection)
 {
-  let  f = &lib.function_list[self.fi as usize];
+  let  f = &coll.function_list[self.fi as usize];
 
-    for vi in &f.variable_info_list
+    for alo in &f.allocation_list
     {
-        if vi.offset < 0
-        {
-          let  addr = ((self.bp as i64)+vi.offset) as u64;
+      let  addr = self.bp+(alo.offset as u64);
 
-          let  i = self.memory.get_u64(addr);
+      let  i = self.memory.get_u64(addr);
 
-          println!("addr:{}, value:{}",addr,i);
-        }
+      println!("addr:{}, value:{}",addr,i);
     }
 }
 

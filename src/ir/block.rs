@@ -2,6 +2,29 @@
 
 use super::memory::{
   Word,
+  WORD_SIZE,
+};
+
+use super::allocation::{
+  Allocation,
+  AllocationLink,
+};
+
+use super::allocating_operation::{
+  AllocatingOperation,
+  Operand,
+  PhiOperand,
+
+};
+
+use super::line::{
+  Line,
+
+};
+
+use super::collection::{
+  Collection,
+
 };
 
 
@@ -9,28 +32,54 @@ use super::memory::{
 
 #[derive(Clone)]
 pub enum
-AddressSource
+BlockLink
 {
-    GlobalOffset(i64),
-     LocalOffset(i64),
-  ArgumentOffset(i64),
+  Unresolved(String),
+     Resolved(usize),
 
 }
 
 
 impl
-AddressSource
+BlockLink
 {
 
 
 pub fn
-print(&self)
+new(name: &str)-> BlockLink
+{
+  BlockLink::Unresolved(String::from(name))
+}
+
+
+pub fn
+resolve(&mut self, name_ls: &Vec<String>)-> Result<(),()>
+{
+    if let BlockLink::Unresolved(this_name) = self
+    {
+        for i in 0..name_ls.len()
+        {
+            if name_ls[i] == this_name.as_str()
+            {
+              *self = BlockLink::Resolved(i);
+
+              return Ok(());
+            }
+        }
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+print(&self, coll: &Collection)
 {
     match self
     {
-  AddressSource::GlobalOffset(i)=>{print!("g:{}",i);},
-  AddressSource::LocalOffset(i)=> {print!("l:{}",i);},
-  AddressSource::ArgumentOffset(i)=> {print!("a:{}",i);},
+  BlockLink::Unresolved(name)=>{print!("{}",name);},
+  BlockLink::Resolved(i)=>{print!("{}",i);},
     }
 }
 
@@ -40,466 +89,45 @@ print(&self)
 
 
 
-#[derive(Clone)]
-pub enum
-Operand
-{
-  Identifier(String),
-
-  ImmediateValue(Word),
-
-}
-
-
-impl
-Operand
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  Operand::Identifier(s)=>{print!("{}",s);},
-  Operand::ImmediateValue(w)=>{print!("(imm, i:{})",w.get_i64());},
-    }
-}
-
-
-}
-
-
-
-
-pub fn
-new_operand_list()-> Vec<Operand>
-{
-  Vec::new()
-}
-
-
-
-
-#[derive(Clone,Copy)]
 pub struct
-WordCount
+BranchInfo
 {
-  number: u64,
-}
+  pub(crate) condition: AllocationLink,
 
-
-impl
-WordCount
-{
-
-
-pub fn  zero()-> WordCount{WordCount{ number: 0}}
-pub fn   one()-> WordCount{WordCount{ number: 1}}
-pub fn  from(n: u64)-> WordCount{WordCount{ number: n}}
-
-pub fn  get_size(&self)-> u64{8*self.number}
-
-pub fn  print(&self){print!("({} bytes)",self.get_size());}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-CallInfo
-{
-  pub(crate) target: String,
-
-  pub(crate) return_word_count: WordCount,
-
-  pub(crate) argument_list: Vec<Operand>,
+  pub(crate) on_true:  BlockLink,
+  pub(crate) on_false: BlockLink,
 
 }
 
 
 impl
-CallInfo
+BranchInfo
 {
 
 
 pub fn
-new(name: &str, ret_wc: WordCount)-> CallInfo
+new(alo_name: &str, on_true: &str, on_false: &str)-> BranchInfo
 {
-  CallInfo{ target: String::from(name), return_word_count: ret_wc, argument_list: Vec::new()}
+  BranchInfo{
+    condition: AllocationLink::Unresolved(String::from(alo_name)),
+     on_true: BlockLink::Unresolved(String::from(on_true )),
+    on_false: BlockLink::Unresolved(String::from(on_false)),
+  }
 }
 
 
 pub fn
-push(&mut self, o: Operand)
+print(&self, coll: &Collection)
 {
-  self.argument_list.push(o);
-}
-
-
-pub fn
-print(&self)
-{
-  print!("{} ",&self.target);
-
-  self.return_word_count.print();
+  self.condition.print(coll);
 
   print!(" ");
 
-    for a in &self.argument_list
-    {
-      a.print();
+  self.on_true.print(coll);
 
-      print!(", ");
-    }
-}
+  print!(" ");
 
-
-}
-
-
-pub struct
-BranchInfo
-{
-  pub(crate) condition: String,
-
-  pub(crate) on_true:  String,
-  pub(crate) on_false: String,
-
-}
-
-
-impl
-BranchInfo
-{
-
-
-pub fn
-new(cond: &str, on_true: &str, on_false: &str)-> BranchInfo
-{
-  BranchInfo{ condition: String::from(cond), on_true: String::from(on_true), on_false: String::from(on_false)}
-}
-
-
-pub fn
-print(&self)
-{
-  print!("{} {} {}",&self.condition,&self.on_true,&self.on_false);
-}
-
-
-}
-
-
-
-
-#[derive(Clone,Copy)]
-pub enum
-UnaryOperator
-{
-  ExS8,
-  ExS16,
-  ExS32,
-  ExF32,
-
-  StoF,
-  FtoS,
-
-  Not,
-
-  Neg,
-  NegF,
-
-  LogicalNot,
-
-}
-
-
-impl
-UnaryOperator
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  UnaryOperator::ExS8=>{print!("exs8");}
-  UnaryOperator::ExS16=>{print!("exs16");}
-  UnaryOperator::ExS32=>{print!("exs32");}
-  UnaryOperator::ExF32=>{print!("exs32");}
-  UnaryOperator::StoF=>{print!("stof");}
-  UnaryOperator::FtoS=>{print!("ftos");}
-  UnaryOperator::Not=>{print!("not");}
-  UnaryOperator::Neg=>{print!("neg");}
-  UnaryOperator::NegF=>{print!("negf");}
-  UnaryOperator::LogicalNot=>{print!("logical_not");}
-    }
-}
-
-
-}
-
-
-
-
-#[derive(Clone,Copy)]
-pub enum
-BinaryOperator
-{
-  AddI, SubI, MulI, DivI, RemI,
-  AddU, SubU, MulU, DivU, RemU,
-  AddF, SubF, MulF, DivF, RemF,
-
-  Shl, Shr, Or, And, Xor,
-
-  Eq, Neq,
-
-  LtI, LteqI, GtI, GteqI,
-  LtU, LteqU, GtU, GteqU,
-  LtF, LteqF, GtF, GteqF,
-
-  LogicalAnd, LogicalOr,
-
-}
-
-
-impl
-BinaryOperator
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  BinaryOperator::AddI=>{print!("addi");},
-  BinaryOperator::SubI=>{print!("subi");},
-  BinaryOperator::MulI=>{print!("muli");},
-  BinaryOperator::DivI=>{print!("divi");},
-  BinaryOperator::RemI=>{print!("remi");},
-
-  BinaryOperator::AddU=>{print!("addu");},
-  BinaryOperator::SubU=>{print!("subu");},
-  BinaryOperator::MulU=>{print!("mulu");},
-  BinaryOperator::DivU=>{print!("divu");},
-  BinaryOperator::RemU=>{print!("remu");},
-
-  BinaryOperator::AddF=>{print!("addf");},
-  BinaryOperator::SubF=>{print!("subf");},
-  BinaryOperator::MulF=>{print!("mulf");},
-  BinaryOperator::DivF=>{print!("divf");},
-  BinaryOperator::RemF=>{print!("remf");},
-
-  BinaryOperator::Shl=>{print!("shl");},
-  BinaryOperator::Shr=>{print!("shr");},
-  BinaryOperator::Or=>{print!("or");},
-  BinaryOperator::And=>{print!("and");},
-  BinaryOperator::Xor=>{print!("xor");},
-
-  BinaryOperator::Eq=>{print!("eq");},
-  BinaryOperator::Neq=>{print!("neq");},
-
-  BinaryOperator::LtI=>{print!("lti");},
-  BinaryOperator::LteqI=>{print!("lteqi");},
-  BinaryOperator::GtI=>{print!("gti");},
-  BinaryOperator::GteqI=>{print!("gteqi");},
-
-  BinaryOperator::LtU=>{print!("ltu");},
-  BinaryOperator::LteqU=>{print!("ltequ");},
-  BinaryOperator::GtU=>{print!("gtu");},
-  BinaryOperator::GteqU=>{print!("gtequ");},
-
-  BinaryOperator::LtF=>{print!("ltf");},
-  BinaryOperator::LteqF=>{print!("lteqf");},
-  BinaryOperator::GtF=>{print!("gtf");},
-  BinaryOperator::GteqF=>{print!("gteqf");},
-
-  BinaryOperator::LogicalAnd=>{print!("logical_and");},
-  BinaryOperator::LogicalOr=>{print!("logical_or");},
-    }
-}
-
-
-}
-
-
-
-
-pub enum
-AllocatingOperation
-{
-  Unary(Operand,UnaryOperator),
-  Binary(Operand,Operand,BinaryOperator),
-
-  Allocate(WordCount),
-
-  Address(String),
-
-  Phi(Vec<PhiOperand>),
-  Call(CallInfo),
-
-}
-
-
-impl
-AllocatingOperation
-{
-
-
-pub fn
-get_word_count(&self)-> WordCount
-{
-    match self
-    {
-  AllocatingOperation::Unary(_,_)=>   {WordCount::one()},
-  AllocatingOperation::Binary(_,_,_)=>{WordCount::one()},
-  AllocatingOperation::Allocate(wc)=> {*wc},
-  AllocatingOperation::Address(_)=>{WordCount::one()},
-  AllocatingOperation::Phi(_)=>  {WordCount::one()},
-  AllocatingOperation::Call(ci)=>{ci.return_word_count},
-    }
-}
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  AllocatingOperation::Unary(o,u)=>
-        {
-          o.print();
-
-          print!(" ");
-
-          u.print();
-        },
-  AllocatingOperation::Binary(l,r,b)=>
-        {
-          l.print();
-
-          print!(" ");
-
-          r.print();
-
-          print!(" ");
-
-          b.print();
-        },
-  AllocatingOperation::Allocate(wc)=>
-        {
-          print!("allocate {}",wc.number);
-        },
-  AllocatingOperation::Address(o)=>
-        {
-          print!("address {}",o);
-        },
-  AllocatingOperation::Phi(ops)=>
-        {
-          print!("phi ");
-
-            for o in ops
-            {
-              print!("{} ",&o.from);
-
-              o.value.print();
-
-              print!(",");
-            }
-        },
-  AllocatingOperation::Call(ci)=>
-        {
-          print!("cal ");
-
-          ci.print();
-        },
-    }
-}
-
-
-}
-pub enum
-NonAllocatingOperation
-{
-  CopyWord(String,String),
-  CopyString(String,String,usize),
-  Message(String),
-  Print(String,char),
-
-}
-
-
-impl
-NonAllocatingOperation
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  NonAllocatingOperation::CopyWord(src,dst)=>
-        {
-          print!("copy_word (src){} (dst){}",src,dst);
-        },
-  NonAllocatingOperation::CopyString(dst,src,sz)=>
-        {
-          print!("copy_string (src){} (dst){} {}",src,dst,*sz);
-        },
-  NonAllocatingOperation::Message(s)=>
-        {
-          print!("message \"{}\"",s);
-        },
-  NonAllocatingOperation::Print(target,c)=>
-        {
-          print!("print {} {}",target,c);
-        },
-    }
-}
-
-
-}
-
-
-
-
-pub enum
-Line
-{
-     AllocatingOperation(String,AllocatingOperation),
-  NonAllocatingOperation(NonAllocatingOperation),
-
-}
-
-
-impl
-Line
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  Line::AllocatingOperation(dst,ao)=>
-        {
-          print!("{} = ",dst);
-
-          ao.print();
-        }
-  Line::NonAllocatingOperation(nao)=>
-        {
-          nao.print();
-        }
-    }
+  self.on_false.print(coll);
 }
 
 
@@ -511,7 +139,7 @@ print(&self)
 pub enum
 Terminator
 {
-  Jump(String),
+  Jump(BlockLink),
   Branch(BranchInfo),
   Return(Option<Operand>),
 
@@ -524,18 +152,76 @@ Terminator
 
 
 pub fn
-print(&self)
+resolve_block_link(&mut self, name_ls: &Vec<String>)-> Result<(),()>
 {
     match self
     {
   Terminator::Jump(dst)=>
         {
-          print!("jmp {}",dst);
+          dst.resolve(name_ls)
+        },
+  Terminator::Branch(bi)=>
+        {
+            if  bi.on_true.resolve(name_ls).is_ok()
+            && bi.on_false.resolve(name_ls).is_ok()
+            {
+              Ok(())
+            }
+
+          else
+            {
+              Err(())
+            }
+        },
+  Terminator::Return(o_opt)=>
+        {
+          Ok(())
+        },
+    }
+}
+
+
+pub fn
+resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>)-> Result<(),()>
+{
+    match self
+    {
+  Terminator::Jump(dst)=>{Ok(())},
+  Terminator::Branch(bi)=>
+        {
+          bi.condition.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
+        },
+  Terminator::Return(o_opt)=>
+        {
+            if let Some(o) = o_opt
+            {
+              o.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
+            }
+
+          else
+            {
+              Ok(())
+            }
+        },
+    }
+}
+
+
+pub fn
+print(&self, coll: &Collection)
+{
+    match self
+    {
+  Terminator::Jump(dst)=>
+        {
+          print!("jmp ");
+
+          dst.print(coll);
         },
   Terminator::Branch(bi)=>
         {
           print!("br ");
-          bi.print();
+          bi.print(coll);
         },
   Terminator::Return(o_opt)=>
         {
@@ -543,46 +229,36 @@ print(&self)
 
             if let Some(o) = o_opt
             {
-              o.print();
+              o.print(coll);
             }
         },
     }
 }
 
 
-}
-
-
-
-
-pub struct
-PhiOperand
-{
-  pub(crate)  from: String,
-  pub(crate) value: Operand,
-
-}
-
-
-impl
-PhiOperand
-{
 
 
 pub fn
-make(blk_name: &str, o: Operand)-> PhiOperand
+jmp(name: &str)-> Terminator
 {
-  PhiOperand{ from: String::from(blk_name), value: o}
-}
-
-
+  Terminator::Jump(BlockLink::new(name))
 }
 
 
 pub fn
-new_phi_operand_list()-> Vec<PhiOperand>
+br(cond: &str, on_true: &str, on_false: &str)-> Terminator
 {
-  Vec::new()
+  Terminator::Branch(BranchInfo::new(cond,on_true,on_false))
+}
+
+
+pub fn
+ret(op_opt: Option<Operand>)-> Terminator
+{
+  Terminator::Return(op_opt)
+}
+
+
 }
 
 
@@ -595,7 +271,7 @@ Block
 
   pub(crate) line_list: Vec<Line>,
 
-  pub(crate) terminator: Option<Terminator>,
+  pub(crate) terminator: Terminator,
 
 }
 
@@ -608,39 +284,92 @@ Block
 pub fn
 new(name: &str)-> Block
 {
-  Block{ name: String::from(name), line_list: Vec::new(), terminator: None}
+  Block{
+    name: String::from(name),
+    line_list: Vec::new(),
+    terminator: Terminator::Return(None),
+  }
 }
 
 
-
-
 pub fn
-set_jmp(&mut self, label: &str)
+add_line(&mut self, ln: Line)
 {
-  self.terminator = Some(Terminator::Jump(String::from(label)));
+  self.line_list.push(ln);
 }
 
 
 pub fn
-set_br(&mut self, var_name: &str, on_true: &str, on_false: &str)
+set_terminator(&mut self, term: Terminator)
 {
-  let  bi = BranchInfo{ condition: String::from(var_name), on_true: String::from(on_true), on_false: String::from(on_false)};
-
-  self.terminator = Some(Terminator::Branch(bi));
+  self.terminator = term;
 }
 
 
-pub fn
-set_ret(&mut self, o_opt: Option<Operand>)
+fn
+resolve_block_link_in_phi(op_ls: &mut Vec<PhiOperand>, name_ls: &Vec<String>)-> Result<(),()>
 {
-  self.terminator = Some(Terminator::Return(o_opt));
+    for op in op_ls
+    {
+        if op.from.resolve(name_ls).is_err()
+        {
+          return Err(());
+        }
+    }
+
+
+  Ok(())
 }
 
 
+pub fn
+resolve_block_link(&mut self, name_ls: &Vec<String>)-> Result<(),()>
+{
+    for ln in &mut self.line_list
+    {
+        if let Line::AllocatingOperation(_,o) = ln
+        {
+            if let AllocatingOperation::Phi(op_ls) = o
+            {
+                if Self::resolve_block_link_in_phi(op_ls,name_ls).is_err()
+                {
+                  return Err(());
+                }
+            }
+        }
+
+
+        if self.terminator.resolve_block_link(name_ls).is_err()
+        {
+          return Err(());
+        }
+    }
+
+
+  Ok(())
+}
 
 
 pub fn
-print(&self)
+resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
+{
+    for ln in &mut self.line_list
+    {
+        if ln.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls,fname_ls).is_err()
+        {
+          println!("Block::resolve error: line resolve is failed.");
+
+          return Err(());
+        }
+    }
+
+
+  self.terminator.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
+}
+
+
+pub fn
+print(&self, coll: &Collection)
 {
   print!(":{}\n",&self.name);
 
@@ -648,19 +377,13 @@ print(&self)
     {
       print!("  ");
 
-      l.print();
+      l.print(coll);
 
       print!("\n");
     }
 
 
-    if let Some(t) = &self.terminator
-    {
-      print!("  ");
-
-      t.print();
-    }
-
+  self.terminator.print(coll);
 
   print!("\n");
 }

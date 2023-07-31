@@ -1,44 +1,14 @@
 
 
+pub mod allocation;
 pub mod memory;
-pub mod directory;
+pub mod collection;
 pub mod block;
-pub mod block__add;
+pub mod line;
+pub mod allocating_operation;
 pub mod function;
-//pub mod executor;
-//pub mod test;
-
-/*
-use crate::ir::{
-  executor::Library,
-};
-
-use crate::language::{
-  expression,
-  statement,
-  statement::Program,
-  typesystem::TypeNote,
-  typesystem::r#struct::Struct,
-  typesystem::r#union::Union,
-  typesystem::r#enum::Enum,
-  typesystem::function_signature::FunctionSignature,
-};
-
-
-pub fn
-compile(prog: &Program)-> Result<Library,()>
-{
-  let  mut lib = Library::new();
-
-    for decl in &prog.declaration_list
-    {
-      
-    }
-
-
-  Err(())
-}
-*/
+pub mod executor;
+pub mod test;
 
 
 

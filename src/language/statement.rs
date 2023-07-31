@@ -9,6 +9,7 @@ use super::library::{
   StringIndex,
   TypeIndex,
   DeclarationIndex,
+  SpaceIndex,
   Library
 };
 
@@ -27,11 +28,36 @@ use super::typesystem::{
 
 
 pub struct
-Var
+Storage
 {
   pub(crate) type_index: TypeIndex,
 
   pub(crate) expression_index_opt: Option<ExpressionIndex>,
+
+}
+
+
+impl
+Storage
+{
+
+
+pub fn
+print(&self, lib: &Library)
+{
+  lib.print_type(self.type_index);
+
+    if let Some(ei) = &self.expression_index_opt
+    {
+      print!(" = ");
+
+        if let Some(e) = lib.get_expression(*ei)
+        {
+          e.print(lib);
+        }
+    }
+}
+
 
 }
 
@@ -45,6 +71,8 @@ Fn
 
   pub(crate) parameter_name_list: Vec<String>,
 
+  pub(crate) space_index: SpaceIndex,
+
   pub(crate) block: Block,
 
 }
@@ -56,14 +84,14 @@ pub enum
 Definition
 {
   Fn(Fn),
-  Var(Var),
-  Static(Var),
-  Const(Var),
-  Argument(Var),
+  Var(Storage),
+  Static(Storage),
+  Const(Storage),
+  Argument(Storage),
   Struct(Struct),
   Union(Union),
   Enum(Enum),
-  Alias(Type),
+  Alias(TypeIndex),
 
 }
 
@@ -107,69 +135,29 @@ print(&self, lib: &Library)
 
           f.block.print(lib);
         },
-  Definition::Var(v)=>
+  Definition::Var(s)=>
         {
           print!("var\n{}: ",&self.name);
 
-          lib.print_type(v.type_index);
-
-            if let Some(ei) = &v.expression_index_opt
-            {
-              print!(" = ");
-
-                if let Some(e) = lib.get_expression(*ei)
-                {
-                  e.print(lib);
-                }
-            }
+          s.print(lib);
         },
-  Definition::Static(v)=>
+  Definition::Static(s)=>
         {
           print!("static\n{}: ",&self.name);
 
-          lib.print_type(v.type_index);
-
-            if let Some(ei) = &v.expression_index_opt
-            {
-              print!(" = ");
-
-                if let Some(e) = lib.get_expression(*ei)
-                {
-                  e.print(lib);
-                }
-            }
+          s.print(lib);
         },
-  Definition::Const(v)=>
+  Definition::Const(s)=>
         {
           print!("const\n{}: ",&self.name);
 
-          lib.print_type(v.type_index);
-
-            if let Some(ei) = &v.expression_index_opt
-            {
-              print!(" = ");
-
-                if let Some(e) = lib.get_expression(*ei)
-                {
-                  e.print(lib);
-                }
-            }
+          s.print(lib);
         },
-  Definition::Argument(v)=>
+  Definition::Argument(s)=>
         {
           print!("arg\n{}: ",&self.name);
 
-          lib.print_type(v.type_index);
-
-            if let Some(ei) = &v.expression_index_opt
-            {
-              print!(" = ");
-
-                if let Some(e) = lib.get_expression(*ei)
-                {
-                  e.print(lib);
-                }
-            }
+          s.print(lib);
         },
   Definition::Struct(st)=>
         {
@@ -189,11 +177,11 @@ print(&self, lib: &Library)
 
           en.print(lib);
         },
-  Definition::Alias(ty)=>
+  Definition::Alias(ti)=>
         {
           print!("alias\n{}: ",&self.name);
 
-          ty.print(lib);
+          lib.print_type(*ti);
         },
     }
 }

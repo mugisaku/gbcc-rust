@@ -11,6 +11,8 @@ use super::library::{
   ExpressionIndex,
   StringIndex,
   TypeIndex,
+  SpaceIndex,
+  Space,
   Library
 };
 
@@ -174,6 +176,7 @@ print(&self, lib: &Library)
 
 
 
+#[derive(Clone)]
 pub struct
 Field
 {
@@ -186,6 +189,7 @@ Field
 }
 
 
+#[derive(Clone)]
 pub struct
 TypeInfo
 {
@@ -212,247 +216,7 @@ new()-> TypeInfo
 
 
 pub fn
-make_from_type(t: &Type, lib: &Library)-> Result<TypeInfo,()>
-{
-  let  mut ti = TypeInfo::new();
-
-    if ti.update_by_type(t,lib).is_ok(){Ok(ti)}
-  else{Err(())}
-}
-
-
-pub fn
-make_from_type_index(tx: TypeIndex, lib: &Library)-> Result<TypeInfo,()>
-{
-  let  mut ti = TypeInfo::new();
-
-    if ti.update_by_type_index(tx,lib).is_ok(){Ok(ti)}
-  else{Err(())}
-}
-
-
-pub fn
-update_by_type(&mut self, t: &Type, lib: &Library)-> Result<(),()>
-{
-  self.field_list.clear();
-
-    match t
-    {
-  Type::Undefined=>
-        {
-        },
-  Type::FromExpression(ei)=>
-        {
-            if let Some(e) = lib.get_expression(*ei)
-            {
-                if let Ok(eti) = e.get_type_index(lib)
-                {
-                  return Ok(());
-                }
-            }
-
-
-          return Err(());
-        },
-  Type::Void=>
-        {
-          self.id.push_str("voi");
-        },
-  Type::Bool=>
-        {
-          self.id.push_str("bol");
-          self.size  = 1;
-          self.align = 1;
-        },
-  Type::Char=>
-        {
-          self.id.push_str("chr");
-          self.size  = 1;
-          self.align = 1;
-        },
-  Type::I8=>
-        {
-          self.id.push_str("i8");
-          self.size  = 1;
-          self.align = 1;
-        },
-  Type::I16=>
-        {
-          self.id.push_str("i16");
-          self.size  = 2;
-          self.align = 2;
-        },
-  Type::I32=>
-        {
-          self.id.push_str("i32");
-          self.size  = 4;
-          self.align = 4;
-        },
-  Type::I64=>
-        {
-          self.id.push_str("i64");
-          self.size  = 8;
-          self.align = 8;
-        },
-  Type::ISize=>
-        {
-          self.id.push_str("isz");
-          self.size  = WORD_SIZE;
-          self.align = WORD_SIZE;
-        },
-  Type::U8=>
-        {
-          self.id.push_str("u8");
-          self.size  = 1;
-          self.align = 1;
-        },
-  Type::U16=>
-        {
-          self.id.push_str("u16");
-          self.size  = 2;
-          self.align = 2;
-        },
-  Type::U32=>
-        {
-          self.id.push_str("u32");
-          self.size  = 4;
-          self.align = 4;
-        },
-  Type::U64=>
-        {
-          self.id.push_str("u64");
-          self.size  = 8;
-          self.align = 8;
-        },
-  Type::USize=>
-        {
-          self.id.push_str("usz");
-          self.size  = WORD_SIZE;
-          self.align = WORD_SIZE;
-        },
-  Type::F32=>
-        {
-          self.id.push_str("f32");
-          self.size  = 4;
-          self.align = 4;
-        },
-  Type::F64=>
-        {
-          self.id.push_str("f64");
-          self.size  = 8;
-          self.align = 8;
-        },
-  Type::FunctionPointer(sig)=>
-        {
-          self.id.push_str("fnp");
-
-            for tx in &sig.parameter_list
-            {
-                if self.update_by_type_index(*tx,lib).is_ok()
-                {
-                  continue;
-                }
-
-
-              return Err(());
-            }
-
-
-          self.id.push_str("->");
-
-          return self.update_by_type_index(sig.return_type_index,lib);
-        },
-  Type::Tuple(tx_ls)=>
-        {
-          self.id.push_str("tpl");
-
-          let  mut offset: usize = 0;
-          let  mut  align: usize = 0;
-
-            for tx in tx_ls
-            {
-                if let Ok(ti) = Self::make_from_type_index(*tx,lib)
-                {
-                  align = std::cmp::max(align,ti.align);
-
-                  let  next_offset = get_aligned_size(offset+ti.size);
-
-                  self.field_list.push(Field{name: String::new(), offset, type_index: *tx});
-
-                  offset = next_offset;
-                }
-
-              else
-                {
-                  return Err(());
-                }
-            }
-
-
-          self.size  = offset;
-          self.align =  align;
-        },
-  Type::Pointer(target_tx)=>
-        {
-          self.id.push_str("ptr");
-
-            if self.update_by_type_index(*target_tx,lib).is_err()
-            {
-              return Err(());
-            }
-
-
-          self.size  = WORD_SIZE;
-          self.align = WORD_SIZE;
-        },
-  Type::Reference(target_tx)=>
-        {
-          self.id.push_str("ref");
-
-            if self.update_by_type_index(*target_tx,lib).is_err()
-            {
-              return Err(());
-            }
-
-
-          self.size  = WORD_SIZE;
-          self.align = WORD_SIZE;
-        },
-  Type::Array(target_tx,e)=>
-        {
-          self.id.push_str("arr");
-
-            if self.update_by_type_index(*target_tx,lib).is_err()
-            {
-              return Err(());
-            }
-        },
-  Type::Symbol(name)=>
-        {
-          self.id.push_str(name);
-        },
-    }
-
-
-  Ok(())
-}
-
-
-pub fn
-update_by_type_index(&mut self, ti: TypeIndex, lib: &Library)-> Result<(),()>
-{
-    if let Some(t) = lib.get_type(ti)
-    {
-      return self.update_by_type(t,lib);
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-get_field(&self, name: &str)-> Option<&Field>
+find_field(&self, name: &str)-> Option<&Field>
 {
     for f in &self.field_list
     {

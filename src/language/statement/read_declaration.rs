@@ -33,7 +33,7 @@ use crate::language::typesystem::{
 use super::{
   Definition,
   Declaration,
-  Var, Fn, Block, Statement,
+  Storage, Fn, Block, Statement,
 };
 
 
@@ -137,22 +137,32 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 
                 if let Some(blk_d) = cur.seek_directory_with_name("block")
                 {
-                  let  _ = lib.open_space(name.as_str());
+                  let  si = lib.open_space(name.as_str());
 
                     if let Ok(blk) = read_block(blk_d,lib)
                     {
-                      let  f = Fn{signature: fnsig, parameter_name_list: name_ls, block: blk};
+                          for i in 0..name_ls.len()
+                          {
+                            let  sto = Storage{type_index: fnsig.parameter_list[i], expression_index_opt: None};
+
+                            let  decl = Declaration{name: name_ls[i].clone(), definition: Definition::Argument(sto)};
+
+                            lib.push_declaration(decl);
+                          }
+
+
+                      let  f = Fn{signature: fnsig, parameter_name_list: name_ls, space_index: si, block: blk};
 
                       let  decl = Declaration::new(&name,Definition::Fn(f));
 
-                      let  _ = lib.close_space();
+                      lib.close_space();
 
                       return Ok(decl);
                     }
 
                   else
                     {
-                      let  _ = lib.close_space();
+                      lib.close_space();
                     }
                 }
             }
@@ -165,7 +175,7 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 
 
 pub fn
-read_Var(dir: &Directory, lib: &mut Library)-> Result<(String,Var),()>
+read_storage(dir: &Directory, lib: &mut Library)-> Result<(String,Storage),()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -175,7 +185,7 @@ read_Var(dir: &Directory, lib: &mut Library)-> Result<(String,Var),()>
     {
       let  name = id.clone();
 
-      let  mut var = Var{type_index: TypeIndex{value: 0}, expression_index_opt: None};
+      let  mut sto = Storage{type_index: TypeIndex{value: 0}, expression_index_opt: None};
 
       cur.advance(1);
 
@@ -183,7 +193,7 @@ read_Var(dir: &Directory, lib: &mut Library)-> Result<(String,Var),()>
         {
             if let Ok(ty) = read_type(ty_d,lib)
             {
-              var.type_index = lib.push_type(ty);
+              sto.type_index = lib.push_type(ty);
             }
 
 
@@ -195,12 +205,12 @@ read_Var(dir: &Directory, lib: &mut Library)-> Result<(String,Var),()>
         {
             if let Ok(e) = read_expression(e_d,lib)
             {
-              var.expression_index_opt = Some(lib.push_expression(e));
+              sto.expression_index_opt = Some(lib.push_expression(e));
             }
         }
 
 
-      return Ok((name,var));
+      return Ok((name,sto));
     }
 
 
@@ -211,9 +221,9 @@ read_Var(dir: &Directory, lib: &mut Library)-> Result<(String,Var),()>
 pub fn
 read_var(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
-    if let Ok((name,var)) = read_Var(dir,lib)
+    if let Ok((name,sto)) = read_storage(dir,lib)
     {
-      let  def = Definition::Var(var);
+      let  def = Definition::Var(sto);
 
       let  decl = Declaration::new(&name,def);
 
@@ -228,9 +238,9 @@ read_var(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 pub fn
 read_static(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
-    if let Ok((name,var)) = read_Var(dir,lib)
+    if let Ok((name,sto)) = read_storage(dir,lib)
     {
-      let  def = Definition::Static(var);
+      let  def = Definition::Static(sto);
 
       let  decl = Declaration::new(&name,def);
 
@@ -245,9 +255,9 @@ read_static(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 pub fn
 read_const(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 {
-    if let Ok((name,var)) = read_Var(dir,lib)
+    if let Ok((name,sto)) = read_storage(dir,lib)
     {
-      let  def = Definition::Const(var);
+      let  def = Definition::Const(sto);
 
       let  decl = Declaration::new(&name,def);
 
@@ -435,7 +445,7 @@ read_alias(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
         {
             if let Ok(ty) = read_type(ty_d,lib)
             {
-              let  def = Definition::Alias(ty);
+              let  def = Definition::Alias(lib.push_type(ty));
 
               let  decl = Declaration::new(&name,def);
 

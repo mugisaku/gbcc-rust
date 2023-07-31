@@ -6,11 +6,9 @@ pub const WORD_SIZE: usize = 8;
 
 
 pub fn
-get_word_size_aligned(i: i64)-> i64
+get_aligned(u: usize)-> usize
 {
-  let  wsz = WORD_SIZE as i64;
-
-  (i+(wsz-1))/wsz*wsz
+  (u+(WORD_SIZE-1))/WORD_SIZE*WORD_SIZE
 }
 
 
@@ -70,6 +68,7 @@ impl  From<u8>  for Word{fn from(u: u8)->  Word{Word::from_u64(u as u64)}}
 impl  From<u16> for Word{fn from(u: u16)-> Word{Word::from_u64(u as u64)}}
 impl  From<u32> for Word{fn from(u: u32)-> Word{Word::from_u64(u as u64)}}
 impl  From<u64> for Word{fn from(u: u64)-> Word{Word::from_u64(u)}}
+impl  From<usize> for Word{fn from(u: usize)-> Word{Word::from_u64(u as u64)}}
 impl  From<f32> for Word{fn from(f: f32)-> Word{Word::from_f64(f as f64)}}
 impl  From<f64> for Word{fn from(f: f64)-> Word{Word::from_f64(f)}}
 impl  From<bool> for Word{fn from(b: bool)-> Word{if b{Word::from_u64(1)}else{Word::from_u64(0)}}}
@@ -82,9 +81,6 @@ Memory
 {
   content: Vec<u8>,
 
-  putlog_flag: bool,
-  getlog_flag: bool,
-
 }
 
 
@@ -96,7 +92,7 @@ Memory
 pub fn
 new(sz: usize)-> Memory
 {
-  let mut  mem = Memory{ content: Vec::new(), putlog_flag: false, getlog_flag: false};
+  let  mut mem = Memory{content: Vec::new()};
 
   mem.content.resize(sz,0);
 
@@ -107,7 +103,7 @@ new(sz: usize)-> Memory
 pub fn
 from_word(w: Word)-> Memory
 {
-  let mut  mem = Memory{ content: Vec::new(), putlog_flag: false, getlog_flag: false};
+  let  mut mem = Memory{content: Vec::new()};
 
   mem.content.resize(WORD_SIZE,0);
 
@@ -167,34 +163,6 @@ read(&mut self, dst_start: u64, src: &Memory, src_start: u64, src_sz_opt: Option
 
 
   Err(())
-}
-
-
-pub fn
-test_getlog_flag(&self)-> bool
-{
-  self.getlog_flag
-}
-
-
-pub fn
-test_putlog_flag(&self)-> bool
-{
-  self.putlog_flag
-}
-
-
-pub fn
-set_putlog_flag(&mut self)
-{
-  self.putlog_flag = true;
-}
-
-
-pub fn
-unset_putlog_flag(&mut self)
-{
-  self.putlog_flag = false;
 }
 
 
@@ -314,12 +282,6 @@ get_word(&self, addr: u64)-> Word
 pub fn
 put_u8(&mut self, addr: u64, v: u8)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
   self.content[addr as usize] = v;
 }
 
@@ -327,12 +289,6 @@ put_u8(&mut self, addr: u64, v: u8)
 pub fn
 put_u16(&mut self, addr: u64, v: u16)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(Self::align2(addr)) as *mut u16) = v;
@@ -343,12 +299,6 @@ put_u16(&mut self, addr: u64, v: u16)
 pub fn
 put_u32(&mut self, addr: u64, v: u32)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(Self::align4(addr)) as *mut u32) = v;
@@ -359,12 +309,6 @@ put_u32(&mut self, addr: u64, v: u32)
 pub fn
 put_u64(&mut self, addr: u64, v: u64)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(Self::align8(addr)) as *mut u64) = v;
@@ -375,12 +319,6 @@ put_u64(&mut self, addr: u64, v: u64)
 pub fn
 put_i8(&mut self, addr: u64, v: i8)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(addr as usize) as *mut i8) = v;
@@ -391,12 +329,6 @@ put_i8(&mut self, addr: u64, v: i8)
 pub fn
 put_i16(&mut self, addr: u64, v: i16)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(Self::align2(addr)) as *mut i16) = v;
@@ -407,12 +339,6 @@ put_i16(&mut self, addr: u64, v: i16)
 pub fn
 put_i32(&mut self, addr: u64, v: i32)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(Self::align4(addr)) as *mut i32) = v;
@@ -423,12 +349,6 @@ put_i32(&mut self, addr: u64, v: i32)
 pub fn
 put_i64(&mut self, addr: u64, v: i64)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(Self::align8(addr)) as *mut i64) = v;
@@ -439,12 +359,6 @@ put_i64(&mut self, addr: u64, v: i64)
 pub fn
 put_f32(&mut self, addr: u64, v: f32)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(Self::align4(addr)) as *mut f32) = v;
@@ -455,12 +369,6 @@ put_f32(&mut self, addr: u64, v: f32)
 pub fn
 put_f64(&mut self, addr: u64, v: f64)
 {
-    if self.putlog_flag
-    {
-      print!("put( addr: {}, value: {})\n",addr,v);
-    }
-
-
     unsafe
     {
       *(self.content.as_mut_ptr().add(Self::align8(addr)) as *mut f64) = v;
@@ -472,6 +380,21 @@ pub fn
 put_word(&mut self, addr: u64, w: Word)
 {
   self.put_u64(addr,w.get_u64());
+}
+
+
+pub fn
+print(&self)
+{
+  print!("{{");
+
+    for c in &self.content
+    {
+      print!("{},",c);
+    }
+
+
+  print!("}}");
 }
 
 

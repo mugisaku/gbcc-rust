@@ -413,9 +413,9 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
     {
       let  old_pos = self.position;
 
-      self.print_indent();
+//      self.print_indent();
 
-      println!("{}としての解析を開始({})",&def.name,self.dictionary_stack.len());
+//      println!("{}としての解析を開始({})",&def.name,self.dictionary_stack.len());
 
       self.depth += 1;
 
@@ -427,9 +427,9 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
 
           self.depth -= 1;
 
-          self.print_indent();
+//          self.print_indent();
 
-          println!("{}としての解析に成功",&def.name);
+//          println!("{}としての解析に成功",&def.name);
 
           return Some(vec![obj]);
         }
@@ -437,9 +437,9 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
 
       self.depth -= 1;
 
-      self.print_indent();
+//      self.print_indent();
 
-      println!("{}としての解析に失敗",&def.name);
+//      println!("{}としての解析に失敗",&def.name);
 
       self.position = old_pos;
     }

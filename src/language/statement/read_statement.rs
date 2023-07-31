@@ -220,19 +220,17 @@ read_block(dir: &Directory, lib: &mut Library)-> Result<Block,()>
 
   let  mut stmts: Vec<Statement> = Vec::new();
 
+  cur.advance(1);
+
     while let Some(d) = cur.get_directory()
     {
         if let Ok(stmt) = read_statement(d,lib)
         {
           stmts.push(stmt);
-
-          cur.advance(1);
         }
 
-      else
-        {
-          return Err(());
-        }
+
+      cur.advance(1);
     }
 
 
@@ -258,12 +256,6 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
     {
       let  d_name = d.get_name();
 
-        if d.get_name() == "if"
-        {
-          return read_if(d,lib);
-        }
-
-      else
         if d_name == "block"
         {
             if let Ok(blk) = read_block(d,lib)

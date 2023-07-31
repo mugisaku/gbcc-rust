@@ -118,21 +118,23 @@ PostfixOperator
 
 
 pub fn
-get_type_index(&self, ti: TypeIndex, lib: &Library)-> Result<TypeIndex,()>
+get_type_index(&self, tx: TypeIndex, lib: &Library)-> Result<TypeIndex,()>
 {
-    if let Some(t) = lib.get_type(ti)
+    if let Some(t) = lib.get_type(tx)
     {
         match self
         {
       PostfixOperator::Access(s)=>
             {
-                if let Ok(ti) = TypeInfo::make_from_type(t,lib)
+/*
+                if let Ok(ti) = TypeInfo::make(tx,lib)
                 {
                     if let Some(f) = ti.get_field(s)
                     {
                       return Ok(f.type_index);
                     }
                 }
+*/
             },
       PostfixOperator::Subscript(_)=>
             {
