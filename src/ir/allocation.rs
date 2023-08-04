@@ -88,16 +88,16 @@ resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocat
 
 
 pub fn
-print(&self, coll: &Collection)
+print(&self, coll: &Collection, verbose: usize)
 {
     match self
     {
-  AllocationLink::Unresolved(name)=>{print!("{}",name);},
+  AllocationLink::Unresolved(name)=>{print!("{}(UNRESOLVED)",name);},
   AllocationLink::Global(i)=>
         {
             if let Some(alo) = coll.get_allocation(*i)
             {
-              alo.print();
+              alo.print(verbose);
             }
         },
   AllocationLink::Local(fi,i)=>
@@ -106,7 +106,7 @@ print(&self, coll: &Collection)
             {
                 if let Some(alo) = f.get_allocation(*i)
                 {
-                  alo.print();
+                  alo.print(verbose);
                 }
             }
         },
@@ -116,7 +116,7 @@ print(&self, coll: &Collection)
             {
                 if let Some(alo) = f.get_parameter(*i)
                 {
-                  alo.print();
+                  alo.print(verbose);
                 }
             }
         },
@@ -134,7 +134,7 @@ AllocationKind
 {
   Global,
   Local,
-  Parameter(usize),
+  Parameter,
 
 }
 
@@ -164,12 +164,12 @@ Allocation
 
 
 pub fn
-new_parameter(i: usize, name: &str, sz: usize)-> Allocation
+new_parameter(name: &str, sz: usize)-> Allocation
 {
   Allocation{
     name: String::from(name),
     size: sz,
-    kind: AllocationKind::Parameter(i),
+    kind: AllocationKind::Parameter,
     memory_opt: None,
     user_count: 0,
     offset: 0,
@@ -206,17 +206,22 @@ new_global(name: &str, sz: usize)-> Allocation
 
 
 pub fn
-print(&self)
+print(&self, verbose: usize)
 {
-  print!("{}: (sz:{})",&self.name,self.size);
+  print!("{}",&self.name);
 
-    if let Some(m) = &self.memory_opt
+    if verbose > 0
     {
-      print!(" = {{");
+      print!("(off: {}, sz:{})",self.offset,self.size);
 
-      m.print();
+        if let Some(m) = &self.memory_opt
+        {
+          print!(" = {{");
 
-      print!("}}");
+          m.print();
+
+          print!("}}");
+        }
     }
 }
 

@@ -175,9 +175,7 @@ type_make(s: &str)
 fn
 main()
 {
-  if ir::test::test_call().is_ok()
-  {
-  }
+  ir::test::test();
 /*
 
   println!("--GBCC Interactive Interpreter--");

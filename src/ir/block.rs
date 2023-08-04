@@ -22,6 +22,12 @@ use super::line::{
 
 };
 
+
+use super::function::{
+  Function,
+
+};
+
 use super::collection::{
   Collection,
 
@@ -55,17 +61,20 @@ new(name: &str)-> BlockLink
 pub fn
 resolve(&mut self, name_ls: &Vec<String>)-> Result<(),()>
 {
-    if let BlockLink::Unresolved(this_name) = self
+    if let BlockLink::Unresolved(name) = self
     {
         for i in 0..name_ls.len()
         {
-            if name_ls[i] == this_name.as_str()
+            if name_ls[i] == name.as_str()
             {
               *self = BlockLink::Resolved(i);
 
               return Ok(());
             }
         }
+
+
+      println!("BlockLink::resolve error: block <{}> is not found",name);
     }
 
 
@@ -74,12 +83,18 @@ resolve(&mut self, name_ls: &Vec<String>)-> Result<(),()>
 
 
 pub fn
-print(&self, coll: &Collection)
+print(&self, coll: &Collection, f: &Function)
 {
     match self
     {
-  BlockLink::Unresolved(name)=>{print!("{}",name);},
-  BlockLink::Resolved(i)=>{print!("{}",i);},
+  BlockLink::Unresolved(name)=>{print!("{}(UNRESOLVED)",name);},
+  BlockLink::Resolved(i)=>
+        {
+            if let Some(blk) = f.get_block(*i)
+            {
+              print!("{}",&blk.name);
+            }
+        },
     }
 }
 
@@ -117,17 +132,17 @@ new(alo_name: &str, on_true: &str, on_false: &str)-> BranchInfo
 
 
 pub fn
-print(&self, coll: &Collection)
+print(&self, coll: &Collection, f: &Function)
 {
-  self.condition.print(coll);
+  self.condition.print(coll,0);
 
   print!(" ");
 
-  self.on_true.print(coll);
+  self.on_true.print(coll,f);
 
   print!(" ");
 
-  self.on_false.print(coll);
+  self.on_false.print(coll,f);
 }
 
 
@@ -208,7 +223,7 @@ resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocat
 
 
 pub fn
-print(&self, coll: &Collection)
+print(&self, coll: &Collection, f: &Function)
 {
     match self
     {
@@ -216,12 +231,12 @@ print(&self, coll: &Collection)
         {
           print!("jmp ");
 
-          dst.print(coll);
+          dst.print(coll,f);
         },
   Terminator::Branch(bi)=>
         {
           print!("br ");
-          bi.print(coll);
+          bi.print(coll,f);
         },
   Terminator::Return(o_opt)=>
         {
@@ -327,7 +342,7 @@ resolve_block_link(&mut self, name_ls: &Vec<String>)-> Result<(),()>
 {
     for ln in &mut self.line_list
     {
-        if let Line::AllocatingOperation(_,o) = ln
+        if let Line::AllocatingOperation(_,_,o) = ln
         {
             if let AllocatingOperation::Phi(op_ls) = o
             {
@@ -337,16 +352,10 @@ resolve_block_link(&mut self, name_ls: &Vec<String>)-> Result<(),()>
                 }
             }
         }
-
-
-        if self.terminator.resolve_block_link(name_ls).is_err()
-        {
-          return Err(());
-        }
     }
 
 
-  Ok(())
+  self.terminator.resolve_block_link(name_ls)
 }
 
 
@@ -369,7 +378,7 @@ resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocat
 
 
 pub fn
-print(&self, coll: &Collection)
+print(&self, coll: &Collection, f: &Function)
 {
   print!(":{}\n",&self.name);
 
@@ -377,13 +386,13 @@ print(&self, coll: &Collection)
     {
       print!("  ");
 
-      l.print(coll);
+      l.print(coll,f);
 
       print!("\n");
     }
 
 
-  self.terminator.print(coll);
+  self.terminator.print(coll,f);
 
   print!("\n");
 }

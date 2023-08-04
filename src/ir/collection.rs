@@ -104,6 +104,45 @@ get_allocation(&self, i: usize)-> Option<&Allocation>
 
 
 pub fn
+get_allocation_by_link(&self, ln: &AllocationLink)-> Option<&Allocation>
+{
+    match ln
+    {
+  AllocationLink::Global(i)=>{self.get_allocation(*i)}
+  AllocationLink::Local(fi,i)=>{self.get_local_allocation(*fi,*i)}
+  AllocationLink::Parameter(fi,i)=> {self.get_parameter(*fi,*i)}
+  _=>{None}
+    }
+}
+
+
+pub fn
+get_local_allocation(&self, fi: usize, i: usize)-> Option<&Allocation>
+{
+    if fi < self.function_list.len()
+    {
+      return self.function_list[fi].get_allocation(i);
+    }
+
+
+  None
+}
+
+
+pub fn
+get_parameter(&self, fi: usize, i: usize)-> Option<&Allocation>
+{
+    if fi < self.function_list.len()
+    {
+      return self.function_list[fi].get_parameter(i);
+    }
+
+
+  None
+}
+
+
+pub fn
 find_allocation(&self, name: &str)-> Option<&Allocation>
 {
     for alo in &self.allocation_list
@@ -125,6 +164,24 @@ get_function(&self, i: usize)-> Option<&Function>
     if i < self.function_list.len()
     {
       return Some(&self.function_list[i]);
+    }
+
+
+  None
+}
+
+
+pub fn
+find_function(&self, name: &str)-> Option<(&Function,usize)>
+{
+    for i in 0..self.function_list.len()
+    {
+      let  f = &self.function_list[i];
+
+        if f.name == name
+        {
+          return Some((f,i));
+        }
     }
 
 
@@ -203,7 +260,7 @@ print(&self)
 {
     for alo in &self.allocation_list
     {
-      alo.print();
+      alo.print(1);
 
       print!("\n");
     }

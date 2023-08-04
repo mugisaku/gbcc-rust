@@ -16,6 +16,7 @@ use super::block::{
 
 use super::function::{
   FunctionLink,
+  Function,
 };
 
 use super::collection::{
@@ -76,7 +77,7 @@ print(&self, coll: &Collection)
 {
     match self
     {
-  Operand::AllocationLink(l)=>{l.print(coll);},
+  Operand::AllocationLink(l)=>{l.print(coll,0);},
   Operand::ImmediateValue(w)=>{print!("(imm, i:{})",w.get_i64());},
     }
 }
@@ -101,8 +102,6 @@ CallInfo
 {
   pub(crate) target: FunctionLink,
 
-  pub(crate) return_size: usize,
-
   pub(crate) argument_list: Vec<Operand>,
 
 }
@@ -114,9 +113,9 @@ CallInfo
 
 
 pub fn
-new(alo_name: &str, ret_sz: usize)-> CallInfo
+new(alo_name: &str)-> CallInfo
 {
-  CallInfo{target: FunctionLink::Unresolved(String::from(alo_name)), return_size: ret_sz, argument_list: Vec::new()}
+  CallInfo{target: FunctionLink::Unresolved(String::from(alo_name)), argument_list: Vec::new()}
 }
 
 
@@ -180,7 +179,7 @@ print(&self, coll: &Collection)
 {
   self.target.print(coll);
 
-  print!(" (RET_SZ: {}) ",self.return_size);
+  print!(" ");
 
     for a in &self.argument_list
     {
@@ -222,17 +221,17 @@ new(alo_name: &str, on_true: &str, on_false: &str)-> BranchInfo
 
 
 pub fn
-print(&self, coll: &Collection)
+print(&self, coll: &Collection, f: &Function)
 {
-  self.condition.print(coll);
+  self.condition.print(coll,0);
 
   print!(" ");
 
-  self.on_true.print(coll);
+  self.on_true.print(coll,f);
 
   print!(" ");
 
-  self.on_false.print(coll);
+  self.on_false.print(coll,f);
 }
 
 
@@ -415,7 +414,7 @@ AllocatingOperation
   Unary(Operand,UnaryOperator),
   Binary(Operand,Operand,BinaryOperator),
 
-  Allocate(usize),
+  Allocate,
 
   Address(AllocationLink),
 
@@ -428,21 +427,6 @@ AllocatingOperation
 impl
 AllocatingOperation
 {
-
-
-pub fn
-get_size(&self)-> usize
-{
-    match self
-    {
-  AllocatingOperation::Unary(_,_)=>   {WORD_SIZE},
-  AllocatingOperation::Binary(_,_,_)=>{WORD_SIZE},
-  AllocatingOperation::Allocate(sz)=> {*sz},
-  AllocatingOperation::Address(_)=>{WORD_SIZE},
-  AllocatingOperation::Phi(_)=>  {WORD_SIZE},
-  AllocatingOperation::Call(ci)=>{ci.return_size},
-    }
-}
 
 
 pub fn
@@ -488,7 +472,7 @@ resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocat
 
 
 pub fn
-print(&self, coll: &Collection)
+print(&self, coll: &Collection, f: &Function)
 {
     match self
     {
@@ -496,9 +480,11 @@ print(&self, coll: &Collection)
         {
           o.print(coll);
 
-          print!(" ");
+          print!(" <");
 
           u.print();
+
+          print!(">");
         },
   AllocatingOperation::Binary(l,r,b)=>
         {
@@ -508,27 +494,29 @@ print(&self, coll: &Collection)
 
           r.print(coll);
 
-          print!(" ");
+          print!(" <");
 
           b.print();
+
+          print!(">");
         },
-  AllocatingOperation::Allocate(sz)=>
+  AllocatingOperation::Allocate=>
         {
-          print!("allocate {}",sz);
+          print!("<allocate>");
         },
   AllocatingOperation::Address(l)=>
         {
-          print!("address ");
+          print!("<address> ");
 
-          l.print(coll);
+          l.print(coll,0);
         },
   AllocatingOperation::Phi(ops)=>
         {
-          print!("phi ");
+          print!("<phi> ");
 
             for o in ops
             {
-              o.from.print(coll);
+              o.from.print(coll,f);
 
               o.value.print(coll);
 
@@ -537,7 +525,7 @@ print(&self, coll: &Collection)
         },
   AllocatingOperation::Call(ci)=>
         {
-          print!("cal ");
+          print!("<cal> ");
 
           ci.print(coll);
         },

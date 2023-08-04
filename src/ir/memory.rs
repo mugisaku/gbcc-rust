@@ -114,16 +114,31 @@ from_word(w: Word)-> Memory
 
 
 pub fn
-resize(&mut self, sz: u64)
+from_memory(src: &Memory, start: usize, sz: usize)-> Memory
 {
-  self.content.resize(sz as usize,0);
+  let  mut dst = Memory::new(sz);
+
+    for i in 0..sz
+    {
+      dst.content[start+i] = src.content[start+i];
+    }
+
+
+  dst
 }
 
 
 pub fn
-get_size(&self)-> u64
+resize(&mut self, sz: usize)
 {
-  self.content.len() as u64
+  self.content.resize(sz,0);
+}
+
+
+pub fn
+get_size(&self)-> usize
+{
+  self.content.len()
 }
 
 
@@ -138,7 +153,7 @@ zerofill(&mut self)
 
 
 pub fn
-read(&mut self, dst_start: u64, src: &Memory, src_start: u64, src_sz_opt: Option<u64>)-> Result<(),()>
+read(&mut self, dst_start: usize, src: &Memory, src_start: usize, src_sz_opt: Option<usize>)-> Result<(),()>
 {
   let  src_sz = if let Some(sz) = src_sz_opt{sz} else{src.get_size()};
 
@@ -154,7 +169,7 @@ read(&mut self, dst_start: u64, src: &Memory, src_start: u64, src_sz_opt: Option
     {
         for offset in 0..src_sz
         {
-          self.content[(dst_start+offset) as usize] = src.content[(src_start+offset) as usize];
+          self.content[(dst_start+offset)] = src.content[(src_start+offset)];
         }
 
 
@@ -166,22 +181,52 @@ read(&mut self, dst_start: u64, src: &Memory, src_start: u64, src_sz_opt: Option
 }
 
 
+pub fn
+copy(&mut self, dst_start: usize, src_start: usize, sz: usize)-> Result<(),()>
+{
+    if (dst_start+sz) > self.get_size()
+    {
+      println!("range of src is invalid");
+
+      return Err(());
+    }
 
 
-pub fn  align2(addr: u64)-> usize{(addr as usize>>1)<<1}
-pub fn  align4(addr: u64)-> usize{(addr as usize>>2)<<2}
-pub fn  align8(addr: u64)-> usize{(addr as usize>>3)<<3}
+    if (src_start+sz) > self.get_size()
+    {
+      println!("range of src is invalid");
+
+      return Err(());
+    }
+
+
+    for offset in 0..sz
+    {
+      let  byte = self.content[(src_start+offset)]       ;
+                  self.content[(dst_start+offset)] = byte;
+    }
+
+
+  Ok(())
+}
+
+
+
+
+pub fn  align2(addr: usize)-> usize{(addr>>1)<<1}
+pub fn  align4(addr: usize)-> usize{(addr>>2)<<2}
+pub fn  align8(addr: usize)-> usize{(addr>>3)<<3}
 
 
 pub fn
-get_u8(&self, addr: u64)-> u8
+get_u8(&self, addr: usize)-> u8
 {
-  self.content[addr as usize]
+  self.content[addr]
 }
 
 
 pub fn
-get_u16(&self, addr: u64)-> u16
+get_u16(&self, addr: usize)-> u16
 {
     unsafe
     {
@@ -191,7 +236,7 @@ get_u16(&self, addr: u64)-> u16
 
 
 pub fn
-get_u32(&self, addr: u64)-> u32
+get_u32(&self, addr: usize)-> u32
 {
     unsafe
     {
@@ -201,7 +246,7 @@ get_u32(&self, addr: u64)-> u32
 
 
 pub fn
-get_u64(&self, addr: u64)-> u64
+get_u64(&self, addr: usize)-> u64
 {
     unsafe
     {
@@ -211,17 +256,17 @@ get_u64(&self, addr: u64)-> u64
 
 
 pub fn
-get_i8(&self, addr: u64)-> i8
+get_i8(&self, addr: usize)-> i8
 {
     unsafe
     {
-      *(self.content.as_ptr().add(addr as usize) as *const i8)
+      *(self.content.as_ptr().add(addr) as *const i8)
     }
 }
 
 
 pub fn
-get_i16(&self, addr: u64)-> i16
+get_i16(&self, addr: usize)-> i16
 {
     unsafe
     {
@@ -231,7 +276,7 @@ get_i16(&self, addr: u64)-> i16
 
 
 pub fn
-get_i32(&self, addr: u64)-> i32
+get_i32(&self, addr: usize)-> i32
 {
     unsafe
     {
@@ -241,7 +286,7 @@ get_i32(&self, addr: u64)-> i32
 
 
 pub fn
-get_i64(&self, addr: u64)-> i64
+get_i64(&self, addr: usize)-> i64
 {
     unsafe
     {
@@ -251,7 +296,7 @@ get_i64(&self, addr: u64)-> i64
 
 
 pub fn
-get_f32(&self, addr: u64)-> f32
+get_f32(&self, addr: usize)-> f32
 {
     unsafe
     {
@@ -261,7 +306,7 @@ get_f32(&self, addr: u64)-> f32
 
 
 pub fn
-get_f64(&self, addr: u64)-> f64
+get_f64(&self, addr: usize)-> f64
 {
     unsafe
     {
@@ -271,7 +316,7 @@ get_f64(&self, addr: u64)-> f64
 
 
 pub fn
-get_word(&self, addr: u64)-> Word
+get_word(&self, addr: usize)-> Word
 {
   Word::from_u64(self.get_u64(addr))
 }
@@ -280,14 +325,14 @@ get_word(&self, addr: u64)-> Word
 
 
 pub fn
-put_u8(&mut self, addr: u64, v: u8)
+put_u8(&mut self, addr: usize, v: u8)
 {
-  self.content[addr as usize] = v;
+  self.content[addr] = v;
 }
 
 
 pub fn
-put_u16(&mut self, addr: u64, v: u16)
+put_u16(&mut self, addr: usize, v: u16)
 {
     unsafe
     {
@@ -297,7 +342,7 @@ put_u16(&mut self, addr: u64, v: u16)
 
 
 pub fn
-put_u32(&mut self, addr: u64, v: u32)
+put_u32(&mut self, addr: usize, v: u32)
 {
     unsafe
     {
@@ -307,7 +352,7 @@ put_u32(&mut self, addr: u64, v: u32)
 
 
 pub fn
-put_u64(&mut self, addr: u64, v: u64)
+put_u64(&mut self, addr: usize, v: u64)
 {
     unsafe
     {
@@ -317,17 +362,17 @@ put_u64(&mut self, addr: u64, v: u64)
 
 
 pub fn
-put_i8(&mut self, addr: u64, v: i8)
+put_i8(&mut self, addr: usize, v: i8)
 {
     unsafe
     {
-      *(self.content.as_mut_ptr().add(addr as usize) as *mut i8) = v;
+      *(self.content.as_mut_ptr().add(addr) as *mut i8) = v;
     }
 }
 
 
 pub fn
-put_i16(&mut self, addr: u64, v: i16)
+put_i16(&mut self, addr: usize, v: i16)
 {
     unsafe
     {
@@ -337,7 +382,7 @@ put_i16(&mut self, addr: u64, v: i16)
 
 
 pub fn
-put_i32(&mut self, addr: u64, v: i32)
+put_i32(&mut self, addr: usize, v: i32)
 {
     unsafe
     {
@@ -347,7 +392,7 @@ put_i32(&mut self, addr: u64, v: i32)
 
 
 pub fn
-put_i64(&mut self, addr: u64, v: i64)
+put_i64(&mut self, addr: usize, v: i64)
 {
     unsafe
     {
@@ -357,7 +402,7 @@ put_i64(&mut self, addr: u64, v: i64)
 
 
 pub fn
-put_f32(&mut self, addr: u64, v: f32)
+put_f32(&mut self, addr: usize, v: f32)
 {
     unsafe
     {
@@ -367,7 +412,7 @@ put_f32(&mut self, addr: u64, v: f32)
 
 
 pub fn
-put_f64(&mut self, addr: u64, v: f64)
+put_f64(&mut self, addr: usize, v: f64)
 {
     unsafe
     {
@@ -377,7 +422,7 @@ put_f64(&mut self, addr: u64, v: f64)
 
 
 pub fn
-put_word(&mut self, addr: u64, w: Word)
+put_word(&mut self, addr: usize, w: Word)
 {
   self.put_u64(addr,w.get_u64());
 }

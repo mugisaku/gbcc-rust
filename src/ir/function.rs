@@ -140,9 +140,7 @@ add_allocation(&mut self, name: &str, sz: usize)
 pub fn
 add_parameter(&mut self, name: &str, sz: usize)
 {
-  let  i = self.parameter_list.len();
-
-  self.parameter_list.push(Allocation::new_parameter(i,name,sz));
+  self.parameter_list.push(Allocation::new_parameter(name,sz));
 }
 
 
@@ -182,6 +180,19 @@ get_allocation_size(&self)-> usize
 
 
   0
+}
+
+
+pub fn
+get_block(&self, i: usize)-> Option<&Block>
+{
+    if i < self.block_list.len()
+    {
+      return Some(&self.block_list[i]);
+    }
+
+
+  None
 }
 
 
@@ -318,7 +329,7 @@ print(&self, coll: &Collection)
 
     for p in &self.parameter_list
     {
-      p.print();
+      p.print(1);
 
       print!(",");
     }
@@ -330,7 +341,7 @@ print(&self, coll: &Collection)
 
     for blk in &self.block_list
     {
-      blk.print(coll);
+      blk.print(coll,self);
     }
 
 
