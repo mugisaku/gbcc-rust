@@ -33,7 +33,7 @@ use crate::language::typesystem::{
 use super::{
   Definition,
   Declaration,
-  Storage, Fn, Block, Statement,
+  Storage, Function, Block, Statement,
 };
 
 
@@ -137,8 +137,6 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 
                 if let Some(blk_d) = cur.seek_directory_with_name("block")
                 {
-                  let  si = lib.open_space(name.as_str());
-
                     if let Ok(blk) = read_block(blk_d,lib)
                     {
                           for i in 0..name_ls.len()
@@ -151,18 +149,13 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
                           }
 
 
-                      let  f = Fn{signature: fnsig, parameter_name_list: name_ls, space_index: si, block: blk};
+                      let  bi = lib.push_block(blk);
+
+                      let  f = Function{signature: fnsig, parameter_name_list: name_ls, block_index: bi};
 
                       let  decl = Declaration::new(&name,Definition::Fn(f));
 
-                      lib.close_space();
-
                       return Ok(decl);
-                    }
-
-                  else
-                    {
-                      lib.close_space();
                     }
                 }
             }

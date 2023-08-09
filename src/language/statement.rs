@@ -9,7 +9,6 @@ use super::library::{
   StringIndex,
   TypeIndex,
   DeclarationIndex,
-  SpaceIndex,
   Library
 };
 
@@ -65,15 +64,13 @@ print(&self, lib: &Library)
 
 
 pub struct
-Fn
+Function
 {
   pub(crate) signature: FunctionSignature,
 
   pub(crate) parameter_name_list: Vec<String>,
 
-  pub(crate) space_index: SpaceIndex,
-
-  pub(crate) block: Block,
+  pub(crate) block_index: BlockIndex,
 
 }
 
@@ -83,7 +80,7 @@ Fn
 pub enum
 Definition
 {
-  Fn(Fn),
+  Fn(Function),
   Var(Storage),
   Static(Storage),
   Const(Storage),
@@ -133,7 +130,10 @@ print(&self, lib: &Library)
 
           print!("\n");
 
-          f.block.print(lib);
+            if let Some(blk) = lib.get_block(f.block_index)
+            {
+              blk.print(lib);
+            }
         },
   Definition::Var(s)=>
         {
@@ -197,11 +197,11 @@ Statement
 {
   Empty,
   Declaration(DeclarationIndex),
-  Block(Block),
-  If(ConditionalBlock,Vec<ConditionalBlock>,Option<Block>),
-  For(Block),
-  While(ConditionalBlock),
-  Loop(Block),
+  Block(BlockIndex),
+  If((ExpressionIndex,BlockIndex),Vec<(ExpressionIndex,BlockIndex)>,Option<BlockIndex>),
+  For(BlockIndex),
+  While((ExpressionIndex,BlockIndex)),
+  Loop(BlockIndex),
   Break,
   Continue,
   Return(Option<ExpressionIndex>),
@@ -252,40 +252,44 @@ print(&self, lib: &Library)
     {
   Statement::Empty=>{print!(";");},
   Statement::Declaration(di)=>{lib.print_declaration(*di);},
-  Statement::Block(blk)=>{blk.print(lib);},
-  Statement::If(top,elif_ls,el_opt)=>
+  Statement::Block(bi)=>{lib.print_block(*bi);},
+  Statement::If((top_ei,top_bi),(elif_ls),el_bi_opt)=>
         {
           print!("if ");
 
-          top.print(lib);
+          lib.print_expression(*top_ei);
 
-            for condblk in elif_ls
+          lib.print_block(*top_bi);
+
+            for (ei,bi) in elif_ls
             {
               print!("else if ");
 
-              condblk.print(lib);
+              lib.print_expression(*ei);
+
+              lib.print_block(*bi);
             }
 
 
-            if let Some(blk) = el_opt
+            if let Some(bi) = el_bi_opt
             {
               print!("else ");
 
-              blk.print(lib);
+              lib.print_block(*bi);
             }
         },
   Statement::For(blks)=>{},
-  Statement::While(condblk)=>
+  Statement::While((ei,bi))=>
         {
           print!("while ");
 
-          condblk.print(lib);
+          lib.print_block(*bi);
         },
-  Statement::Loop(blk)=>
+  Statement::Loop(bi)=>
         {
           print!("loop\n");
 
-          blk.print(lib);
+          lib.print_block(*bi);
         },
   Statement::Break=>{print!("break");},
   Statement::Continue=>{print!("continue");},
@@ -317,9 +321,20 @@ print(&self, lib: &Library)
 
 
 
+#[derive(PartialEq,Clone,Copy)]
+pub struct
+BlockIndex
+{
+  pub(crate) value: usize,
+
+}
+
+
 pub struct
 Block
 {
+  pub(crate) parent_block_index_opt: Option<BlockIndex>,
+
   pub(crate) statement_list: Vec<Statement>,
 
 }
@@ -331,9 +346,9 @@ Block
 
 
 pub fn
-new()-> Block
+new(parent_block_index_opt: Option<BlockIndex>)-> Block
 {
-  Block{statement_list: Vec::new()}
+  Block{parent_block_index_opt, statement_list: Vec::new()}
 }
 
 
@@ -358,39 +373,6 @@ print(&self, lib: &Library)
 
 
   print!("}}\n");
-}
-
-
-}
-
-
-
-
-pub struct
-ConditionalBlock
-{
-  pub(crate) expression_index: ExpressionIndex,
-  pub(crate) block: Block,
-
-}
-
-
-impl
-ConditionalBlock
-{
-
-
-pub fn
-print(&self, lib: &Library)
-{
-    if let Some(e) = lib.get_expression(self.expression_index)
-    {
-      e.print(lib);
-
-      print!("\n");
-
-      self.block.print(lib);
-    }
 }
 
 

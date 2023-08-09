@@ -11,8 +11,6 @@ use super::library::{
   ExpressionIndex,
   StringIndex,
   TypeIndex,
-  SpaceIndex,
-  Space,
   Library
 };
 

@@ -18,7 +18,7 @@ use crate::language::expression::read_expression::read_expression;
 
 
 use super::{
-  Block, ConditionalBlock, Statement,
+  Block, BlockIndex, Statement,
 };
 
 
@@ -53,7 +53,7 @@ read_return(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 
 
 pub fn
-read_else_if(dir: &Directory, lib: &mut Library)-> Result<ConditionalBlock,()>
+read_else_if(dir: &Directory, lib: &mut Library)-> Result<(Expression,Block),()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -95,18 +95,21 @@ read_if(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 
     if let Some(blk_d) = cur.get_directory_with_name("conditional_block")
     {
-        if let Ok(top_blk) = read_conditional_block(blk_d,lib)
+        if let Ok((top_e,top_b)) = read_conditional_block(blk_d,lib)
         {
           cur.advance(1);
 
-          let  mut elif_ls: Vec<ConditionalBlock> = Vec::new();
-          let  mut  el_opt: Option<Block> = None;
+          let  mut elif_ls: Vec<(ExpressionIndex,BlockIndex)> = Vec::new();
+          let  mut  el_opt: Option<BlockIndex> = None;
 
             while let Some(elif_d) = cur.seek_directory_with_name("else_if")
             {
-                if let Ok(elif) = read_else_if(elif_d,lib)
+                if let Ok((e,b)) = read_else_if(elif_d,lib)
                 {
-                  elif_ls.push(elif);
+                  let  ei = lib.push_expression(e);
+                  let  bi = lib.push_block(b);
+
+                  elif_ls.push((ei,bi));
 
                   cur.advance(1);
                 }
@@ -115,14 +118,17 @@ read_if(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 
             if let Some(el_d) = cur.seek_directory_with_name("else")
             {
-                if let Ok(el) = read_else(el_d,lib)
+                if let Ok(el_blk) = read_else(el_d,lib)
                 {
-                  el_opt = Some(el);
+                  el_opt = Some(lib.push_block(el_blk));
                 }
             }
 
 
-          return Ok(Statement::If(top_blk,elif_ls,el_opt));
+          let  ei = lib.push_expression(top_e);
+          let  bi = lib.push_block(top_b);
+
+          return Ok(Statement::If((ei,bi),elif_ls,el_opt));
         }
     }
 
@@ -140,9 +146,12 @@ read_while(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 
     if let Some(blk_d) = cur.get_directory_with_name("conditional_block")
     {
-        if let Ok(blk) = read_conditional_block(blk_d,lib)
+        if let Ok((e,b)) = read_conditional_block(blk_d,lib)
         {
-          return Ok(Statement::While(blk));
+          let  ei = lib.push_expression(e);
+          let  bi = lib.push_block(b);
+
+          return Ok(Statement::While((ei,bi)));
         }
     }
 
@@ -162,7 +171,7 @@ read_loop(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
     {
         if let Ok(blk) = read_block(blk_d,lib)
         {
-          return Ok(Statement::Loop(blk));
+          return Ok(Statement::Loop(lib.push_block(blk)));
         }
     }
 
@@ -172,7 +181,7 @@ read_loop(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
 
 
 pub fn
-read_conditional_block(dir: &Directory, lib: &mut Library)-> Result<ConditionalBlock,()>
+read_conditional_block(dir: &Directory, lib: &mut Library)-> Result<(Expression,Block),()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -186,7 +195,7 @@ read_conditional_block(dir: &Directory, lib: &mut Library)-> Result<ConditionalB
             {
                 if let Ok(blk) = read_block(blk_d,lib)
                 {
-                  return Ok(ConditionalBlock{expression_index: lib.push_expression(e), block: blk});
+                  return Ok((e,blk));
                 }
             }
         }
@@ -234,7 +243,7 @@ read_block(dir: &Directory, lib: &mut Library)-> Result<Block,()>
     }
 
 
-  Ok(Block{statement_list: stmts})
+  Ok(Block{parent_block_index_opt: None, statement_list: stmts})
 }
 
 
@@ -260,7 +269,7 @@ read_statement(dir: &Directory, lib: &mut Library)-> Result<Statement,()>
         {
             if let Ok(blk) = read_block(d,lib)
             {
-              return Ok(Statement::Block(blk));
+              return Ok(Statement::Block(lib.push_block(blk)));
             }
         }
 

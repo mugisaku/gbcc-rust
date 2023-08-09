@@ -19,6 +19,7 @@ use super::statement::{
   Storage,
   Statement,
   Block,
+  BlockIndex,
   Declaration,
   Definition,
 };
@@ -56,64 +57,6 @@ DeclarationIndex
 }
 
 
-#[derive(PartialEq,Clone,Copy)]
-pub struct
-SpaceIndex
-{
-  pub(crate) value: usize,
-}
-
-
-#[derive(PartialEq,Clone,Copy)]
-pub struct
-Address
-{
-  pub(crate) value: usize,
-}
-
-
-impl
-Address
-{
-
-
-pub fn
-get_aligned(&self)-> Address
-{
-  Address{value: get_aligned_size(self.value)}
-}
-
-
-}
-
-
-pub struct
-Space
-{
-  parent_index: SpaceIndex,
-
-  name: String,
-
-  index_list: Vec<DeclarationIndex>,
-
-}
-
-
-impl
-Space
-{
-
-
-pub fn
-new(parent_si: SpaceIndex, name: &str)-> Space
-{
-  Space{parent_index: parent_si, name: String::from(name), index_list: Vec::new()}
-}
-
-
-}
-
-
 
 
 pub struct
@@ -121,13 +64,9 @@ Library
 {
   pub(crate)  expression_list: Vec<Expression>,
   pub(crate)      string_list: Vec<String>,
-  pub(crate)        type_list: Vec<(Type,SpaceIndex)>,
-  pub(crate) declaration_list: Vec<(Declaration,SpaceIndex)>,
-
-  pub(crate) space_list: Vec<Space>,
-
-  pub(crate) current_space_index: SpaceIndex,
-  pub(crate) space_index_stack: Vec<SpaceIndex>,
+  pub(crate)        type_list: Vec<Type>,
+  pub(crate) declaration_list: Vec<Declaration>,
+  pub(crate)       block_list: Vec<Block>,
 
 }
 
@@ -145,33 +84,26 @@ new()-> Library
              string_list: Vec::new(),
                type_list: Vec::new(),
         declaration_list: Vec::new(),
-              space_list: Vec::new(),
-       space_index_stack: Vec::new(),
-
-    current_space_index: SpaceIndex{value: 0},
+              block_list: Vec::new(),
   };
 
 
-  let  si = SpaceIndex{value: 0};
-
-  lib.type_list.push((Type::Undefined,si));
-  lib.type_list.push((Type::Void,si));
-  lib.type_list.push((Type::Bool,si));
-  lib.type_list.push((Type::Char,si));
-  lib.type_list.push((Type::I8,si));
-  lib.type_list.push((Type::I16,si));
-  lib.type_list.push((Type::I32,si));
-  lib.type_list.push((Type::I64,si));
-  lib.type_list.push((Type::ISize,si));
-  lib.type_list.push((Type::U8,si));
-  lib.type_list.push((Type::U16,si));
-  lib.type_list.push((Type::U32,si));
-  lib.type_list.push((Type::U64,si));
-  lib.type_list.push((Type::USize,si));
-  lib.type_list.push((Type::F32,si));
-  lib.type_list.push((Type::F64,si));
-
-  lib.open_space("__GLOBAL_SPACE__");
+  lib.type_list.push(Type::Undefined);
+  lib.type_list.push(Type::Void);
+  lib.type_list.push(Type::Bool);
+  lib.type_list.push(Type::Char);
+  lib.type_list.push(Type::I8);
+  lib.type_list.push(Type::I16);
+  lib.type_list.push(Type::I32);
+  lib.type_list.push(Type::I64);
+  lib.type_list.push(Type::ISize);
+  lib.type_list.push(Type::U8);
+  lib.type_list.push(Type::U16);
+  lib.type_list.push(Type::U32);
+  lib.type_list.push(Type::U64);
+  lib.type_list.push(Type::USize);
+  lib.type_list.push(Type::F32);
+  lib.type_list.push(Type::F64);
 
   lib
 }
@@ -221,85 +153,6 @@ make_from_string(s: &str)-> Result<Library,()>
 
 
 pub fn
-open_space(&mut self, name: &str)-> SpaceIndex
-{
-  let  si = SpaceIndex{value: self.space_list.len()};
-
-  self.space_index_stack.push(self.current_space_index);
-
-  self.space_list.push(Space::new(self.current_space_index,name));
-
-  self.current_space_index = si;
-
-  si
-}
-
-
-pub fn
-close_space(&mut self)
-{
-    if let Some(_) = self.space_index_stack.pop()
-    {
-        if let Some(si) = self.space_index_stack.last()
-        {
-          self.current_space_index = *si;
-        }
-    }
-}
-
-
-pub fn
-get_space(&self, i: SpaceIndex)-> Option<&Space>
-{
-    if i.value < self.space_list.len()
-    {
-      return Some(&self.space_list[i.value]);
-    }
-
-
-  None
-}
-
-
-pub fn
-get_current_space_mut(&mut self)-> Option<&mut Space>
-{
-  let  i = self.current_space_index.value;
-
-    if i < self.space_list.len()
-    {
-      return Some(&mut self.space_list[i]);
-    }
-
-
-  None
-}
-
-
-pub fn
-print_space(&self, i: SpaceIndex)
-{
-    if let Some(sp) = self.get_space(i)
-    {
-      print!("{}\n{{\n",&sp.name);
-
-        for di in &sp.index_list
-        {
-            if di.value < self.declaration_list.len()
-            {
-              let  decl = &self.declaration_list[di.value].0;
-
-              print!("{}\n",&decl.name);
-            }
-        }
-
-
-      print!("}}\n");
-    }
-}
-
-
-pub fn
 push_expression(&mut self, e: Expression)-> ExpressionIndex
 {
   let  i = self.expression_list.len();
@@ -338,13 +191,7 @@ push_declaration(&mut self, d: Declaration)-> DeclarationIndex
 {
   let  di = DeclarationIndex{value: self.declaration_list.len()};
 
-  self.declaration_list.push((d,self.current_space_index));
-
-    if let Some(sp) = self.get_current_space_mut()
-    {
-      sp.index_list.push(di);
-    }
-
+  self.declaration_list.push(d);
 
   di
 }
@@ -355,7 +202,7 @@ get_declaration(&self, i: DeclarationIndex)-> Option<&Declaration>
 {
     if i.value < self.declaration_list.len()
     {
-      return Some(&self.declaration_list[i.value].0);
+      return Some(&self.declaration_list[i.value]);
     }
 
 
@@ -480,14 +327,14 @@ push_type_internal(&mut self, t: Type)-> TypeIndex
 
     for i in 0..last_i
     {
-        if self.type_list[i].0 == t
+        if self.type_list[i] == t
         {
           return TypeIndex{value: i};
         }
     }
 
 
-  self.type_list.push((t,self.current_space_index));
+  self.type_list.push(t);
 
   TypeIndex{value: last_i}
 }
@@ -498,22 +345,7 @@ get_type(&self, i: TypeIndex)-> Option<&Type>
 {
     if i.value < self.type_list.len()
     {
-      return Some(&self.type_list[i.value].0);
-    }
-
-
-  None
-}
-
-
-pub fn
-get_space_by_type_index(&self, i: TypeIndex)-> Option<&Space>
-{
-    if i.value < self.type_list.len()
-    {
-      let  si = self.type_list[i.value].1;
-
-      return Some(&self.space_list[si.value]);
+      return Some(&self.type_list[i.value]);
     }
 
 
@@ -533,33 +365,39 @@ print_type(&self, i: TypeIndex)
 
 
 
+
+
 pub fn
-find_declaration_index_in_space(&self, si: SpaceIndex, name: &str)-> Option<DeclarationIndex>
+push_block(&mut self, blk: Block)-> BlockIndex
 {
-    if si.value < self.space_list.len()
+  let  last_i = self.block_list.len();
+
+  self.block_list.push(blk);
+
+  BlockIndex{value: last_i}
+}
+
+
+pub fn
+get_block(&self, i: BlockIndex)-> Option<&Block>
+{
+    if i.value < self.block_list.len()
     {
-      let  sp = &self.space_list[si.value];
-
-        for i in &sp.index_list
-        {
-            if let Some(d) = self.get_declaration(*i)
-            {
-                if d.name == name
-                {
-                  return Some(*i);
-                }
-            }
-        }
-
-
-        if si != sp.parent_index
-        {
-          return self.find_declaration_index_in_space(sp.parent_index,name);
-        }
+      return Some(&self.block_list[i.value]);
     }
 
 
   None
+}
+
+
+pub fn
+print_block(&self, i: BlockIndex)
+{
+    if let Some(blk) = self.get_block(i)
+    {
+      blk.print(self);
+    }
 }
 
 
@@ -570,14 +408,8 @@ print(&self)
 {
   print!("library\n{{\n");
 
-    for (decl,si) in &self.declaration_list
+    for decl in &self.declaration_list
     {
-        if let Some(sp) = self.get_space(*si)
-        {
-          print!("({})\n",&sp.name);
-        }
-
-
       decl.print(self);
 
       print!("\n\n");
@@ -585,43 +417,6 @@ print(&self)
 
 
   print!("}}\n\n");
-
-    for sp in &self.space_list
-    {
-      print!("space {}{{\n",&sp.name);
-
-        for di in &sp.index_list
-        {
-            if let Some(decl) = self.get_declaration(*di)
-            {
-              print!("  {} ",&decl.name);
-
-                match &decl.definition
-                {
-              Definition::Fn(_)=>{println!("fn");},
-              Definition::Var(_)=>{println!("var");},
-              Definition::Static(_)=>{println!("static");},
-              Definition::Const(_)=>{println!("const");},
-              Definition::Argument(_)=>{println!("argument");},
-              Definition::Struct(_)=>{println!("struct");},
-              Definition::Union(_)=>{println!("union");},
-              Definition::Enum(_)=>{println!("enum");},
-              Definition::Alias(_)=>{println!("alias");},
-                }
-            }
-        }
-
-
-      print!("}}\n\n");
-    }
-
-
-/*
-    for (decl,_,_) in &self.declaration_list
-    {
-      print!("decl {}\n",&decl.name);
-    }
-*/
 }
 
 
