@@ -14,11 +14,6 @@ use super::line::{
   Line,
 };
 
-use super::block::{
-  Terminator,
-  Block,
-};
-
 use super::collection::{
   Collection,
 };
@@ -98,7 +93,7 @@ Function
 
   pub(crate) return_size: usize,
 
-  pub(crate) block_list: Vec<Block>,
+  pub(crate) line_list: Vec<Line>,
 
   pub(crate) allocation_list: Vec<Allocation>,
 
@@ -117,16 +112,16 @@ new(name: &str, sz: usize)-> Function
     name: String::from(name),
     return_size: sz,
     parameter_list: Vec::new(),
-    block_list: Vec::new(),
+    line_list: Vec::new(),
     allocation_list: Vec::new(),
   }
 }
 
 
 pub fn
-add_block(&mut self, blk: Block)
+add_line(&mut self, ln: Line)
 {
-  self.block_list.push(blk);
+  self.line_list.push(ln);
 }
 
 
@@ -171,6 +166,22 @@ get_parameter(&self, i: usize)-> Option<&Allocation>
 
 
 pub fn
+get_block_name(&self, i: usize)-> Option<&String>
+{
+    if i < self.line_list.len()
+    {
+        if let Line::BlockOpen(name) = &self.line_list[i]
+        {
+          return Some(name);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
 get_allocation_size(&self)-> usize
 {
     if let Some(alo) = self.allocation_list.last()
@@ -183,72 +194,16 @@ get_allocation_size(&self)-> usize
 }
 
 
-pub fn
-get_block(&self, i: usize)-> Option<&Block>
-{
-    if i < self.block_list.len()
-    {
-      return Some(&self.block_list[i]);
-    }
-
-
-  None
-}
-
-
-pub fn
-find_block(&self, name: &str)-> Option<&Block>
-{
-    for blk in &self.block_list
-    {
-        if blk.name == name
-        {
-          return Some(blk);
-        }
-    }
-
-
-  None
-}
-
-
-fn
-resolve_block_links_all(&mut self)-> Result<(),()>
-{
-  let  mut ls: Vec<String> = Vec::new();
-
-    for blk in &mut self.block_list
-    {
-      ls.push(blk.name.clone());
-    }
-
-
-    for blk in &mut self.block_list
-    {
-        if blk.resolve_block_link(&ls).is_err()
-        {
-          return Err(());
-        }
-    }
-
-
-  Ok(())
-}
-
-
 fn
 build_local_allocation(&mut self)
 {
   let  mut ls: Vec<(String,usize)> = Vec::new();
 
-    for blk in &self.block_list
+    for ln in &self.line_list
     {
-        for ln in &blk.line_list
+        if let Some((name,size)) = ln.get_allocation_data()
         {
-            if let Some((name,size)) = ln.get_allocation_data()
-            {
-              ls.push((name,size));
-            }
+          ls.push((name,size));
         }
     }
 
@@ -259,24 +214,6 @@ build_local_allocation(&mut self)
     {
       self.add_allocation(&e.0,e.1);
     }
-}
-
-
-fn
-resolve_other_links_all(&mut self, fi: usize, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
-{
-    for blk in &mut self.block_list
-    {
-        if blk.resolve(fi,&self.parameter_list,&self.allocation_list,g_alo_ls,fname_ls).is_err()
-        {
-          println!("function::resolve_other_links_all error");
-
-          return Err(());
-        }
-    }
-
-
-  Ok(())
 }
 
 
@@ -307,18 +244,33 @@ assign_allocation_offset(&mut self)
 
 
 pub fn
-resolve_links_all(&mut self, fi: usize, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
+resolve(&mut self, fi: usize, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
 {
   self.build_local_allocation();
 
-    if self.resolve_block_links_all().is_ok()
-    && self.resolve_other_links_all(fi,g_alo_ls,fname_ls).is_ok()
+  let  mut blkop_ls: Vec<(String,usize)> = Vec::new();
+
+    for i in 0..self.line_list.len()
     {
-      return Ok(());
+        if let Line::BlockOpen(name) = &self.line_list[i]
+        {
+          blkop_ls.push((name.clone(),i));
+        }
     }
 
 
-  Err(())
+    for ln in &mut self.line_list
+    {
+        if ln.resolve(fi,&blkop_ls,&self.parameter_list,&self.allocation_list,g_alo_ls,fname_ls).is_err()
+        {
+          println!("function::resolve_other_links_all error");
+
+          return Err(());
+        }
+    }
+
+
+  Ok(())
 }
 
 
@@ -339,9 +291,11 @@ print(&self, coll: &Collection)
 
   print!("\n{{\n");
 
-    for blk in &self.block_list
+    for ln in &self.line_list
     {
-      blk.print(coll,self);
+      ln.print(coll,self);
+
+      print!("\n");
     }
 
 

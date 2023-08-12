@@ -7,8 +7,8 @@ use super::allocation::{
 };
 
 use super::line::{
-  NonAllocatingOperation,
   Line,
+  BlockLink,
 };
 
 use super::allocating_operation::{
@@ -18,13 +18,6 @@ use super::allocating_operation::{
   Operand,
   PhiOperand,
   CallInfo,
-};
-
-use super::block::{
-  Terminator,
-  Block,
-  BlockLink,
-  BranchInfo,
 };
 
 use super::memory::{
@@ -80,6 +73,7 @@ Executor
 }
 
 
+#[allow(dead_code)]
 impl
 Executor
 {
@@ -119,7 +113,7 @@ change_bi(&mut self, bl: &BlockLink)
       self.pbi = self.bi            ;
                  self.bi = *i as u64;
 
-      self.pc = 0;
+      self.pc = self.bi+1;
 
       return;
     }
@@ -516,85 +510,74 @@ operate(&mut self, coll: &Collection, ln: &Line)
           AllocatingOperation::Call(ci)=>{self.operate_call(coll,dst_addr,ci);},
             }
         }
-  Line::NonAllocatingOperation(nao)=>
+  Line::CopyWord(dst,src)=>
         {
-            match nao
+          let  dst_addr = self.get_absolute_address_by_link(coll,dst);
+          let  src_addr = self.get_absolute_address_by_link(coll,src);
+
+          let  v = self.memory.get_word(src_addr);
+
+          self.memory.put_word(dst_addr,v);
+        }
+  Line::CopyString(dst,src,sz)=>
+        {
+          let  dst_addr = self.get_absolute_address_by_link(coll,dst);
+          let  src_addr = self.get_absolute_address_by_link(coll,src);
+
+            for off in 0..*sz
             {
-          NonAllocatingOperation::CopyWord(dst,src)=>
+              let  v = self.memory.get_u8(src_addr+off);
+
+              self.memory.put_u8(dst_addr+off,v);
+            }
+        }
+  Line::Message(s)=>
+        {
+          println!("[message] {}",s);
+        }
+  Line::Print(target,c)=>
+        {
+          let  src_addr = self.get_absolute_address_by_link(coll,target);
+
+            if src_addr != 0
+            {
+              let  w = self.memory.get_word(src_addr);
+
+                match c
                 {
-                  let  dst_addr = self.get_absolute_address_by_link(coll,dst);
-                  let  src_addr = self.get_absolute_address_by_link(coll,src);
-
-                  let  v = self.memory.get_word(src_addr);
-
-                  self.memory.put_word(dst_addr,v);
-                }
-          NonAllocatingOperation::CopyString(dst,src,sz)=>
-                {
-                  let  dst_addr = self.get_absolute_address_by_link(coll,dst);
-                  let  src_addr = self.get_absolute_address_by_link(coll,src);
-
-                    for off in 0..*sz
-                    {
-                      let  v = self.memory.get_u8(src_addr+off);
-
-                      self.memory.put_u8(dst_addr+off,v);
-                    }
-                }
-          NonAllocatingOperation::Message(s)=>
-                {
-                  println!("[message] {}",s);
-                }
-          NonAllocatingOperation::Print(target,c)=>
-                {
-                  let  src_addr = self.get_absolute_address_by_link(coll,target);
-
-                    if src_addr != 0
-                    {
-                      let  w = self.memory.get_word(src_addr);
-
-                        match c
-                        {
-                      'i'=>{println!("[print] {}",w.get_i64());}
-                      'u'=>{println!("[print] {}",w.get_u64());}
-                      'f'=>{println!("[print] {}",w.get_f64());}
-                      _=>{}
-                        }
-                    }
+              'i'=>{println!("[print] {}",w.get_i64());}
+              'u'=>{println!("[print] {}",w.get_u64());}
+              'f'=>{println!("[print] {}",w.get_f64());}
+              _=>{}
                 }
             }
         }
-    }
-}
-
-
-fn
-terminate(&mut self, coll: &Collection, tm: &Terminator)
-{
-    match tm
-    {
-  Terminator::Jump(bl)=>
+  Line::BlockOpen(name)=>
+        {
+          println!("executor::operate warning: passed BlockOpen {}",name);
+        },
+  Line::Jump(bl)=>
         {
           self.change_bi(bl);
         },
-  Terminator::Branch(bi)=>
+  Line::Branch(cond,on_true,on_false)=>
         {
-            if let Some(alo) = coll.get_allocation_by_link(&bi.condition)
+            if let Some(alo) = coll.get_allocation_by_link(cond)
             {
               let  addr = self.get_absolute_address(alo);
 
                 if self.memory.get_word(addr).get_u64() != 0
                 {
-                  self.change_bi(&bi.on_true);
+                  self.change_bi(on_true);
                 }
 
               else
                 {
-                  self.change_bi(&bi.on_false);
+                  self.change_bi(on_false);
                 }
             }
         },
-  Terminator::Return(o_opt)=>
+  Line::Return(o_opt)=>
         {
             if let Some(o) = o_opt
             {
@@ -618,20 +601,13 @@ step(&mut self, coll: &Collection)-> Result<(),()>
 self.print_context();
       let  f = &coll.function_list[self.fi as usize];
 
-      let  blk = &f.block_list[self.bi as usize];
-
-        if (self.pc as usize) < blk.line_list.len()
+        if (self.pc as usize) < f.line_list.len()
         {
-          let  ln = &blk.line_list[self.pc as usize];
+          let  ln = &f.line_list[self.pc as usize];
 
           self.pc += 1;
 
           self.operate(coll,ln);
-        }
-
-      else
-        {
-          self.terminate(coll,&blk.terminator);
         }
 
 

@@ -6,6 +6,7 @@ pub mod statement;
 pub mod evaluate;
 pub mod value;
 pub mod library;
+pub mod compile;
 
 
 use crate::language::{

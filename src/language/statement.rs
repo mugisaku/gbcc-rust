@@ -66,9 +66,9 @@ print(&self, lib: &Library)
 pub struct
 Function
 {
-  pub(crate) signature: FunctionSignature,
+  pub(crate) parameter_list: Vec<DeclarationIndex>,
 
-  pub(crate) parameter_name_list: Vec<String>,
+  pub(crate) return_type_index_opt: Option<TypeIndex>,
 
   pub(crate) block_index: BlockIndex,
 
@@ -84,7 +84,7 @@ Definition
   Var(Storage),
   Static(Storage),
   Const(Storage),
-  Argument(Storage),
+  Parameter(Storage),
   Struct(Struct),
   Union(Union),
   Enum(Enum),
@@ -124,9 +124,23 @@ print(&self, lib: &Library)
     {
   Definition::Fn(f)=>
         {
-          print!("fn\n{}",&self.name);
+          print!("fn\n{}(",&self.name);
 
-          f.signature.print_with_name_list(&f.parameter_name_list,lib);
+            for p in &f.parameter_list
+            {
+              lib.print_declaration(*p);
+            }
+
+
+          print!(")");
+
+            if let Some(ti) = &f.return_type_index_opt
+            {
+              print!("-> ");
+
+              lib.print_type(*ti);
+            }
+
 
           print!("\n");
 
@@ -153,9 +167,9 @@ print(&self, lib: &Library)
 
           s.print(lib);
         },
-  Definition::Argument(s)=>
+  Definition::Parameter(s)=>
         {
-          print!("arg\n{}: ",&self.name);
+          print!("para\n{}: ",&self.name);
 
           s.print(lib);
         },

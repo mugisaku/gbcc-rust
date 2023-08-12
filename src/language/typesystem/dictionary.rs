@@ -32,23 +32,23 @@ type_list: type & [{"," & type}];
 pub fn
 get_dictionary()-> &'static Dictionary
 {
-  static  mut dic_opt: Option<Dictionary> = None;
+  static  mut DIC_OPT: Option<Dictionary> = None;
 
     unsafe
     {
-        if let None = dic_opt
+        if let None = DIC_OPT
         {
             if let Ok(mut tmp_dic) = Dictionary::make_from_string(&DIC_S)
             {
                 if tmp_dic.test().is_ok()
                 {
-                  dic_opt = Some(tmp_dic);
+                  DIC_OPT = Some(tmp_dic);
                 }
             }
         }
 
 
-        if let Some(dic) = &dic_opt
+        if let Some(dic) = &DIC_OPT
         {
           return dic;
         }

@@ -20,13 +20,6 @@ use super::allocating_operation::{
 };
 
 
-use super::block::{
-  BranchInfo,
-  Terminator,
-  Block,
-  BlockLink,
-};
-
 use super::function::{
   Function,
   FunctionLink,
@@ -39,100 +32,64 @@ use super::memory::{
 
 
 
+#[derive(Clone)]
 pub enum
-NonAllocatingOperation
+BlockLink
 {
-  CopyWord(AllocationLink,AllocationLink),
-  CopyString(AllocationLink,AllocationLink,usize),
-  Message(String),
-  Print(AllocationLink,char),
+  Unresolved(String),
+     Resolved(usize),
 
 }
 
 
 impl
-NonAllocatingOperation
+BlockLink
 {
 
 
 pub fn
-resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>)-> Result<(),()>
+new(name: &str)-> BlockLink
 {
-    match self
-    {
-  NonAllocatingOperation::CopyWord(dst,src)=>
-        {
-            if dst.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            && src.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            {
-              Ok(())
-            }
-
-          else
-            {
-              Err(())
-            }
-        },
-  NonAllocatingOperation::CopyString(dst,src,_)=>
-        {
-            if dst.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            && src.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            {
-              Ok(())
-            }
-
-          else
-            {
-              Err(())
-            }
-        },
-  NonAllocatingOperation::Message(_)=>{Ok(())},
-  NonAllocatingOperation::Print(target,_)=>
-        {
-          target.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
-        },
-    }
+  BlockLink::Unresolved(String::from(name))
 }
 
 
 pub fn
-print(&self, coll: &Collection)
+resolve(&mut self, ls: &Vec<(String,usize)>)-> Result<(),()>
+{
+    if let BlockLink::Unresolved(name) = self
+    {
+        for e in ls
+        {
+            if e.0 == name.as_str()
+            {
+              *self = BlockLink::Resolved(e.1);
+
+              return Ok(());
+            }
+        }
+
+
+      println!("BlockLink::resolve error: block <{}> is not found",name);
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+print(&self, coll: &Collection, f: &Function)
 {
     match self
     {
-  NonAllocatingOperation::CopyWord(src,dst)=>
+  BlockLink::Unresolved(name)=>{print!("{}(UNRESOLVED)",name);},
+  BlockLink::Resolved(i)=>
         {
-          print!("copy_word ");
-
-          src.print(coll,0);
-
-          print!(" ");
-
-          dst.print(coll,0);
-        },
-  NonAllocatingOperation::CopyString(dst,src,sz)=>
-        {
-          print!("copy_string ");
-
-          src.print(coll,0);
-
-          print!(" ");
-
-          dst.print(coll,0);
-
-          print!(" {}",*sz);
-        },
-  NonAllocatingOperation::Message(s)=>
-        {
-          print!("message \"{}\"",s);
-        },
-  NonAllocatingOperation::Print(target,c)=>
-        {
-          print!("print ");
-
-          target.print(coll,0);
-
-          print!(" {}",c);
+            if let Some(name) = f.get_block_name(*i)
+            {
+              print!("{}",name);
+            }
         },
     }
 }
@@ -146,12 +103,21 @@ print(&self, coll: &Collection)
 pub enum
 Line
 {
-     AllocatingOperation(AllocationLink,usize,AllocatingOperation),
-  NonAllocatingOperation(NonAllocatingOperation),
+  AllocatingOperation(AllocationLink,usize,AllocatingOperation),
+
+  CopyWord(AllocationLink,AllocationLink),
+  CopyString(AllocationLink,AllocationLink,usize),
+  Message(String),
+  Print(AllocationLink,char),
+  BlockOpen(String),
+  Jump(BlockLink),
+  Branch(AllocationLink,BlockLink,BlockLink),
+  Return(Option<Operand>),
 
 }
 
 
+#[allow(dead_code)]
 impl
 Line
 {
@@ -174,14 +140,14 @@ get_allocation_data(&self)-> Option<(String,usize)>
 
 
 pub fn
-resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
+resolve(&mut self, fi: usize, blkop_ls: &Vec<(String,usize)>, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
 {
     match self
     {
   Line::AllocatingOperation(ln,_,ao)=>
         {
-            if ln.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            && ao.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls,fname_ls).is_ok()
+            if ln.resolve(fi,         p_alo_ls,l_alo_ls,g_alo_ls         ).is_ok()
+            && ao.resolve(fi,blkop_ls,p_alo_ls,l_alo_ls,g_alo_ls,fname_ls).is_ok()
             {
               Ok(())
             }
@@ -193,10 +159,71 @@ resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocat
               Err(())
             }
         }
-  Line::NonAllocatingOperation(nao)=>
+  Line::CopyWord(dst,src)=>
         {
-          nao.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
-        }
+            if dst.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
+            && src.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
+            {
+              Ok(())
+            }
+
+          else
+            {
+              Err(())
+            }
+        },
+  Line::CopyString(dst,src,_)=>
+        {
+            if dst.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
+            && src.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
+            {
+              Ok(())
+            }
+
+          else
+            {
+              Err(())
+            }
+        },
+  Line::Message(_)=>{Ok(())},
+  Line::Print(target,_)=>
+        {
+          target.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
+        },
+  Line::BlockOpen(_)=>
+        {
+          Ok(())
+        },
+  Line::Jump(dst)=>
+        {
+          dst.resolve(blkop_ls)
+        },
+  Line::Branch(cond,on_true,on_false)=>
+        {
+            if     cond.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
+            &&  on_true.resolve(blkop_ls).is_ok()
+            && on_false.resolve(blkop_ls).is_ok()
+            {
+              Ok(())
+            }
+
+          else
+            {
+              Err(())
+            }
+        },
+  Line::Return(o_opt)=>
+        {
+            if let Some(o) = o_opt
+            {
+              o.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
+            }
+
+          else
+            {
+              Ok(())
+            }
+        },
     }
 }
 
@@ -214,10 +241,73 @@ print(&self, coll: &Collection, f: &Function)
 
           ao.print(coll,f);
         }
-  Line::NonAllocatingOperation(nao)=>
+  Line::CopyWord(src,dst)=>
         {
-          nao.print(coll);
-        }
+          print!("copy_word ");
+
+          src.print(coll,0);
+
+          print!(" ");
+
+          dst.print(coll,0);
+        },
+  Line::CopyString(dst,src,sz)=>
+        {
+          print!("copy_string ");
+
+          src.print(coll,0);
+
+          print!(" ");
+
+          dst.print(coll,0);
+
+          print!(" {}",*sz);
+        },
+  Line::Message(s)=>
+        {
+          print!("message \"{}\"",s);
+        },
+  Line::Print(target,c)=>
+        {
+          print!("print ");
+
+          target.print(coll,0);
+
+          print!(" {}",c);
+        },
+  Line::BlockOpen(name)=>
+        {
+          print!("BLOCK {}:",name);
+        },
+  Line::Jump(dst)=>
+        {
+          print!("jmp ");
+
+          dst.print(coll,f);
+        },
+  Line::Branch(cond,on_true,on_false)=>
+        {
+          print!("br ");
+
+          cond.print(coll,0);
+
+          print!(" ");
+
+          on_true.print(coll,f);
+
+          print!(" ");
+
+          on_false.print(coll,f);
+        },
+  Line::Return(o_opt)=>
+        {
+          print!("ret ");
+
+            if let Some(o) = o_opt
+            {
+              o.print(coll);
+            }
+        },
     }
 }
 
@@ -333,7 +423,7 @@ cpyw(dst: &str, src: &str)-> Line
   let  dst_al = AllocationLink::new(dst);
   let  src_al = AllocationLink::new(src);
 
-  Line::NonAllocatingOperation(NonAllocatingOperation::CopyWord(dst_al,src_al))
+  Line::CopyWord(dst_al,src_al)
 }
 
 
@@ -343,22 +433,52 @@ cpys(dst: &str, src: &str, sz: usize)-> Line
   let  dst_al = AllocationLink::new(dst);
   let  src_al = AllocationLink::new(src);
 
-  Line::NonAllocatingOperation(NonAllocatingOperation::CopyString(dst_al,src_al,sz))
+  Line::CopyString(dst_al,src_al,sz)
 }
 
 
 pub fn
 msg(s: &str)-> Line
 {
-  Line::NonAllocatingOperation(NonAllocatingOperation::Message(String::from(s)))
+  Line::Message(String::from(s))
 }
 
 
 pub fn
 pr(s: &str, c: char)-> Line
 {
-  Line::NonAllocatingOperation(NonAllocatingOperation::Print(AllocationLink::new(s),c))
+  Line::Print(AllocationLink::new(s),c)
 }
+
+
+pub fn
+blkop(name: &str)-> Line
+{
+  Line::BlockOpen(String::from(name))
+}
+
+
+pub fn
+jmp(name: &str)-> Line
+{
+  Line::Jump(BlockLink::new(name))
+}
+
+
+pub fn
+br(cond: &str, on_true: &str, on_false: &str)-> Line
+{
+  Line::Branch(AllocationLink::new(cond),BlockLink::new(on_true),BlockLink::new(on_false))
+}
+
+
+pub fn
+ret(op_opt: Option<Operand>)-> Line
+{
+  Line::Return(op_opt)
+}
+
+
 
 
 }

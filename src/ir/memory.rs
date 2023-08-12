@@ -33,6 +33,7 @@ Word
 }
 
 
+#[allow(dead_code)]
 impl
 Word
 {
@@ -84,6 +85,7 @@ Memory
 }
 
 
+#[allow(dead_code)]
 impl
 Memory
 {

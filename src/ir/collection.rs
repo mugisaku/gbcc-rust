@@ -13,11 +13,6 @@ use super::allocation::{
   Allocation,
 };
 
-use super::block::{
-  Terminator,
-  Block
-};
-
 use super::line::{
   Line,
 };
@@ -226,7 +221,7 @@ process_functions_all(&mut self)-> Result<(),()>
     {
       let  f = &mut self.function_list[fi];
 
-        if f.resolve_links_all(fi,&self.allocation_list,&fname_ls).is_err()
+        if f.resolve(fi,&self.allocation_list,&fname_ls).is_err()
         {
           return Err(());
         }

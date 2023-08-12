@@ -379,7 +379,7 @@ BinaryOperator
 
 
 pub fn
-get_type_index(&self, lti: TypeIndex, rti: TypeIndex, Binasrylib: &Library)-> Result<TypeIndex,()>
+get_type_index(&self, lti: TypeIndex, rti: TypeIndex, lib: &Library)-> Result<TypeIndex,()>
 {
   Err(())
 }

@@ -20,6 +20,7 @@ Value
 
 
 #[derive(Clone,Copy)]
+#[allow(dead_code)]
 pub enum
 ValueData
 {
@@ -32,6 +33,7 @@ ValueData
 }
 
 
+#[allow(dead_code)]
 impl
 ValueData
 {

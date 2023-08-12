@@ -4,6 +4,7 @@ use std::cell::Cell;
 
 use crate::language::library::{
   ExpressionIndex,
+  DeclarationIndex,
   StringIndex,
   TypeIndex,
   Library
@@ -43,7 +44,7 @@ use crate::language::statement::read_statement::{
 
 
 pub fn
-read_parameter(dir: &Directory, lib: &mut Library)-> Result<(String,TypeIndex),()>
+read_parameter(dir: &Directory, lib: &mut Library)-> Result<DeclarationIndex,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -57,7 +58,11 @@ read_parameter(dir: &Directory, lib: &mut Library)-> Result<(String,TypeIndex),(
         {
             if let Ok(ty) = read_type(ty_d,lib)
             {
-              return Ok((name,lib.push_type(ty)));
+              let  def = Definition::Parameter(Storage{type_index: lib.push_type(ty), expression_index_opt: None});
+
+              let  decl = Declaration{name: name, definition: def};
+
+              return Ok(lib.push_declaration(decl));
             }
         }
     }
@@ -68,10 +73,10 @@ read_parameter(dir: &Directory, lib: &mut Library)-> Result<(String,TypeIndex),(
 
 
 pub fn
-read_parameter_list(dir: &Directory, lib: &mut Library)-> Result<Vec<(String,TypeIndex)>,()>
+read_parameter_list(dir: &Directory, lib: &mut Library)-> Result<Vec<DeclarationIndex>,()>
 {
   let  mut cur = Cursor::new(dir);
-  let  mut ls: Vec<(String,TypeIndex)> = Vec::new();
+  let  mut ls: Vec<DeclarationIndex> = Vec::new();
 
     while let Some(d) = cur.seek_directory_with_name("parameter")
     {
@@ -110,25 +115,17 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
 
         if let Some(parals_d) = cur.get_directory_with_name("parameter_list")
         {
-            if let Ok(parals) = read_parameter_list(parals_d,lib)
+            if let Ok(para_ls) = read_parameter_list(parals_d,lib)
             {
-              let  mut name_ls: Vec<String> = Vec::new();
-
-                for para in parals
-                {
-                  name_ls.push(para.0);
-
-                  fnsig.parameter_list.push(para.1);
-                }
-
-
               cur.advance(1);
+
+              let  mut ret_ti_opt: Option<TypeIndex> = None;
 
                 if let Some(ty_d) = cur.seek_directory_with_name("type")
                 {
                     if let Ok(ty) = read_type(ty_d,lib)
                     {
-                      fnsig.return_type_index = lib.push_type(ty);
+                      ret_ti_opt = Some(lib.push_type(ty));
 
                       cur.advance(1);
                     }
@@ -139,19 +136,9 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
                 {
                     if let Ok(blk) = read_block(blk_d,lib)
                     {
-                          for i in 0..name_ls.len()
-                          {
-                            let  sto = Storage{type_index: fnsig.parameter_list[i], expression_index_opt: None};
-
-                            let  decl = Declaration{name: name_ls[i].clone(), definition: Definition::Argument(sto)};
-
-                            lib.push_declaration(decl);
-                          }
-
-
                       let  bi = lib.push_block(blk);
 
-                      let  f = Function{signature: fnsig, parameter_name_list: name_ls, block_index: bi};
+                      let  f = Function{parameter_list: para_ls, return_type_index_opt: ret_ti_opt, block_index: bi};
 
                       let  decl = Declaration::new(&name,Definition::Fn(f));
 

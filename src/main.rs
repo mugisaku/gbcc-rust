@@ -175,9 +175,8 @@ type_make(s: &str)
 fn
 main()
 {
-  ir::test::test();
-/*
-
+ir::test::test();
+return; 
   println!("--GBCC Interactive Interpreter--");
   println!("type <h>, list command.");
 
@@ -251,7 +250,6 @@ main()
           buf.clear();
         }
     }
-*/
 }
 
 

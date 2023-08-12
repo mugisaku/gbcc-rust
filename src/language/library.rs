@@ -65,8 +65,11 @@ Library
   pub(crate)  expression_list: Vec<Expression>,
   pub(crate)      string_list: Vec<String>,
   pub(crate)        type_list: Vec<Type>,
-  pub(crate) declaration_list: Vec<Declaration>,
-  pub(crate)       block_list: Vec<Block>,
+
+  pub(crate) global_declaration_list: Vec<Declaration>,
+  pub(crate)        declaration_list: Vec<Declaration>,
+
+  pub(crate) block_list: Vec<Block>,
 
 }
 
@@ -83,7 +86,8 @@ new()-> Library
          expression_list: Vec::new(),
              string_list: Vec::new(),
                type_list: Vec::new(),
-        declaration_list: Vec::new(),
+               declaration_list: Vec::new(),
+        global_declaration_list: Vec::new(),
               block_list: Vec::new(),
   };
 
@@ -130,7 +134,7 @@ make_from_string(s: &str)-> Result<Library,()>
         {
             if let Ok(decl) = crate::language::statement::read_declaration::read_declaration(decl_d,&mut lib)
             {
-              lib.push_declaration(decl);
+              lib.push_global_declaration(decl);
 
               cur.advance(1);
             }
@@ -150,6 +154,8 @@ make_from_string(s: &str)-> Result<Library,()>
 
   Err(())
 }
+
+
 
 
 pub fn
@@ -186,6 +192,34 @@ print_expression(&self, i: ExpressionIndex)
 }
 
 
+
+
+pub fn
+push_global_declaration(&mut self, d: Declaration)-> DeclarationIndex
+{
+  let  di = DeclarationIndex{value: self.global_declaration_list.len()};
+
+  self.global_declaration_list.push(d);
+
+  di
+}
+
+
+pub fn
+get_global_declaration(&self, i: DeclarationIndex)-> Option<&Declaration>
+{
+    if i.value < self.global_declaration_list.len()
+    {
+      return Some(&self.global_declaration_list[i.value]);
+    }
+
+
+  None
+}
+
+
+
+
 pub fn
 push_declaration(&mut self, d: Declaration)-> DeclarationIndex
 {
@@ -218,6 +252,8 @@ print_declaration(&self, i: DeclarationIndex)
       d.print(self);
     }
 }
+
+
 
 
 pub fn
@@ -408,7 +444,7 @@ print(&self)
 {
   print!("library\n{{\n");
 
-    for decl in &self.declaration_list
+    for decl in &self.global_declaration_list
     {
       decl.print(self);
 

@@ -10,7 +10,7 @@ use super::allocation::{
   AllocationLink,
 };
 
-use super::block::{
+use super::line::{
   BlockLink,
 };
 
@@ -292,6 +292,7 @@ print(&self)
 
 
 #[derive(Clone,Copy)]
+#[allow(dead_code)]
 pub enum
 BinaryOperator
 {
@@ -430,7 +431,7 @@ AllocatingOperation
 
 
 pub fn
-resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
+resolve(&mut self, fi: usize, blkop_ls: &Vec<(String,usize)>, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
 {
     match self
     {
@@ -454,6 +455,12 @@ resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocat
         {
             for phio in phio_ls
             {
+                if phio.from.resolve(blkop_ls).is_err()
+                {
+                  return Err(());
+                }
+
+
                 if phio.value.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_err()
                 {
                   println!("AllocatingOperation::resolve error: Phi resolve is failed");

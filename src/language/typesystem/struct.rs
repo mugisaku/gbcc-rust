@@ -70,6 +70,7 @@ Struct
 }
 
 
+#[allow(dead_code)]
 impl
 Struct
 {
