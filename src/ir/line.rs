@@ -2,7 +2,10 @@
 
 use super::allocation::{
   Allocation,
-  AllocationLink,
+  AllocationID,
+  Source,
+  Destination,
+  Operand,
 };
 
 use super::collection::{
@@ -11,18 +14,18 @@ use super::collection::{
 
 
 use super::allocating_operation::{
-  Operand,
   UnaryOperator,
   BinaryOperator,
   AllocatingOperation,
-  PhiOperand,
+  PhiPair,
+  JumpOperand,
+  JumpDestination,
   CallInfo,
 };
 
 
 use super::function::{
   Function,
-  FunctionLink,
 };
 
 use super::memory::{
@@ -32,87 +35,19 @@ use super::memory::{
 
 
 
-#[derive(Clone)]
-pub enum
-BlockLink
-{
-  Unresolved(String),
-     Resolved(usize),
-
-}
-
-
-impl
-BlockLink
-{
-
-
-pub fn
-new(name: &str)-> BlockLink
-{
-  BlockLink::Unresolved(String::from(name))
-}
-
-
-pub fn
-resolve(&mut self, ls: &Vec<(String,usize)>)-> Result<(),()>
-{
-    if let BlockLink::Unresolved(name) = self
-    {
-        for e in ls
-        {
-            if e.0 == name.as_str()
-            {
-              *self = BlockLink::Resolved(e.1);
-
-              return Ok(());
-            }
-        }
-
-
-      println!("BlockLink::resolve error: block <{}> is not found",name);
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-print(&self, coll: &Collection, f: &Function)
-{
-    match self
-    {
-  BlockLink::Unresolved(name)=>{print!("{}(UNRESOLVED)",name);},
-  BlockLink::Resolved(i)=>
-        {
-            if let Some(name) = f.get_block_name(*i)
-            {
-              print!("{}",name);
-            }
-        },
-    }
-}
-
-
-}
-
-
-
-
 pub enum
 Line
 {
-  AllocatingOperation(AllocationLink,usize,AllocatingOperation),
+  AllocatingOperation(Destination,usize,AllocatingOperation),
 
-  CopyWord(AllocationLink,AllocationLink),
-  CopyString(AllocationLink,AllocationLink,usize),
+  CopyWord(Destination,Source),
+  CopyString(Destination,Source,usize),
   Message(String),
-  Print(AllocationLink,char),
-  BlockOpen(String),
-  Jump(BlockLink),
-  Branch(AllocationLink,BlockLink,BlockLink),
-  Return(Option<Operand>),
+  Print(Source,char),
+  Label(String),
+  Jump(JumpDestination),
+  Branch(Source,JumpDestination,JumpDestination),
+  Return(Option<(Source,usize)>),
 
 }
 
@@ -126,12 +61,9 @@ Line
 pub fn
 get_allocation_data(&self)-> Option<(String,usize)>
 {
-    if let Line::AllocatingOperation(ln,sz,op) = self
+    if let Line::AllocatingOperation(dst,sz,_) = self
     {
-        if let AllocationLink::Unresolved(name) = ln
-        {
-          return Some((name.clone(),*sz));
-        }
+      return Some((dst.name.clone(),*sz));
     }
 
 
@@ -140,29 +72,97 @@ get_allocation_data(&self)-> Option<(String,usize)>
 
 
 pub fn
-resolve(&mut self, fi: usize, blkop_ls: &Vec<(String,usize)>, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
+link_to_function(&mut self, f_name_ls: &Vec<String>)-> Result<(),()>
+{
+    if let Line::AllocatingOperation(_,_,ao) = self
+    {
+        if let AllocatingOperation::Call(ci) = ao
+        {
+            for i in 0..f_name_ls.len()
+            {
+                if f_name_ls[i] == ci.function_name
+                {
+                  ci.function_index = i;
+
+                  return Ok(());
+                }
+            }
+
+
+          return Err(());
+        }
+    }
+
+
+  Ok(())
+}
+
+
+pub fn
+link_to_label(&mut self, ls: &Vec<(String,usize)>)-> Result<(),()>
 {
     match self
     {
-  Line::AllocatingOperation(ln,_,ao)=>
+  Line::AllocatingOperation(dst,_,ao)=>
         {
-            if ln.resolve(fi,         p_alo_ls,l_alo_ls,g_alo_ls         ).is_ok()
-            && ao.resolve(fi,blkop_ls,p_alo_ls,l_alo_ls,g_alo_ls,fname_ls).is_ok()
+            if let AllocatingOperation::Phi(o_ls,_) = ao
+            {
+                for o in o_ls
+                {
+                    if o.from.link(ls).is_err()
+                    {
+                      return Err(());
+                    }
+                }
+            }
+
+
+          Ok(())
+        },
+  Line::Jump(dst)=>
+        {
+          dst.link(ls)
+        },
+  Line::Branch(_,on_true,on_false)=>
+        {
+            if   on_true.link(ls).is_ok()
+             && on_false.link(ls).is_ok()
             {
               Ok(())
             }
 
           else
             {
-              println!("Line::resolve error: AllocatingOperation resolve is failed");
+              Err(())
+            }
+        },
+  _=>{Ok(())}
+    }
+}
 
+
+pub fn
+link_to_allocation(&mut self, g_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, para_ls: &Vec<Allocation>)-> Result<(),()>
+{
+    match self
+    {
+  Line::AllocatingOperation(dst,_,ao)=>
+        {
+            if  dst.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
+             && ao.link_to_allocation(g_alo_ls,l_alo_ls,para_ls).is_ok()
+            {
+              Ok(())
+            }
+
+          else
+            {
               Err(())
             }
         }
   Line::CopyWord(dst,src)=>
         {
-            if dst.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            && src.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
+            if  dst.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
+             && src.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
             {
               Ok(())
             }
@@ -174,8 +174,8 @@ resolve(&mut self, fi: usize, blkop_ls: &Vec<(String,usize)>, p_alo_ls: &Vec<All
         },
   Line::CopyString(dst,src,_)=>
         {
-            if dst.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            && src.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
+            if  dst.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
+             && src.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
             {
               Ok(())
             }
@@ -185,83 +185,47 @@ resolve(&mut self, fi: usize, blkop_ls: &Vec<(String,usize)>, p_alo_ls: &Vec<All
               Err(())
             }
         },
-  Line::Message(_)=>{Ok(())},
   Line::Print(target,_)=>
         {
-          target.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
+          target.link(g_alo_ls,l_alo_ls,para_ls)
         },
-  Line::BlockOpen(_)=>
+  Line::Branch(cond,_,_)=>
         {
-          Ok(())
+          cond.link(g_alo_ls,l_alo_ls,para_ls)
         },
-  Line::Jump(dst)=>
+  Line::Return(opt)=>
         {
-          dst.resolve(blkop_ls)
-        },
-  Line::Branch(cond,on_true,on_false)=>
-        {
-            if     cond.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            &&  on_true.resolve(blkop_ls).is_ok()
-            && on_false.resolve(blkop_ls).is_ok()
+            if let Some((src,_)) = opt
             {
-              Ok(())
+              return src.link(g_alo_ls,l_alo_ls,para_ls);
             }
 
-          else
-            {
-              Err(())
-            }
-        },
-  Line::Return(o_opt)=>
-        {
-            if let Some(o) = o_opt
-            {
-              o.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
-            }
 
-          else
-            {
-              Ok(())
-            }
+          return Ok(());
         },
+  _=>{Ok(())}
     }
 }
 
 
 pub fn
-print(&self, coll: &Collection, f: &Function)
+print(&self)
 {
     match self
     {
-  Line::AllocatingOperation(ln,_,ao)=>
+  Line::AllocatingOperation(dst,sz,ao)=>
         {
-          ln.print(coll,1);
+          print!("{} = ({})",&dst.name,*sz);
 
-          print!(" = ");
-
-          ao.print(coll,f);
+          ao.print();
         }
-  Line::CopyWord(src,dst)=>
+  Line::CopyWord(dst,src)=>
         {
-          print!("copy_word ");
-
-          src.print(coll,0);
-
-          print!(" ");
-
-          dst.print(coll,0);
+          print!("copy_word {} {}",&dst.name,&src.name);
         },
   Line::CopyString(dst,src,sz)=>
         {
-          print!("copy_string ");
-
-          src.print(coll,0);
-
-          print!(" ");
-
-          dst.print(coll,0);
-
-          print!(" {}",*sz);
+          print!("copy_string  {} {} {}",&dst.name,&src.name,*sz);
         },
   Line::Message(s)=>
         {
@@ -269,43 +233,27 @@ print(&self, coll: &Collection, f: &Function)
         },
   Line::Print(target,c)=>
         {
-          print!("print ");
-
-          target.print(coll,0);
-
-          print!(" {}",c);
+          print!("print {} {}",&target.name,c);
         },
-  Line::BlockOpen(name)=>
+  Line::Label(name)=>
         {
-          print!("BLOCK {}:",name);
+          print!("LABEL {}:",name);
         },
   Line::Jump(dst)=>
         {
-          print!("jmp ");
-
-          dst.print(coll,f);
+          print!("jmp {}",&dst.name);
         },
   Line::Branch(cond,on_true,on_false)=>
         {
-          print!("br ");
-
-          cond.print(coll,0);
-
-          print!(" ");
-
-          on_true.print(coll,f);
-
-          print!(" ");
-
-          on_false.print(coll,f);
+          print!("br {} {} {}",&cond.name,&on_true.name,&on_false.name);
         },
-  Line::Return(o_opt)=>
+  Line::Return(opt)=>
         {
-          print!("ret ");
+          print!("ret");
 
-            if let Some(o) = o_opt
+            if let Some((src,sz)) = opt
             {
-              o.print(coll);
+              print!(" {} {}",&src.name,sz);
             }
         },
     }
@@ -314,182 +262,223 @@ print(&self, coll: &Collection, f: &Function)
 
 
 
+}
+
+
+
+
+pub struct
+LineList
+{
+  pub(crate) content: Vec<Line>
+
+}
+
+
+impl
+LineList
+{
+
+
+pub fn
+new()-> LineList
+{
+  LineList{content: Vec::new()}
+}
+
+
 fn
-un(dst: &str, sz: usize, o: Operand, u: UnaryOperator)-> Line
+add_un(&mut self, dst: &str, sz: usize, o: &str, u: UnaryOperator)
 {
-  let  ao = AllocatingOperation::Unary(o,u);
+  let  ao = AllocatingOperation::Unary(Source::new(o),u);
 
-  Line::AllocatingOperation(AllocationLink::new(dst),sz,ao)
+  self.content.push(Line::AllocatingOperation(Destination::new(dst),sz,ao));
 }
 
 
-pub fn        exs8(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::ExS8)}
-pub fn       exs16(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::ExS16)}
-pub fn       exs32(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::ExS32)}
-pub fn       exf32(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::ExF32)}
-pub fn        stof(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::StoF)}
-pub fn        ftos(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::FtoS)}
-pub fn         not(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::Not)}
-pub fn logical_not(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::LogicalNot)}
-pub fn         neg(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::Neg)}
-pub fn        negf(dst: &str, o: Operand)-> Line{Self::un(dst,WORD_SIZE,o,UnaryOperator::NegF)}
+pub fn         add_exs8(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::ExS8);}
+pub fn        add_exs16(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::ExS16);}
+pub fn        add_exs32(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::ExS32);}
+pub fn        add_exf32(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::ExF32);}
+pub fn         add_stof(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::StoF);}
+pub fn         add_ftos(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::FtoS);}
+pub fn          add_not(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::Not);}
+pub fn  add_logical_not(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::LogicalNot);}
+pub fn          add_neg(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::Neg);}
+pub fn         add_negf(&mut self, dst: &str, o: (&str,)){self.add_un(dst,WORD_SIZE,o.0,UnaryOperator::NegF);}
 
 
 
 
 pub fn
-bin(dst: &str, sz: usize, l: Operand, r: Operand, b: BinaryOperator)-> Line
+add_bin(&mut self, dst: &str, sz: usize, o: (&str,&str), b: BinaryOperator)
 {
-  let  ao = AllocatingOperation::Binary(l,r,b);
+  let  ao = AllocatingOperation::Binary(Source::new(o.0),Source::new(o.1),b);
 
-  Line::AllocatingOperation(AllocationLink::new(dst),sz,ao)
+  self.content.push(Line::AllocatingOperation(Destination::new(dst),sz,ao));
 }
 
 
-pub fn  addi(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::AddI)}
-pub fn  addu(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::AddU)}
-pub fn  addf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::AddF)}
-pub fn  subi(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::SubI)}
-pub fn  subu(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::SubU)}
-pub fn  subf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::SubF)}
-pub fn  muli(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::MulI)}
-pub fn  mulu(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::MulU)}
-pub fn  mulf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::MulF)}
-pub fn  divi(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::DivI)}
-pub fn  divu(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::DivU)}
-pub fn  divf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::DivF)}
-pub fn  remi(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::RemI)}
-pub fn  remu(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::RemU)}
-pub fn  remf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::RemF)}
-pub fn  shl(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::Shl)}
-pub fn  shr(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::Shr)}
-pub fn  and(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::And)}
-pub fn   or(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::Or)}
-pub fn  xor(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::Xor)}
+pub fn  add_addi(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::AddI)}
+pub fn  add_addu(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::AddU)}
+pub fn  add_addf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::AddF)}
+pub fn  add_subi(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::SubI)}
+pub fn  add_subu(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::SubU)}
+pub fn  add_subf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::SubF)}
+pub fn  add_muli(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::MulI)}
+pub fn  add_mulu(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::MulU)}
+pub fn  add_mulf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::MulF)}
+pub fn  add_divi(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::DivI)}
+pub fn  add_divu(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::DivU)}
+pub fn  add_divf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::DivF)}
+pub fn  add_remi(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::RemI)}
+pub fn  add_remu(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::RemU)}
+pub fn  add_remf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::RemF)}
+pub fn  add_shl(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::Shl)}
+pub fn  add_shr(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::Shr)}
+pub fn  add_and(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::And)}
+pub fn   add_or(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::Or)}
+pub fn  add_xor(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::Xor)}
 
 
-pub fn     eq(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::Eq)}
-pub fn    neq(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::Neq)}
-pub fn    lti(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::LtI)}
-pub fn    ltu(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::LtU)}
-pub fn    ltf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::LtF)}
-pub fn  lteqi(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::LteqI)}
-pub fn  ltequ(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::LteqU)}
-pub fn  lteqf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::LteqF)}
-pub fn    gti(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::GtI)}
-pub fn    gtu(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::GtU)}
-pub fn    gtf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::GtF)}
-pub fn  gteqi(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::GteqI)}
-pub fn  gtequ(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::GteqU)}
-pub fn  gteqf(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::GteqF)}
+pub fn     add_eq(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::Eq)}
+pub fn    add_neq(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::Neq)}
+pub fn    add_lti(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::LtI)}
+pub fn    add_ltu(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::LtU)}
+pub fn    add_ltf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::LtF)}
+pub fn  add_lteqi(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::LteqI)}
+pub fn  add_ltequ(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::LteqU)}
+pub fn  add_lteqf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::LteqF)}
+pub fn    add_gti(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::GtI)}
+pub fn    add_gtu(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::GtU)}
+pub fn    add_gtf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::GtF)}
+pub fn  add_gteqi(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::GteqI)}
+pub fn  add_gtequ(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::GteqU)}
+pub fn  add_gteqf(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::GteqF)}
 
-pub fn  logical_and(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::LogicalAnd)}
-pub fn   logical_or(dst: &str, l: Operand, r: Operand)-> Line{Self::bin(dst,WORD_SIZE,l,r,BinaryOperator::LogicalOr)}
-
-
-pub fn
-alo(dst: &str, sz: usize)-> Line
-{
-  Line::AllocatingOperation(AllocationLink::new(dst),sz,AllocatingOperation::Allocate)
-}
+pub fn  add_logical_and(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::LogicalAnd)}
+pub fn   add_logical_or(&mut self, dst: &str, o: (&str,&str)){self.add_bin(dst,WORD_SIZE,o,BinaryOperator::LogicalOr)}
 
 
 pub fn
-addr(dst: &str, src: &str)-> Line
+add_alo(&mut self, dst: &str, sz: usize)
 {
-  Line::AllocatingOperation(AllocationLink::new(dst),WORD_SIZE,AllocatingOperation::Address(AllocationLink::new(src)))
+  self.content.push(Line::AllocatingOperation(Destination::new(dst),sz,AllocatingOperation::Allocate));
 }
 
 
 pub fn
-phi(dst: &str, sz: usize, ops: Vec<PhiOperand>)-> Line
+add_movu64(&mut self, dst: &str, u: u64)
 {
-  Line::AllocatingOperation(AllocationLink::new(dst),sz,AllocatingOperation::Phi(ops))
+  self.content.push(Line::AllocatingOperation(Destination::new(dst),WORD_SIZE,AllocatingOperation::MoveU64(u)));
 }
 
 
 pub fn
-cal(dst: &str, ret_sz: usize, target: &str, args: Vec<Operand>)-> Line
+add_movf64(&mut self, dst: &str, f: f64)
 {
-  let  ci = CallInfo{target: FunctionLink::new(target), argument_list: args};
-
-  Line::AllocatingOperation(AllocationLink::new(dst),ret_sz,AllocatingOperation::Call(ci))
+  self.content.push(Line::AllocatingOperation(Destination::new(dst),WORD_SIZE,AllocatingOperation::MoveF64(f)));
 }
 
 
 pub fn
-cpyw(dst: &str, src: &str)-> Line
+add_addr(&mut self, dst: &str, src: (&str,))
 {
-  let  dst_al = AllocationLink::new(dst);
-  let  src_al = AllocationLink::new(src);
-
-  Line::CopyWord(dst_al,src_al)
+  self.content.push(Line::AllocatingOperation(Destination::new(dst),WORD_SIZE,AllocatingOperation::Address(Source::new(src.0))));
 }
 
 
 pub fn
-cpys(dst: &str, src: &str, sz: usize)-> Line
+add_phi(&mut self, dst: &str, sz: usize, ops: Vec<PhiPair>, defau: &str)
 {
-  let  dst_al = AllocationLink::new(dst);
-  let  src_al = AllocationLink::new(src);
+  let  ao = AllocatingOperation::Phi(ops,Source::new(defau));
 
-  Line::CopyString(dst_al,src_al,sz)
+  self.content.push(Line::AllocatingOperation(Destination::new(dst),sz,ao));
 }
 
 
 pub fn
-msg(s: &str)-> Line
+add_cal(&mut self, dst: &str, ret_sz: usize, target: (&str,Vec<Source>))
 {
-  Line::Message(String::from(s))
+  let  ci = CallInfo{function_name: String::from(target.0), function_index: 0, argument_list: target.1};
+
+  self.content.push(Line::AllocatingOperation(Destination::new(dst),ret_sz,AllocatingOperation::Call(ci)));
 }
 
 
 pub fn
-pr(s: &str, c: char)-> Line
+add_cpyw(&mut self, dst: &str, src: (&str,))
 {
-  Line::Print(AllocationLink::new(s),c)
+  let  dst_al = Destination::new(dst);
+  let  src_al =      Source::new(src.0);
+
+  self.content.push(Line::CopyWord(dst_al,src_al));
 }
 
 
 pub fn
-blkop(name: &str)-> Line
+add_cpys(&mut self, dst: &str, src: (&str,usize))
 {
-  Line::BlockOpen(String::from(name))
+  let  dst_al = Destination::new(dst);
+  let  src_al =      Source::new(src.0);
+
+  self.content.push(Line::CopyString(dst_al,src_al,src.1));
 }
 
 
 pub fn
-jmp(name: &str)-> Line
+add_msg(&mut self, s: &str)
 {
-  Line::Jump(BlockLink::new(name))
+  self.content.push(Line::Message(String::from(s)));
 }
 
 
 pub fn
-br(cond: &str, on_true: &str, on_false: &str)-> Line
+add_pr(&mut self, s: &str, c: char)
 {
-  Line::Branch(AllocationLink::new(cond),BlockLink::new(on_true),BlockLink::new(on_false))
+  self.content.push(Line::Print(Source::new(s),c));
 }
 
 
 pub fn
-ret(op_opt: Option<Operand>)-> Line
+add_lb(&mut self, name: &str)
 {
-  Line::Return(op_opt)
+  self.content.push(Line::Label(String::from(name)));
 }
-
-
-
-
-}
-
-
 
 
 pub fn
-new_line_list()-> Vec<Line>
+add_jmp(&mut self, name: &str)
 {
-  Vec::new()
+  self.content.push(Line::Jump(JumpDestination::new(name)));
+}
+
+
+pub fn
+add_br(&mut self, cond: &str, dst: (&str,&str))
+{
+  self.content.push(Line::Branch(Source::new(cond),JumpDestination::new(dst.0),JumpDestination::new(dst.1)));
+}
+
+
+pub fn
+add_ret(&mut self)
+{
+  self.content.push(Line::Return(None));
+}
+
+
+pub fn
+add_retval(&mut self, src: &str, sz: usize)
+{
+  let  opt: Option<(Source,usize)> = Some((Source::new(src),sz));
+
+  self.content.push(Line::Return(opt));
+}
+
+
+
+
 }
 
 

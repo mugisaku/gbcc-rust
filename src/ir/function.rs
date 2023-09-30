@@ -6,11 +6,11 @@ use super::memory::{
 
 use super::allocation::{
   Allocation,
-  AllocationKind,
-  AllocationLink,
+  AllocationID,
 };
 
 use super::line::{
+  LineList,
   Line,
 };
 
@@ -18,68 +18,9 @@ use super::collection::{
   Collection,
 };
 
-
-
-
-pub enum
-FunctionLink
-{
-  Unresolved(String),
-    Resolved(usize),
-}
-
-
-impl
-FunctionLink
-{
-
-
-pub fn
-new(name: &str)-> FunctionLink
-{
-  FunctionLink::Unresolved(String::from(name))
-}
-
-
-pub fn
-resolve(&mut self, f_ls: &Vec<Function>)-> Result<(),()>
-{
-    if let FunctionLink::Unresolved(this_name) = self
-    {
-        for i in 0..f_ls.len()
-        {
-            if f_ls[i].name == this_name.as_str()
-            {
-              *self = FunctionLink::Resolved(i);
-
-              return Ok(());
-            }
-        }
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-print(&self, coll: &Collection)
-{
-    match self
-    {
-  FunctionLink::Unresolved(name)=>{print!("{}",name);},
-  FunctionLink::Resolved(i)=>
-        {
-            if let Some(f) = coll.get_function(*i)
-            {
-              print!("{}",&f.name);
-            }
-        },
-    }
-}
-
-
-}
+use super::executor::{
+  Executor,
+};
 
 
 
@@ -93,9 +34,12 @@ Function
 
   pub(crate) return_size: usize,
 
-  pub(crate) line_list: Vec<Line>,
+  pub(crate) line_list: LineList,
 
   pub(crate) allocation_list: Vec<Allocation>,
+
+  pub(crate) parameter_stack_size: usize,
+  pub(crate)     local_stack_size: usize,
 
 }
 
@@ -112,30 +56,39 @@ new(name: &str, sz: usize)-> Function
     name: String::from(name),
     return_size: sz,
     parameter_list: Vec::new(),
-    line_list: Vec::new(),
+    line_list: LineList::new(),
     allocation_list: Vec::new(),
+    parameter_stack_size: 0,
+        local_stack_size: 0,
   }
 }
 
 
 pub fn
-add_line(&mut self, ln: Line)
+set_line_list(&mut self, ln_ls: LineList)
 {
-  self.line_list.push(ln);
+  self.line_list = ln_ls;
+}
+
+
+pub fn
+add_line_list(&mut self, mut ln_ls: LineList)
+{
+  self.line_list.content.append(&mut ln_ls.content);
 }
 
 
 pub fn
 add_allocation(&mut self, name: &str, sz: usize)
 {
-  self.allocation_list.push(Allocation::new_local(name,sz));
+  self.allocation_list.push(Allocation::new(name,sz));
 }
 
 
 pub fn
 add_parameter(&mut self, name: &str, sz: usize)
 {
-  self.parameter_list.push(Allocation::new_parameter(name,sz));
+  self.parameter_list.push(Allocation::new(name,sz));
 }
 
 
@@ -145,6 +98,22 @@ get_allocation(&self, i: usize)-> Option<&Allocation>
     if i < self.allocation_list.len()
     {
       return Some(&self.allocation_list[i]);
+    }
+
+
+  None
+}
+
+
+pub fn
+find_allocation_index(&self, name: &str)-> Option<usize>
+{
+    for i in 0..self.allocation_list.len()
+    {
+        if self.allocation_list[i].name == name
+        {
+          return Some(i);
+        }
     }
 
 
@@ -166,13 +135,13 @@ get_parameter(&self, i: usize)-> Option<&Allocation>
 
 
 pub fn
-get_block_name(&self, i: usize)-> Option<&String>
+find_parameter_index(&self, name: &str)-> Option<usize>
 {
-    if i < self.line_list.len()
+    for i in 0..self.parameter_list.len()
     {
-        if let Line::BlockOpen(name) = &self.line_list[i]
+        if self.parameter_list[i].name == name
         {
-          return Some(name);
+          return Some(i);
         }
     }
 
@@ -181,25 +150,12 @@ get_block_name(&self, i: usize)-> Option<&String>
 }
 
 
-pub fn
-get_allocation_size(&self)-> usize
-{
-    if let Some(alo) = self.allocation_list.last()
-    {
-      return get_aligned(alo.offset+alo.size)
-    }
-
-
-  0
-}
-
-
 fn
 build_local_allocation(&mut self)
 {
   let  mut ls: Vec<(String,usize)> = Vec::new();
 
-    for ln in &self.line_list
+    for ln in &self.line_list.content
     {
         if let Some((name,size)) = ln.get_allocation_data()
         {
@@ -214,56 +170,59 @@ build_local_allocation(&mut self)
     {
       self.add_allocation(&e.0,e.1);
     }
+
+
+  self.parameter_stack_size = Allocation::update_offsets_neg(&mut self.parameter_list,0);
+  self.local_stack_size     = Allocation::update_offsets(    &mut self.allocation_list,Executor::SYSTEM_RESERVED_STACK_SIZE);
 }
 
 
 pub fn
-assign_allocation_offset(&mut self)
+get_label_info_list(&self)-> Vec<(String,usize)>
 {
-  let  mut off: usize = 0;
+  let  mut ls: Vec<(String,usize)> = Vec::new();
 
-    for alo in &mut self.parameter_list
+    for i in 0..self.line_list.content.len()
     {
-      off += get_aligned(alo.size);
-
-      alo.offset = off;
-    }
-
-
-  off = 128;
-
-    for alo in &mut self.allocation_list
-    {
-//        if alo.user_count != 0
+        if let Line::Label(name) = &self.line_list.content[i]
         {
-          alo.offset = off                            ;
-                       off = get_aligned(off+alo.size);
+          ls.push((name.clone(),i));
         }
     }
+
+
+   ls
 }
 
 
 pub fn
-resolve(&mut self, fi: usize, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
+finalize(&mut self, fi: usize, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
 {
   self.build_local_allocation();
 
-  let  mut blkop_ls: Vec<(String,usize)> = Vec::new();
+  let  lb_ls = self.get_label_info_list();
 
-    for i in 0..self.line_list.len()
+    for ln in &mut self.line_list.content
     {
-        if let Line::BlockOpen(name) = &self.line_list[i]
+        if ln.link_to_function(fname_ls).is_err()
         {
-          blkop_ls.push((name.clone(),i));
+          println!("function::finalize error");
+
+          return Err(());
         }
-    }
 
 
-    for ln in &mut self.line_list
-    {
-        if ln.resolve(fi,&blkop_ls,&self.parameter_list,&self.allocation_list,g_alo_ls,fname_ls).is_err()
+        if ln.link_to_label(&lb_ls).is_err()
         {
-          println!("function::resolve_other_links_all error");
+          println!("function::finalize error");
+
+          return Err(());
+        }
+
+
+        if ln.link_to_allocation(g_alo_ls,&self.allocation_list,&self.parameter_list).is_err()
+        {
+          println!("function::finalize error");
 
           return Err(());
         }
@@ -275,15 +234,13 @@ resolve(&mut self, fi: usize, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>
 
 
 pub fn
-print(&self, coll: &Collection)
+print(&self)
 {
-  print!("fn\n{}(",&self.name);
-
+  print!("{}(",&self.name);
+ 
     for p in &self.parameter_list
     {
-      p.print(1);
-
-      print!(",");
+      print!("{},",&p.name);
     }
 
 
@@ -291,9 +248,9 @@ print(&self, coll: &Collection)
 
   print!("\n{{\n");
 
-    for ln in &self.line_list
+    for ln in &self.line_list.content
     {
-      ln.print(coll,self);
+      ln.print();
 
       print!("\n");
     }
@@ -301,6 +258,8 @@ print(&self, coll: &Collection)
 
   print!("\n}}\n");
 }
+
+
 
 
 }

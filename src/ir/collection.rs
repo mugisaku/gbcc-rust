@@ -8,9 +8,10 @@ use super::memory::{
 };
 
 use super::allocation::{
-  AllocationKind,
-  AllocationLink,
+  AllocationID,
   Allocation,
+  Source,
+  Destination,
 };
 
 use super::line::{
@@ -56,16 +57,15 @@ new()-> Collection
 
 
 pub fn
-add_allocation(&mut self, name: &str, sz: usize, mem_opt: Option<Memory>)-> AllocationLink
+add_allocation(&mut self, name: &str, sz: usize, mem_opt: Option<Memory>)-> AllocationID
 {
   let  i = self.allocation_list.len();
 
-  let  ln = AllocationLink::Global(i);
+  let  id = AllocationID::Global(i);
 
   let  a = Allocation{
     name: String::from(name),
     size: sz,
-    kind: AllocationKind::Global,
     memory_opt: mem_opt,
     user_count: 0,
     offset: 0
@@ -74,7 +74,7 @@ add_allocation(&mut self, name: &str, sz: usize, mem_opt: Option<Memory>)-> Allo
 
   self.allocation_list.push(a);
 
-  ln
+  id
 }
 
 
@@ -99,13 +99,13 @@ get_allocation(&self, i: usize)-> Option<&Allocation>
 
 
 pub fn
-get_allocation_by_link(&self, ln: &AllocationLink)-> Option<&Allocation>
+get_allocation_by_id(&self, fi: usize, id: &AllocationID)-> Option<&Allocation>
 {
-    match ln
+    match id
     {
-  AllocationLink::Global(i)=>{self.get_allocation(*i)}
-  AllocationLink::Local(fi,i)=>{self.get_local_allocation(*fi,*i)}
-  AllocationLink::Parameter(fi,i)=> {self.get_parameter(*fi,*i)}
+  AllocationID::Global(i)=>{self.get_allocation(*i)}
+  AllocationID::Local(i)=>{self.get_local_allocation(fi,*i)}
+  AllocationID::Parameter(i)=> {self.get_parameter(fi,*i)}
   _=>{None}
     }
 }
@@ -154,6 +154,22 @@ find_allocation(&self, name: &str)-> Option<&Allocation>
 
 
 pub fn
+find_allocation_index(&self, name: &str)-> Option<usize>
+{
+    for i in 0..self.allocation_list.len()
+    {
+        if self.allocation_list[i].name == name
+        {
+          return Some(i);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
 get_function(&self, i: usize)-> Option<&Function>
 {
     if i < self.function_list.len()
@@ -184,31 +200,13 @@ find_function(&self, name: &str)-> Option<(&Function,usize)>
 }
 
 
-fn
-assign_allocation_offset(&mut self, start_off: usize)
+pub fn
+finalize(&mut self)-> Result<(),()>
 {
-  let  mut off = get_aligned(start_off);
+  self.allocation_area_begin = 0;
 
-  self.allocation_area_begin = off;
+  self.allocation_area_end = Allocation::update_offsets(&mut self.allocation_list,self.allocation_area_begin);
 
-    for alo in &mut self.allocation_list
-    {
-//        if alo.user_count != 0
-        {
-          alo.offset = off;
-
-          off = get_aligned(off+alo.size);
-        }
-    }
-
-
-  self.allocation_area_end = off;
-}
-
-
-fn
-process_functions_all(&mut self)-> Result<(),()>
-{
   let  mut fname_ls: Vec<String> = Vec::new();
 
     for f in &self.function_list
@@ -221,13 +219,10 @@ process_functions_all(&mut self)-> Result<(),()>
     {
       let  f = &mut self.function_list[fi];
 
-        if f.resolve(fi,&self.allocation_list,&fname_ls).is_err()
+        if f.finalize(fi,&self.allocation_list,&fname_ls).is_err()
         {
           return Err(());
         }
-
-
-      f.assign_allocation_offset();
     }
 
 
@@ -236,26 +231,11 @@ process_functions_all(&mut self)-> Result<(),()>
 
 
 pub fn
-finalize(&mut self)-> Result<(),()>
-{
-    if self.process_functions_all().is_ok()
-    {
-      self.assign_allocation_offset(0);
-
-      return Ok(());
-    }
-
-
-  Err(())
-}
-
-
-pub fn
 print(&self)
 {
     for alo in &self.allocation_list
     {
-      alo.print(1);
+      alo.print();
 
       print!("\n");
     }
@@ -263,7 +243,7 @@ print(&self)
 
     for f in &self.function_list
     {
-      f.print(self);
+      f.print();
 
       print!("\n");
     }

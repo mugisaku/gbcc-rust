@@ -6,7 +6,6 @@ use crate::language::library::{
   ExpressionIndex,
   DeclarationIndex,
   StringIndex,
-  TypeIndex,
   Library
 };
 
@@ -22,11 +21,9 @@ use crate::language::expression::read_expression::read_expression;
 use crate::language::typesystem::{
   Type,
   r#struct::Struct,
-  r#union::Union,
   r#enum::Enum,
   r#enum::Enumerator,
   r#enum::Value,
-  function_signature::FunctionSignature,
   read_type::read_type,
 };
 
@@ -58,7 +55,7 @@ read_parameter(dir: &Directory, lib: &mut Library)-> Result<DeclarationIndex,()>
         {
             if let Ok(ty) = read_type(ty_d,lib)
             {
-              let  def = Definition::Parameter(Storage{type_index: lib.push_type(ty), expression_index_opt: None});
+              let  def = Definition::Parameter(Storage{r#type: ty, expression_index_opt: None});
 
               let  decl = Declaration{name: name, definition: def};
 
@@ -109,8 +106,6 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
     {
       let  name = id.clone();
 
-      let  mut fnsig = FunctionSignature::new();
-
       cur.advance(1);
 
         if let Some(parals_d) = cur.get_directory_with_name("parameter_list")
@@ -119,13 +114,13 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
             {
               cur.advance(1);
 
-              let  mut ret_ti_opt: Option<TypeIndex> = None;
+              let  mut ret_ty = Type::Void;
 
                 if let Some(ty_d) = cur.seek_directory_with_name("type")
                 {
                     if let Ok(ty) = read_type(ty_d,lib)
                     {
-                      ret_ti_opt = Some(lib.push_type(ty));
+                      ret_ty = ty;
 
                       cur.advance(1);
                     }
@@ -138,7 +133,7 @@ read_fn(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
                     {
                       let  bi = lib.push_block(blk);
 
-                      let  f = Function{parameter_list: para_ls, return_type_index_opt: ret_ti_opt, block_index: bi};
+                      let  f = Function{parameter_list: para_ls, return_type: ret_ty, block_index: bi};
 
                       let  decl = Declaration::new(&name,Definition::Fn(f));
 
@@ -165,7 +160,7 @@ read_storage(dir: &Directory, lib: &mut Library)-> Result<(String,Storage),()>
     {
       let  name = id.clone();
 
-      let  mut sto = Storage{type_index: TypeIndex{value: 0}, expression_index_opt: None};
+      let  mut sto = Storage{r#type: Type::Void, expression_index_opt: None};
 
       cur.advance(1);
 
@@ -173,7 +168,7 @@ read_storage(dir: &Directory, lib: &mut Library)-> Result<(String,Storage),()>
         {
             if let Ok(ty) = read_type(ty_d,lib)
             {
-              sto.type_index = lib.push_type(ty);
+              sto.r#type = ty;
             }
 
 
@@ -425,7 +420,7 @@ read_alias(dir: &Directory, lib: &mut Library)-> Result<Declaration,()>
         {
             if let Ok(ty) = read_type(ty_d,lib)
             {
-              let  def = Definition::Alias(lib.push_type(ty));
+              let  def = Definition::Alias(ty);
 
               let  decl = Declaration::new(&name,def);
 

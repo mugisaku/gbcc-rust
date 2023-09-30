@@ -6,7 +6,6 @@ pub mod dictionary;
 use super::library::{
   ExpressionIndex,
   StringIndex,
-  TypeIndex,
   Library
 };
 
@@ -35,26 +34,24 @@ OperandCore
 
 
 pub fn
-get_type_index(&self, lib: &Library)-> Result<TypeIndex,()>
+get_type(&self, lib: &Library)-> Result<Type,()>
 {
     match self
     {
   OperandCore::Identifier(s)=>
         {
-               if s ==  "true"{return Ok(Library::get_embedded_type_index(Type::Bool));}
-          else if s == "false"{return Ok(Library::get_embedded_type_index(Type::Bool));}
+               if s ==  "true"{return Ok(Type::Bool);}
+          else if s == "false"{return Ok(Type::Bool);}
         },
-  OperandCore::Integer(u)=>{return Ok(Library::get_embedded_type_index(Type::U64));},
-  OperandCore::Floating(f)=>{return Ok(Library::get_embedded_type_index(Type::F64));},
-  OperandCore::Character(c)=>{return Ok(Library::get_embedded_type_index(Type::Char));},
-  OperandCore::String(_)=>
-        {
-        },
+  OperandCore::Integer(_)  =>{return Ok(Type::U64);},
+  OperandCore::Floating(_) =>{return Ok(Type::F64);},
+  OperandCore::Character(_)=>{return Ok(Type::Char);},
+  OperandCore::String(_)   =>{return Ok(Type::Reference(Box::new(Type::Char)));},
   OperandCore::Expression(i)=>
         {
             if let Some(e) = lib.get_expression(*i)
             {
-              return e.get_type_index(lib);
+              return e.get_type(lib);
             }
         },
     }
@@ -118,43 +115,33 @@ PostfixOperator
 
 
 pub fn
-get_type_index(&self, tx: TypeIndex, lib: &Library)-> Result<TypeIndex,()>
+get_type(&self, ty: &Type, lib: &Library)-> Result<Type,()>
 {
-    if let Some(t) = lib.get_type(tx)
+    match self
     {
-        match self
+  PostfixOperator::Access(s)=>
         {
-      PostfixOperator::Access(s)=>
-            {
 /*
-                if let Ok(ti) = TypeInfo::make(tx,lib)
+            if let Ok(ti) = TypeInfo::make(tx,lib)
+            {
+                if let Some(f) = ti.get_field(s)
                 {
-                    if let Some(f) = ti.get_field(s)
-                    {
-                      return Ok(f.type_index);
-                    }
+                  return Ok(f.type_index);
                 }
+            }
 */
-            },
-      PostfixOperator::Subscript(_)=>
-            {
-                if let Type::Array(el_ti,_) = t
-                {
-                  return Ok(*el_ti);
-                }
-            },
-      PostfixOperator::Call(_)=>
-            {
-                if let Type::FunctionPointer(_) = t
-                {
-                }
-            },
-      PostfixOperator::NameResolution(_)=>
-            {
-            },
-      PostfixOperator::Increment=>{},
-      PostfixOperator::Decrement=>{},
-        }
+        },
+  PostfixOperator::Subscript(_)=>
+        {
+        },
+  PostfixOperator::Call(_)=>
+        {
+        },
+  PostfixOperator::NameResolution(_)=>
+        {
+        },
+  PostfixOperator::Increment=>{},
+  PostfixOperator::Decrement=>{},
     }
 
 
@@ -230,98 +217,83 @@ PrefixOperator
 
 
 pub fn
-get_type_index(&self, ti: TypeIndex, lib: &Library)-> Result<TypeIndex,()>
+get_type(&self, ty: &Type, lib: &Library)-> Result<Type,()>
 {
-    if let Some(t) = lib.get_type(ti)
+    match self
     {
-        match self
+  PrefixOperator::Neg=>
         {
-      PrefixOperator::Neg=>
+            if ty.is_signed_integer() || ty.is_floating()
             {
-                match t
-                {
-              Type::I8=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I16=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I32=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I64=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::ISize=>{Ok(Library::get_embedded_type_index(Type::ISize))}
-              Type::F32=>{Ok(Library::get_embedded_type_index(Type::F64))}
-              Type::F64=>{Ok(Library::get_embedded_type_index(Type::F64))}
-              _=>{Err(())}
-                }
-            },
-      PrefixOperator::Not=>
-            {
-                match t
-                {
-              Type::I8=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I16=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I32=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I64=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::ISize=>{Ok(Library::get_embedded_type_index(Type::ISize))}
-              Type::U8=>{Ok(Library::get_embedded_type_index(Type::U64))}
-              Type::U16=>{Ok(Library::get_embedded_type_index(Type::U64))}
-              Type::U32=>{Ok(Library::get_embedded_type_index(Type::U64))}
-              Type::U64=>{Ok(Library::get_embedded_type_index(Type::U64))}
-              Type::USize=>{Ok(Library::get_embedded_type_index(Type::USize))}
-              _=>{Err(())}
-                }
-            },
-      PrefixOperator::Address=>
-             {
-                match t
-                {
-              Type::Reference(_)=>{Ok(Library::get_embedded_type_index(Type::U64))}
-              _=>{Err(())}
-                }
-            },
-      PrefixOperator::Dereference=>
-             {
-                match t
-                {
-              Type::Pointer(_)=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::Reference(_)=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              _=>{Err(())}
-                }
-            },
-      PrefixOperator::LogicalNot=>
-             {
-                match t
-                {
-              Type::Bool=>{Ok(Library::get_embedded_type_index(Type::Bool))}
-              _=>{Err(())}
-                }
-            },
-      PrefixOperator::Increment=>
-             {
-                match t
-                {
-              Type::I8=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I16=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I32=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I64=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::ISize=>{Ok(Library::get_embedded_type_index(Type::ISize))}
-              _=>{Err(())}
-                }
-            },
-      PrefixOperator::Decrement=>
-            {
-                match t
-                {
-              Type::I8=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I16=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I32=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::I64=>{Ok(Library::get_embedded_type_index(Type::I64))}
-              Type::ISize=>{Ok(Library::get_embedded_type_index(Type::ISize))}
-              _=>{Err(())}
-                }
-            },
-        }
-    }
+              Ok(ty.clone())
+            }
 
-  else
-    {
-      Err(())
+          else
+            {
+              Err(())
+            }
+        },
+  PrefixOperator::Not=>
+        {
+            if ty.is_integer()
+            {
+              Ok(ty.clone())
+            }
+
+          else
+            {
+              Err(())
+            }
+        },
+  PrefixOperator::Address=>
+         {
+            match ty
+            {
+          Type::Reference(_)=>{Ok(Type::U64)}
+          _=>{Err(())}
+            }
+        },
+  PrefixOperator::Dereference=>
+         {
+            match ty
+            {
+          Type::Pointer(_)=>{Ok(Type::I64)}
+          Type::Reference(_)=>{Ok(Type::I64)}
+          _=>{Err(())}
+            }
+        },
+  PrefixOperator::LogicalNot=>
+         {
+            match ty
+            {
+          Type::Bool=>{Ok(Type::Bool)}
+          _=>{Err(())}
+            }
+        },
+  PrefixOperator::Increment=>
+         {
+            match ty
+            {
+          Type::I8=>{Ok(Type::I64)}
+          Type::I16=>{Ok(Type::I64)}
+          Type::I32=>{Ok(Type::I64)}
+          Type::I64=>{Ok(Type::I64)}
+          Type::ISize=>{Ok(Type::ISize)}
+          _=>{Err(())}
+            }
+        },
+  PrefixOperator::Decrement=>
+        {
+            match ty
+            {
+          Type::I8=>{Ok(Type::I64)}
+          Type::I16=>{Ok(Type::I64)}
+          Type::I32=>{Ok(Type::I64)}
+          Type::I64=>{Ok(Type::I64)}
+          Type::ISize=>{Ok(Type::ISize)}
+          _=>{Err(())}
+            }
+        },
     }
 }
 
@@ -378,10 +350,118 @@ BinaryOperator
 {
 
 
-pub fn
-get_type_index(&self, lti: TypeIndex, rti: TypeIndex, lib: &Library)-> Result<TypeIndex,()>
+fn
+for_arithmetic(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
 {
+    if  (lt.is_i8()    == rt.is_i8())
+     || (lt.is_i16()   == rt.is_i16())
+     || (lt.is_i32()   == rt.is_i32())
+     || (lt.is_i64()   == rt.is_i64())
+     || (lt.is_isize() == rt.is_isize())
+     || (lt.is_u8()    == rt.is_u8())
+     || (lt.is_u16()   == rt.is_u16())
+     || (lt.is_u32()   == rt.is_u32())
+     || (lt.is_u64()   == rt.is_u64())
+     || (lt.is_usize() == rt.is_usize())
+     || (lt.is_f32()   == rt.is_f32())
+     || (lt.is_f64()   == rt.is_f64())
+    {
+      return Ok(lt.clone());
+    }
+
+
   Err(())
+}
+
+
+fn
+for_comparison(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+{
+    if  (lt.is_char()  == rt.is_char())
+     || (lt.is_i8()    == rt.is_i8())
+     || (lt.is_i16()   == rt.is_i16())
+     || (lt.is_i32()   == rt.is_i32())
+     || (lt.is_i64()   == rt.is_i64())
+     || (lt.is_isize() == rt.is_isize())
+     || (lt.is_u8()    == rt.is_u8())
+     || (lt.is_u16()   == rt.is_u16())
+     || (lt.is_u32()   == rt.is_u32())
+     || (lt.is_u64()   == rt.is_u64())
+     || (lt.is_usize() == rt.is_usize())
+     || (lt.is_f32()   == rt.is_f32())
+     || (lt.is_f64()   == rt.is_f64())
+    {
+      return Ok(lt.clone());
+    }
+
+
+  Err(())
+}
+
+
+fn
+for_bitshift(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+{
+    if lt.is_integer() && rt.is_unsigned_integer()
+    {
+      return Ok(lt.clone());
+    }
+
+
+  Err(())
+}
+
+
+fn
+for_bitwise(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+{
+    if lt.is_integer() && rt.is_unsigned_integer()
+    {
+      return Ok(lt.clone());
+    }
+
+
+  Err(())
+}
+
+
+fn
+for_logical(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+{
+    if lt.is_bool() && rt.is_bool()
+    {
+      return Ok(Type::Bool);
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+get_type(&self, lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+{
+    match self
+    {
+  BinaryOperator::Add=>{Self::for_arithmetic(lt,rt,lib)},
+  BinaryOperator::Sub=>{Self::for_arithmetic(lt,rt,lib)},
+  BinaryOperator::Mul=>{Self::for_arithmetic(lt,rt,lib)},
+  BinaryOperator::Div=>{Self::for_arithmetic(lt,rt,lib)},
+  BinaryOperator::Rem=>{Self::for_arithmetic(lt,rt,lib)},
+  BinaryOperator::Shl=>{Self::for_bitshift(lt,rt,lib)},
+  BinaryOperator::Shr=>{Self::for_bitshift(lt,rt,lib)},
+  BinaryOperator::And=>{Self::for_bitwise(lt,rt,lib)},
+  BinaryOperator::Or =>{Self::for_bitwise(lt,rt,lib)},
+  BinaryOperator::Xor=>{Self::for_bitwise(lt,rt,lib)},
+  BinaryOperator::Eq  =>{Self::for_comparison(lt,rt,lib)},
+  BinaryOperator::Neq =>{Self::for_comparison(lt,rt,lib)},
+  BinaryOperator::Lt  =>{Self::for_comparison(lt,rt,lib)},
+  BinaryOperator::Lteq=>{Self::for_comparison(lt,rt,lib)},
+  BinaryOperator::Gt  =>{Self::for_comparison(lt,rt,lib)},
+  BinaryOperator::Gteq=>{Self::for_comparison(lt,rt,lib)},
+  BinaryOperator::LogicalAnd=>{Self::for_logical(lt,rt,lib)},
+  BinaryOperator::LogicalOr =>{Self::for_logical(lt,rt,lib)},
+    }
 }
 
 
@@ -530,15 +610,15 @@ Operand
 
 
 pub fn
-get_type_index(&self, lib: &Library)-> Result<TypeIndex,()>
+get_type(&self, lib: &Library)-> Result<Type,()>
 {
-    if let Ok(mut lti) = self.core.get_type_index(lib)
+    if let Ok(mut lt) = self.core.get_type(lib)
     {
         for o in &self.postfix_operator_list
         {
-            if let Ok(ti) = o.get_type_index(lti,lib)
+            if let Ok(t) = o.get_type(&lt,lib)
             {
-              lti = ti;
+              lt = t;
             }
 
           else
@@ -550,9 +630,9 @@ get_type_index(&self, lib: &Library)-> Result<TypeIndex,()>
 
         for o in &self.prefix_operator_list
         {
-            if let Ok(ti) = o.get_type_index(lti,lib)
+            if let Ok(t) = o.get_type(&lt,lib)
             {
-              lti = ti;
+              lt = t;
             }
 
           else
@@ -562,7 +642,7 @@ get_type_index(&self, lib: &Library)-> Result<TypeIndex,()>
         }
 
 
-      return Ok(lti);
+      return Ok(lt);
     }
 
 
@@ -651,17 +731,17 @@ make_from_string(s: &str, lib: &mut Library)-> Result<Expression,()>
 
 
 pub fn
-get_type_index(&self, lib: &Library)-> Result<TypeIndex,()>
+get_type(&self, lib: &Library)-> Result<Type,()>
 {
-    if let Ok(mut lti) = self.operand.get_type_index(lib)
+    if let Ok(mut lt) = self.operand.get_type(lib)
     {
         for tail in &self.tail_list
         {
-            if let Ok(rti) = tail.operand.get_type_index(lib)
+            if let Ok(rt) = tail.operand.get_type(lib)
             {
-                if let Ok(new_ti) = tail.operator.get_type_index(lti,rti,lib)
+                if let Ok(new_t) = tail.operator.get_type(&lt,&rt,lib)
                 {
-                  lti = new_ti;
+                  lt = new_t;
                 }
 
               else
@@ -679,11 +759,11 @@ get_type_index(&self, lib: &Library)-> Result<TypeIndex,()>
 
         if let Some(_) = &self.assign_part_opt
         {
-          return Ok(Library::get_embedded_type_index(Type::Void));
+          return Ok(Type::Void);
         }
 
 
-      return Ok(lti);
+      return Ok(lt);
     }
 
 

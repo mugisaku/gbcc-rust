@@ -2,15 +2,14 @@
 
 use super::library::{
   Library,
-  TypeIndex,
 };
 
 
-#[derive(Clone,Copy)]
+#[derive(Clone)]
 pub struct
 Value
 {
-  pub(crate) type_index: TypeIndex,
+  pub(crate) type_code: String,
 
   pub(crate) data: ValueData,
 

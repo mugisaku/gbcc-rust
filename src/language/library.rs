@@ -43,14 +43,6 @@ StringIndex
 
 #[derive(PartialEq,Clone,Copy)]
 pub struct
-TypeIndex
-{
-  pub(crate) value: usize,
-}
-
-
-#[derive(PartialEq,Clone,Copy)]
-pub struct
 DeclarationIndex
 {
   pub(crate) value: usize,
@@ -64,7 +56,6 @@ Library
 {
   pub(crate)  expression_list: Vec<Expression>,
   pub(crate)      string_list: Vec<String>,
-  pub(crate)        type_list: Vec<Type>,
 
   pub(crate) global_declaration_list: Vec<Declaration>,
   pub(crate)        declaration_list: Vec<Declaration>,
@@ -85,29 +76,10 @@ new()-> Library
   let  mut lib = Library{
          expression_list: Vec::new(),
              string_list: Vec::new(),
-               type_list: Vec::new(),
                declaration_list: Vec::new(),
         global_declaration_list: Vec::new(),
               block_list: Vec::new(),
   };
-
-
-  lib.type_list.push(Type::Undefined);
-  lib.type_list.push(Type::Void);
-  lib.type_list.push(Type::Bool);
-  lib.type_list.push(Type::Char);
-  lib.type_list.push(Type::I8);
-  lib.type_list.push(Type::I16);
-  lib.type_list.push(Type::I32);
-  lib.type_list.push(Type::I64);
-  lib.type_list.push(Type::ISize);
-  lib.type_list.push(Type::U8);
-  lib.type_list.push(Type::U16);
-  lib.type_list.push(Type::U32);
-  lib.type_list.push(Type::U64);
-  lib.type_list.push(Type::USize);
-  lib.type_list.push(Type::F32);
-  lib.type_list.push(Type::F64);
 
   lib
 }
@@ -297,108 +269,6 @@ print_string(&self, i: StringIndex)
       print!("{}",s);
     }
 }
-
-
-pub fn
-get_embedded_type_index(t: Type)-> TypeIndex
-{
-    match t
-    {
-  Type::Void=>     {TypeIndex{value:  1}},
-  Type::Bool=>     {TypeIndex{value:  2}},
-  Type::Char=>     {TypeIndex{value:  3}},
-  Type::I8=>       {TypeIndex{value:  4}},
-  Type::I16=>      {TypeIndex{value:  5}},
-  Type::I32=>      {TypeIndex{value:  6}},
-  Type::I64=>      {TypeIndex{value:  7}},
-  Type::ISize=>    {TypeIndex{value:  8}},
-  Type::U8=>       {TypeIndex{value:  9}},
-  Type::U16=>      {TypeIndex{value: 10}},
-  Type::U32=>      {TypeIndex{value: 11}},
-  Type::U64=>      {TypeIndex{value: 12}},
-  Type::USize=>    {TypeIndex{value: 13}},
-  Type::F32=>      {TypeIndex{value: 14}},
-  Type::F64=>      {TypeIndex{value: 15}},
-  _=>{TypeIndex{value:  0}},
-    }
-}
-
-
-pub fn
-push_type(&mut self, t: Type)-> TypeIndex
-{
-    match t
-    {
-  Type::FromExpression(_)=>{TypeIndex{value: 0}},
-  Type::FunctionPointer(_)=>{self.push_type_internal(t)},
-  Type::Pointer(_)=>{self.push_type_internal(t)},
-  Type::Reference(_)=>{self.push_type_internal(t)},
-  Type::Tuple(_)=>{self.push_type_internal(t)},
-  Type::Array(_,_)=>{self.push_type_internal(t)},
-  Type::Symbol(_)=>{self.push_type_internal(t)},
-  _=>{Self::get_embedded_type_index(t)}
-    }
-}
-
-
-pub fn
-push_type_list(&mut self, t_ls: Vec<Type>)-> Vec<TypeIndex>
-{
-  let  mut ti_ls: Vec<TypeIndex> = Vec::new();
-
-    for t in t_ls
-    {
-      ti_ls.push(self.push_type(t));
-    }
-
-
-  ti_ls
-}
-
-
-pub fn
-push_type_internal(&mut self, t: Type)-> TypeIndex
-{
-  let  last_i = self.type_list.len();
-
-    for i in 0..last_i
-    {
-        if self.type_list[i] == t
-        {
-          return TypeIndex{value: i};
-        }
-    }
-
-
-  self.type_list.push(t);
-
-  TypeIndex{value: last_i}
-}
-
-
-pub fn
-get_type(&self, i: TypeIndex)-> Option<&Type>
-{
-    if i.value < self.type_list.len()
-    {
-      return Some(&self.type_list[i.value]);
-    }
-
-
-  None
-}
-
-
-pub fn
-print_type(&self, i: TypeIndex)
-{
-    if let Some(t) = self.get_type(i)
-    {
-      t.print(self);
-    }
-}
-
-
 
 
 

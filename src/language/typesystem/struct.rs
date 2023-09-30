@@ -10,7 +10,6 @@ use super::{
 use crate::language::library::{
   ExpressionIndex,
   StringIndex,
-  TypeIndex,
   Library
 };
 
@@ -20,7 +19,7 @@ Member
 {
   pub(crate) name: String,
 
-  pub(crate) type_index: TypeIndex,
+  pub(crate) r#type: Type,
 
 }
 
@@ -31,7 +30,7 @@ Member
 
 
 pub fn
-print(&self, lib: &Library)
+print(&self)
 {
     if self.name.len() != 0
     {
@@ -39,24 +38,12 @@ print(&self, lib: &Library)
     }
 
 
-  lib.print_type(self.type_index);
+  self.r#type.print();
 
   print!(")");
 }
 
 
-}
-
-
-pub fn
-print_member_list(ls: &Vec<Member>, lib: &Library)
-{
-    for m in ls
-    {
-      m.print(lib);
-
-      println!(",");
-    }
 }
 
 
@@ -84,17 +71,9 @@ new()-> Struct
 
 
 pub fn
-from(ls: Vec<(String,TypeIndex)>)-> Struct
+from(ls: Vec<Member>)-> Struct
 {
-  let  mut st = Struct::new();
-
-    for e in ls
-    {
-      st.member_list.push(Member{name: e.0, type_index: e.1});
-    }
-
-
-  st
+  Struct{member_list: ls}
 }
 
 
@@ -103,26 +82,6 @@ push(&mut self, m: Member)
 {
   self.member_list.push(m);
 }
-
-
-pub fn
-add(&mut self, name: &str, ti: TypeIndex)
-{
-  self.member_list.push(Member{ name: String::from(name), type_index: ti});
-}
-
-
-pub fn
-merge(&mut self, ls: Vec<Member>)
-{
-    for m in ls
-    {
-      self.member_list.push(m);
-    }
-}
-
-
-pub fn  get_member_list(&self)-> &Vec<Member>{&self.member_list}
 
 
 pub fn
@@ -155,11 +114,17 @@ get(&self, i: usize)-> Option<&Member>
 
 
 pub fn
-print(&self, lib: &Library)
+print(&self)
 {
   print!("{{");
 
-  print_member_list(&self.member_list,lib);
+    for m in &self.member_list
+    {
+      m.print();
+
+      print!(", ");
+    }
+
 
   print!("}}");
 }

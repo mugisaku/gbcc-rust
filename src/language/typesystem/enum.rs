@@ -8,7 +8,6 @@ use super::{
 use crate::language::library::{
   ExpressionIndex,
   StringIndex,
-  TypeIndex,
   Library
 };
 

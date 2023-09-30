@@ -1,142 +1,202 @@
 
 
 use super::collection::Collection;
-use super::memory::Memory;
+use super::memory::{
+  Memory,
+  get_aligned,
+};
 
-#[derive(Clone)]
+
+
+
+#[derive(Clone,Copy)]
 pub enum
-AllocationLink
+AllocationID
 {
-  Unresolved(String),
-
      Global(usize),
-      Local(usize,usize),
-  Parameter(usize,usize),
+      Local(usize),
+  Parameter(usize),
+
+}
+
+
+pub trait
+Operand
+{
+
+
+fn  new(name: &str)-> Self;
+fn  get_name(&self)-> &String;
+fn  get_id(&self)-> AllocationID;
+fn  get_offset(&self)-> usize;
+fn  set_data(&mut self, id: AllocationID, off: usize);
+
+
+fn
+link(&mut self, g_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, para_ls: &Vec<Allocation>)-> Result<(),()>
+{
+  let  name = self.get_name();
+
+
+    if let Some((i,off)) = Allocation::find_index_and_offset(l_alo_ls,name)
+    {
+      self.set_data(AllocationID::Local(i),off);
+
+      Ok(())
+    }
+
+  else
+    if let Some((i,off)) = Allocation::find_index_and_offset(para_ls,name)
+    {
+      self.set_data(AllocationID::Parameter(i),off);
+
+      Ok(())
+    }
+
+  else
+    if let Some((i,off)) = Allocation::find_index_and_offset(g_alo_ls,name)
+    {
+      self.set_data(AllocationID::Global(i),off);
+
+      Ok(())
+    }
+
+  else
+    {
+      print!("Operand::link error: {} is not found",name);
+
+      Err(())
+    }
+}
+
+
+}
+
+
+
+
+pub struct
+Source
+{
+  pub(crate)   name: String,
+  pub(crate)     id: AllocationID,
+  pub(crate) offset: usize,
 
 }
 
 
 impl
-AllocationLink
+Operand for Source
 {
-
-
-pub fn
-new(name: &str)-> AllocationLink
-{
-  AllocationLink::Unresolved(String::from(name))
-}
 
 
 fn
-find_allocation(ls: &Vec<Allocation>, name: &str)-> Option<usize>
+new(name: &str)-> Self
 {
-    for i in 0..ls.len()
-    {
-        if ls[i].name == name
-        {
-          return Some(i);
-        }
-    }
+  Self{
+      name: String::from(name),
+        id: AllocationID::Global(0),
+    offset: 0,
+  }
+}
 
 
-  None
+fn  get_name(&self)-> &String{&self.name}
+fn  get_id(&self)-> AllocationID{self.id}
+fn  get_offset(&self)-> usize{self.offset}
+
+
+fn
+set_data(&mut self, id: AllocationID, off: usize)
+{
+  self.id     =  id;
+  self.offset = off;
+}
+
+
+}
+
+
+pub fn  new_operand_list()-> Vec<Source>{Vec::new()}
+
+
+pub struct
+Destination
+{
+  pub(crate)   name: String,
+  pub(crate)     id: AllocationID,
+  pub(crate) offset: usize,
+
+}
+
+
+impl
+Operand for Destination
+{
+
+
+fn
+new(name: &str)-> Self
+{
+  Self{
+      name: String::from(name),
+        id: AllocationID::Global(0),
+    offset: 0,
+  }
+}
+
+
+fn  get_name(&self)-> &String{&self.name}
+fn  get_id(&self)-> AllocationID{self.id}
+fn  get_offset(&self)-> usize{self.offset}
+
+
+fn
+set_data(&mut self, id: AllocationID, off: usize)
+{
+  self.id     =  id;
+  self.offset = off;
+}
+
+
+}
+
+
+
+
+pub struct
+SourceListWrapper
+{
+  pub(crate) list: Vec<Source>,
+
+}
+
+
+impl
+SourceListWrapper
+{
+
+
+pub fn
+add(mut self, name: &str)-> SourceListWrapper
+{
+  self.list.push(Source::new(name));
+
+  self
 }
 
 
 pub fn
-resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>)-> Result<(),()>
+release(mut self)-> Vec<Source>
 {
-  let  mut new_self_opt: Option<Self> = None;
-
-    if let AllocationLink::Unresolved(name) = self
-    {
-        if let Some(i) = Self::find_allocation(p_alo_ls,name)
-        {
-          new_self_opt = Some(AllocationLink::Parameter(fi,i));
-        }
-
-      else
-        if let Some(i) = Self::find_allocation(l_alo_ls,name)
-        {
-          new_self_opt = Some(AllocationLink::Local(fi,i));
-        }
-
-      else
-        if let Some(i) = Self::find_allocation(g_alo_ls,name)
-        {
-          new_self_opt = Some(AllocationLink::Global(i));
-        }
-
-      else
-        {
-          println!("AllocationLink::resolve error: {} is not found",name);
-
-          return Err(());
-        }
-    }
-
-
-    if let Some(new_self) = new_self_opt
-    {
-      *self = new_self;
-    }
-
-
-  Ok(())
-}
-
-
-pub fn
-print(&self, coll: &Collection, verbose: usize)
-{
-    match self
-    {
-  AllocationLink::Unresolved(name)=>{print!("{}(UNRESOLVED)",name);},
-  AllocationLink::Global(i)=>
-        {
-            if let Some(alo) = coll.get_allocation(*i)
-            {
-              alo.print(verbose);
-            }
-        },
-  AllocationLink::Local(fi,i)=>
-        {
-            if let Some(f) = coll.get_function(*fi)
-            {
-                if let Some(alo) = f.get_allocation(*i)
-                {
-                  alo.print(verbose);
-                }
-            }
-        },
-  AllocationLink::Parameter(fi,i)=>
-        {
-            if let Some(f) = coll.get_function(*fi)
-            {
-                if let Some(alo) = f.get_parameter(*i)
-                {
-                  alo.print(verbose);
-                }
-            }
-        },
-    }
+  self.list
 }
 
 
 }
 
 
-
-
-pub enum
-AllocationKind
-{
-  Global,
-  Local,
-  Parameter,
-
-}
+pub fn  build_args()-> SourceListWrapper{SourceListWrapper{list: Vec::new()}}
 
 
 #[derive()]
@@ -146,8 +206,6 @@ Allocation
   pub(crate) name: String,
 
   pub(crate) size: usize,
-
-  pub(crate) kind: AllocationKind,
 
   pub(crate) memory_opt: Option<Memory>,
 
@@ -164,12 +222,11 @@ Allocation
 
 
 pub fn
-new_parameter(name: &str, sz: usize)-> Allocation
+new(name: &str, sz: usize)-> Allocation
 {
   Allocation{
     name: String::from(name),
     size: sz,
-    kind: AllocationKind::Parameter,
     memory_opt: None,
     user_count: 0,
     offset: 0,
@@ -178,39 +235,62 @@ new_parameter(name: &str, sz: usize)-> Allocation
 
 
 pub fn
-new_local(name: &str, sz: usize)-> Allocation
+find_index_and_offset(ls: &Vec<Allocation>, name: &str)-> Option<(usize,usize)>
 {
-  Allocation{
-    name: String::from(name),
-    size: sz,
-    kind: AllocationKind::Local,
-    memory_opt: None,
-    user_count: 0,
-    offset: 0,
-  }
+    for i in 0..ls.len()
+    {
+        if ls[i].name == name
+        {
+          return Some((i,ls[i].offset));
+        }
+    }
+
+
+  None
 }
 
 
 pub fn
-new_global(name: &str, sz: usize)-> Allocation
+update_offsets(ls: &mut Vec<Allocation>, start: usize)-> usize
 {
-  Allocation{
-    name: String::from(name),
-    size: sz,
-    kind: AllocationKind::Global,
-    memory_opt: None,
-    user_count: 0,
-    offset: 0,
-  }
+  let  mut off: usize = get_aligned(start);
+
+    for alo in ls
+    {
+//        if alo.user_count != 0
+        {
+          alo.offset = off                            ;
+                       off = get_aligned(off+alo.size);
+        }
+    }
+
+
+  off
 }
 
 
 pub fn
-print(&self, verbose: usize)
+update_offsets_neg(ls: &mut Vec<Allocation>, start: usize)-> usize
+{
+  let  mut off: usize = get_aligned(start);
+
+    for alo in ls
+    {
+                   off += get_aligned(alo.size);
+      alo.offset = off                         ;
+    }
+
+
+  off
+}
+
+
+pub fn
+print(&self)
 {
   print!("{}",&self.name);
 
-    if verbose > 0
+//    if verbose > 0
     {
       print!("(off: {}, sz:{})",self.offset,self.size);
 

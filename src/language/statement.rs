@@ -7,7 +7,6 @@ pub mod dictionary;
 use super::library::{
   ExpressionIndex,
   StringIndex,
-  TypeIndex,
   DeclarationIndex,
   Library
 };
@@ -19,9 +18,7 @@ use super::value::Value;
 use super::typesystem::{
   Type,
   r#struct::Struct,
-  r#union::Union,
   r#enum::Enum,
-  function_signature::FunctionSignature,
 
 };
 
@@ -29,7 +26,7 @@ use super::typesystem::{
 pub struct
 Storage
 {
-  pub(crate) type_index: TypeIndex,
+  pub(crate) r#type: Type,
 
   pub(crate) expression_index_opt: Option<ExpressionIndex>,
 
@@ -44,7 +41,7 @@ Storage
 pub fn
 print(&self, lib: &Library)
 {
-  lib.print_type(self.type_index);
+  self.r#type.print();
 
     if let Some(ei) = &self.expression_index_opt
     {
@@ -68,7 +65,7 @@ Function
 {
   pub(crate) parameter_list: Vec<DeclarationIndex>,
 
-  pub(crate) return_type_index_opt: Option<TypeIndex>,
+  pub(crate) return_type: Type,
 
   pub(crate) block_index: BlockIndex,
 
@@ -86,9 +83,9 @@ Definition
   Const(Storage),
   Parameter(Storage),
   Struct(Struct),
-  Union(Union),
+  Union(Struct),
   Enum(Enum),
-  Alias(TypeIndex),
+  Alias(Type),
 
 }
 
@@ -132,14 +129,9 @@ print(&self, lib: &Library)
             }
 
 
-          print!(")");
+          print!(")-> ");
 
-            if let Some(ti) = &f.return_type_index_opt
-            {
-              print!("-> ");
-
-              lib.print_type(*ti);
-            }
+          f.return_type.print();
 
 
           print!("\n");
@@ -177,13 +169,13 @@ print(&self, lib: &Library)
         {
           print!("struct\n{}",&self.name);
 
-          st.print(lib);
+          st.print();
         },
   Definition::Union(un)=>
         {
           print!("union\n{}",&self.name);
 
-          un.print(lib);
+          un.print();
         },
   Definition::Enum(en)=>
         {
@@ -194,8 +186,6 @@ print(&self, lib: &Library)
   Definition::Alias(ti)=>
         {
           print!("alias\n{}: ",&self.name);
-
-          lib.print_type(*ti);
         },
     }
 }

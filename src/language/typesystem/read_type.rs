@@ -19,9 +19,7 @@ use super::{
   Type,
   r#struct::Struct,
   r#struct::Member,
-  r#union::Union,
   r#enum::Enum,
-  function_signature::FunctionSignature,
 };
 
 
@@ -50,7 +48,7 @@ read_type(dir: &Directory, lib: &mut Library)-> Result<Type,()>
   else
     if let Some(s) = cur.get_identifier()
     {
-//      return Ok(Type::Indefinite(s.clone()));
+      return Ok(Type::Symbol(s.clone()));
     }
 
 
@@ -73,7 +71,7 @@ read_member(dir: &Directory, lib: &mut Library)-> Result<Member,()>
         {
             if let Ok(t) = read_type(&subdir,lib)
             {
-              return Ok(Member{name: s, type_index: lib.push_type(t)});
+              return Ok(Member{name: s, r#type: t});
             }
         }
     }
@@ -148,7 +146,7 @@ read_tuple(dir: &Directory, lib: &mut Library)-> Result<Type,()>
     {
         if let Ok(ls) = read_type_list(&subdir,lib)
         {
-          return Ok(Type::Tuple(lib.push_type_list(ls)));
+          return Ok(Type::Tuple(ls));
         }
     }
 
@@ -164,39 +162,32 @@ read_function_pointer(dir: &Directory, lib: &mut Library)-> Result<Type,()>
 
   cur.advance(2);
 
-  let  mut fnsig = FunctionSignature::new();
-
     if let Some(subdir) = cur.get_directory_with_name("type_note_list")
     {
         if let Ok(ls) = read_type_list(&subdir,lib)
         {
-          fnsig.parameter_list = lib.push_type_list(ls);
-
           cur.advance(1);
+
+            if let Some(subdir) = cur.seek_directory_with_name("type")
+            {
+                if let Ok(t) = read_type(&subdir,lib)
+                {
+                  return Ok(Type::FunctionPointer(ls,Box::new(t)))
+                }
+
+              else
+                {
+                }
+            }
         }
 
       else
         {
-          return Err(());
         }
     }
 
 
-    if let Some(subdir) = cur.seek_directory_with_name("type")
-    {
-        if let Ok(t) = read_type(&subdir,lib)
-        {
-          fnsig.return_type_index = lib.push_type(t);
-        }
-
-      else
-        {
-          return Err(());
-        }
-    }
-
-
-  Ok(Type::FunctionPointer(fnsig))
+  Err(())
 }
 
 
@@ -208,6 +199,7 @@ read_primitive(dir: &Directory)-> Result<Type,()>
     if let Some(s) = cur.get_keyword()
     {
            if s == "bool" {return Ok(Type::Bool);}
+      else if s == "char" {return Ok(Type::Char);}
       else if s == "void" {return Ok(Type::Void);}
       else if s == "i8"   {return Ok(Type::I8);}
       else if s == "i16"  {return Ok(Type::I16);}

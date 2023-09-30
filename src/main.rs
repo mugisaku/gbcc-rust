@@ -150,6 +150,11 @@ load()
           lib.print();
 
           print!("\n");
+
+            if let Ok(coll) = language::compile::compile(&lib)
+            {
+              coll.print();
+            }
         }
     }
 }
@@ -165,7 +170,7 @@ type_make(s: &str)
 
     if let Ok(t) = Type::make_from_string(s,&mut lib)
     {
-      t.print(&lib);
+//      t.print();
 
       print!("\n");
     }
@@ -175,8 +180,13 @@ type_make(s: &str)
 fn
 main()
 {
-ir::test::test();
+//  let  (res,_) = crate::language::typesystem::Type::parse("fn(i8,u32,u32)",0);
+
+//  res.print();
+crate::ir::test::test();
+
 return; 
+/*
   println!("--GBCC Interactive Interpreter--");
   println!("type <h>, list command.");
 
@@ -250,6 +260,7 @@ return;
           buf.clear();
         }
     }
+*/
 }
 
 

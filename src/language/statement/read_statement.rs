@@ -10,7 +10,6 @@ use crate::syntax::{
 use crate::language::library::{
   ExpressionIndex,
   StringIndex,
-  TypeIndex,
   Library
 };
 use crate::language::expression::Expression;

@@ -7,15 +7,17 @@ use super::memory::{
 
 use super::allocation::{
   Allocation,
-  AllocationLink,
+  AllocationID,
+  Operand,
+  Source,
+  Destination,
 };
 
 use super::line::{
-  BlockLink,
+  Line,
 };
 
 use super::function::{
-  FunctionLink,
   Function,
 };
 
@@ -27,217 +29,114 @@ use super::collection::{
 
 
 
-#[derive(Clone)]
-pub enum
-Operand
-{
-  AllocationLink(AllocationLink),
-
-  ImmediateValue(Word),
-
-}
-
-
-impl
-Operand
+pub trait
+JumpOperand
 {
 
 
-pub fn
-from_identifier(name: &str)-> Operand
+fn  new(name: &str)-> Self;
+
+fn  get_name(&self)-> &String;
+fn  set_index(&mut self, i: usize);
+
+fn
+link(&mut self, ls: &Vec<(String,usize)>)-> Result<(),()>
 {
-  Operand::AllocationLink(AllocationLink::new(name))
-}
-
-
-pub fn
-from_u32(u: u32)-> Operand
-{
-  Operand::ImmediateValue(Word::from(u))
-}
-
-
-pub fn
-resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>)-> Result<(),()>
-{
-    if let Operand::AllocationLink(ln) = self
+    for e in ls
     {
-      ln.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)
+        if e.0 == self.get_name().as_str()
+        {
+          self.set_index(e.1);
+
+          return Ok(());
+        }
     }
 
-  else
-    {
-      Ok(())
-    }
+
+  Err(())
 }
 
 
-pub fn
-print(&self, coll: &Collection)
-{
-    match self
-    {
-  Operand::AllocationLink(l)=>{l.print(coll,0);},
-  Operand::ImmediateValue(w)=>{print!("(imm, i:{})",w.get_i64());},
-    }
-}
-
-
-}
-
-
-
-
-pub fn
-new_operand_list()-> Vec<Operand>
-{
-  Vec::new()
 }
 
 
 
 
 pub struct
-CallInfo
+JumpDestination
 {
-  pub(crate) target: FunctionLink,
-
-  pub(crate) argument_list: Vec<Operand>,
+  pub(crate) name: String,
+  pub(crate) index: usize,
 
 }
 
 
 impl
-CallInfo
+JumpOperand for JumpDestination
 {
 
 
-pub fn
-new(alo_name: &str)-> CallInfo
+fn
+new(name: &str)-> JumpDestination
 {
-  CallInfo{target: FunctionLink::Unresolved(String::from(alo_name)), argument_list: Vec::new()}
-}
-
-
-pub fn
-push(&mut self, o: Operand)
-{
-  self.argument_list.push(o);
-}
-
-
-pub fn
-resolve(&mut self, fi: usize, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
-{
-  let  mut new_fln_opt: Option<FunctionLink> = None;
-
-    if let FunctionLink::Unresolved(name) = &self.target
-    {
-        for i in 0..fname_ls.len()
-        {
-            if fname_ls[i] == name.as_str()
-            {
-              new_fln_opt = Some(FunctionLink::Resolved(i));
-
-              break;
-            }
-        }
-
-
-        if let None = new_fln_opt
-        {
-          println!("CallInfo::resolve error: target resolve is failed");
-
-          return Err(());
-        }
-    }
-
-
-    if let Some(new_fln) = new_fln_opt
-    {
-      self.target = new_fln;
-    }
-
-
-    for a in &mut self.argument_list
-    {
-        if a.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_err()
-        {
-          println!("CallInfo::resolve error: argument_list resolve is failed");
-
-          return Err(());
-        }
-    }
-
-
-  Ok(())
-}
-
-
-pub fn
-print(&self, coll: &Collection)
-{
-  self.target.print(coll);
-
-  print!(" ");
-
-    for a in &self.argument_list
-    {
-      a.print(coll);
-
-      print!(", ");
-    }
-}
-
-
-}
-
-
-pub struct
-BranchInfo
-{
-  pub(crate) condition: AllocationLink,
-
-  pub(crate) on_true:  BlockLink,
-  pub(crate) on_false: BlockLink,
-
-}
-
-
-impl
-BranchInfo
-{
-
-
-pub fn
-new(alo_name: &str, on_true: &str, on_false: &str)-> BranchInfo
-{
-  BranchInfo{
-    condition: AllocationLink::Unresolved(String::from(alo_name)),
-     on_true: BlockLink::Unresolved(String::from(on_true )),
-    on_false: BlockLink::Unresolved(String::from(on_false)),
+  JumpDestination{
+    name: String::from(name),
+    index: 0,
   }
 }
 
 
-pub fn
-print(&self, coll: &Collection, f: &Function)
+fn  get_name(&self)-> &String{&self.name}
+fn  set_index(&mut self, i: usize){self.index = i;}
+
+
+}
+
+
+
+
+pub struct
+JumpSource
 {
-  self.condition.print(coll,0);
-
-  print!(" ");
-
-  self.on_true.print(coll,f);
-
-  print!(" ");
-
-  self.on_false.print(coll,f);
-}
-
+  pub(crate) name: String,
+  pub(crate) index: usize,
 
 }
 
 
+impl
+JumpOperand for JumpSource
+{
+
+
+fn
+new(name: &str)-> JumpSource
+{
+  JumpSource{
+    name: String::from(name),
+    index: 0,
+  }
+}
+
+
+fn  get_name(&self)-> &String{&self.name}
+fn  set_index(&mut self, i: usize){self.index = i;}
+
+
+}
+
+
+
+
+pub struct
+CallInfo
+{
+  pub(crate) function_name: String,
+  pub(crate) function_index: usize,
+
+  pub(crate) argument_list: Vec<Source>,
+
+}
 
 
 #[derive(Clone,Copy)]
@@ -377,23 +276,40 @@ print(&self)
 
 
 pub struct
-PhiOperand
+PhiPair
 {
-  pub(crate)  from: BlockLink,
-  pub(crate) value: Operand,
+  pub(crate)  from: JumpSource,
+  pub(crate) value: Source,
+
+}
+
+
+pub struct
+PhiPairListWrapper
+{
+  pub(crate) list: Vec<PhiPair>,
 
 }
 
 
 impl
-PhiOperand
+PhiPairListWrapper
 {
 
 
 pub fn
-make(blk_name: &str, o: Operand)-> PhiOperand
+add(mut self, from: &str, value: &str)-> PhiPairListWrapper
 {
-  PhiOperand{from: BlockLink::Unresolved(String::from(blk_name)), value: o}
+  self.list.push(PhiPair{from: JumpSource::new(from), value: Source::new(value)});
+
+  self
+}
+
+
+pub fn
+release(mut self)-> Vec<PhiPair>
+{
+  self.list
 }
 
 
@@ -401,9 +317,11 @@ make(blk_name: &str, o: Operand)-> PhiOperand
 
 
 pub fn
-new_phi_operand_list()-> Vec<PhiOperand>
+build_phi_pairs()-> PhiPairListWrapper
 {
-  Vec::new()
+  PhiPairListWrapper{
+    list: Vec::new(),
+  }
 }
 
 
@@ -412,14 +330,17 @@ new_phi_operand_list()-> Vec<PhiOperand>
 pub enum
 AllocatingOperation
 {
-  Unary(Operand,UnaryOperator),
-  Binary(Operand,Operand,BinaryOperator),
+   Unary(Source,UnaryOperator),
+  Binary(Source,Source,BinaryOperator),
 
   Allocate,
 
-  Address(AllocationLink),
+  MoveU64(u64),
+  MoveF64(f64),
 
-  Phi(Vec<PhiOperand>),
+  Address(Source),
+
+  Phi(Vec<PhiPair>,Source),
   Call(CallInfo),
 
 }
@@ -431,63 +352,73 @@ AllocatingOperation
 
 
 pub fn
-resolve(&mut self, fi: usize, blkop_ls: &Vec<(String,usize)>, p_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String>)-> Result<(),()>
+link_to_allocation(&mut self, g_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, para_ls: &Vec<Allocation>)-> Result<(),()>
 {
     match self
     {
-  AllocatingOperation::Unary(o,_)=>{o.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls)},
+  AllocatingOperation::Unary(o,_)=>
+        {
+          o.link(g_alo_ls,l_alo_ls,para_ls)
+        },
   AllocatingOperation::Binary(l,r,_)=>
         {
-            if l.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
-            && r.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_ok()
+            if  l.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
+             && r.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
             {
               Ok(())
             }
 
           else
             {
-              println!("AllocatingOperation::resolve error: Binary resolve is failed");
-
               Err(())
             }
         },
-  AllocatingOperation::Phi(phio_ls)=>
+  AllocatingOperation::Address(l)=>
         {
-            for phio in phio_ls
+          l.link(g_alo_ls,l_alo_ls,para_ls)
+        },
+  AllocatingOperation::Phi(ops,defau)=>
+        {
+            for o in ops
             {
-                if phio.from.resolve(blkop_ls).is_err()
+                if o.value.link(g_alo_ls,l_alo_ls,para_ls).is_err()
                 {
-                  return Err(());
-                }
-
-
-                if phio.value.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls).is_err()
-                {
-                  println!("AllocatingOperation::resolve error: Phi resolve is failed");
-
                   return Err(());
                 }
             }
 
 
-          return Ok(());
+          defau.link(g_alo_ls,l_alo_ls,para_ls)
         },
-  AllocatingOperation::Call(ci)=>{ci.resolve(fi,p_alo_ls,l_alo_ls,g_alo_ls,fname_ls)},
-  _=>{Ok(())},
+  AllocatingOperation::Call(ci)=>
+        {
+            for a in &mut ci.argument_list
+            {
+                if a.link(g_alo_ls,l_alo_ls,para_ls).is_err()
+                {
+                  return Err(());
+                }
+            }
+
+
+          Ok(())
+        },
+  _=>
+        {
+          Ok(())
+        },
     }
 }
 
 
 pub fn
-print(&self, coll: &Collection, f: &Function)
+print(&self)
 {
     match self
     {
   AllocatingOperation::Unary(o,u)=>
         {
-          o.print(coll);
-
-          print!(" <");
+          print!("{} <",&o.name);
 
           u.print();
 
@@ -495,13 +426,7 @@ print(&self, coll: &Collection, f: &Function)
         },
   AllocatingOperation::Binary(l,r,b)=>
         {
-          l.print(coll);
-
-          print!(" ");
-
-          r.print(coll);
-
-          print!(" <");
+          print!("{} {} <",&l.name,&r.name);
 
           b.print();
 
@@ -511,30 +436,43 @@ print(&self, coll: &Collection, f: &Function)
         {
           print!("<allocate>");
         },
+  AllocatingOperation::MoveU64(u)=>
+        {
+          print!("<movu64> {}",*u);
+        },
+  AllocatingOperation::MoveF64(f)=>
+        {
+          print!("<movf64> {}",*f);
+        },
   AllocatingOperation::Address(l)=>
         {
-          print!("<address> ");
-
-          l.print(coll,0);
+          print!("<address> {}",&l.name);
         },
-  AllocatingOperation::Phi(ops)=>
+  AllocatingOperation::Phi(ops,defau)=>
         {
           print!("<phi> ");
 
             for o in ops
             {
-              o.from.print(coll,f);
-
-              o.value.print(coll);
+              print!("[{} {}]",&o.from.name,&o.value.name);
 
               print!(",");
             }
+
+
+          print!("  defau {}",&defau.name);
         },
   AllocatingOperation::Call(ci)=>
         {
-          print!("<cal> ");
+          print!("<cal> {}(",&ci.function_name);
 
-          ci.print(coll);
+            for a in &ci.argument_list
+            {
+              print!("{}, ",&a.name);
+            }
+
+
+          print!(")");
         },
     }
 }
