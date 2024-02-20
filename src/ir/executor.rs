@@ -10,6 +10,7 @@ use super::allocation::{
 
 use super::line::{
   Line,
+
 };
 
 use super::allocating_operation::{
@@ -63,8 +64,6 @@ Executor
    bi: u64,//BlockIndex
   pbi: u64,//PreviousBlockIndex
 
-  
-
   calling_depth: usize,
 
   halt_flag: bool,
@@ -114,10 +113,10 @@ pub fn  is_halted(&mut self)-> bool{self.halt_flag}
 
 
 pub fn
-change_bi(&mut self, dst: &JumpDestination)
+change_bi(&mut self, dst_i: usize)
 {
-  self.pbi = self.bi                   ;
-             self.bi = dst.index as u64;
+  self.pbi = self.bi               ;
+             self.bi = dst_i as u64;
 
   self.pc = self.bi+1;
 }
@@ -241,7 +240,7 @@ ready(&mut self, coll: &Collection, start_f_name: &str, arg_ls: Vec<Source>)-> R
       self.bp = get_aligned((self.bp as usize)+f.return_size) as u64;
       self.sp = self.bp;
 
-      return self.new_frame(coll,self.main_return_value_address as usize,fi,&arg_ls);
+      return self.new_frame(&coll.function_list,self.main_return_value_address as usize,fi,&arg_ls);
     }
 
 
@@ -344,23 +343,25 @@ operate_phi(&mut self, dst_addr: usize, sz: usize, opls: &Vec<PhiPair>, defau: &
 //println!("{} ? {} ",o.from.index,self.pbi);
         if o.from.index == (self.pbi as usize)
         {
-          self.transfer(dst_addr,&o.value,sz);
+          let  src_addr = self.get_absolute_address(&o.value);
+
+          Self::transfer(&mut self.memory,dst_addr,src_addr,sz,self.debug_flag);
 
           return;
         }
     }
 
 
-  self.transfer(dst_addr,defau,sz);
+  let  src_addr = self.get_absolute_address(defau);
+
+  Self::transfer(&mut self.memory,dst_addr,src_addr,sz,self.debug_flag);
 }
 
 
 fn
-transfer(&mut self, dst_addr: usize, src: &Source, sz: usize)
+transfer(m: &mut Memory, dst_addr: usize, src_addr: usize, sz: usize, debug: bool)
 {
-  let  src_addr = self.get_absolute_address(src);
-
-    if self.debug_flag
+    if debug
     {
       println!("\n transfer: to ADDRESS {} from ADDRESS {}, {} bytes",dst_addr,src_addr,sz);
     }
@@ -368,9 +369,9 @@ transfer(&mut self, dst_addr: usize, src: &Source, sz: usize)
 
     for off in 0..sz
     {
-      let  v = self.memory.get_u8(src_addr+off);
+      let  v = m.get_u8(src_addr+off);
 
-      self.memory.put_u8(dst_addr+off,v);
+      m.put_u8(dst_addr+off,v);
     }
 }
 
@@ -391,7 +392,9 @@ stack_argument_list(&mut self, para_ls: &Vec<Allocation>, arg_ls: &Vec<Source>)-
           let  alo = &para_ls[i];
           let  arg =  &arg_ls[i];
 
-          self.transfer((self.sp as usize)+off,arg,alo.size);
+          let  src_addr = self.get_absolute_address(arg);
+
+          Self::transfer(&mut self.memory,(self.sp as usize)+off,src_addr,alo.size,self.debug_flag);
 
           off = get_aligned(off+alo.size);
         }
@@ -406,11 +409,11 @@ stack_argument_list(&mut self, para_ls: &Vec<Allocation>, arg_ls: &Vec<Source>)-
 
 
 fn
-new_frame(&mut self, coll: &Collection, retval_addr: usize, fi: usize, arg_ls: &Vec<Source>)-> Result<(),()>
+new_frame(&mut self, f_ls: &Vec<Function>, retval_addr: usize, fi: usize, arg_ls: &Vec<Source>)-> Result<(),()>
 {
-    if fi < coll.function_list.len()
+    if fi < f_ls.len()
     {
-      let  f = &coll.function_list[fi];
+      let  f = &f_ls[fi];
 
         if let Ok(off) = self.stack_argument_list(&f.parameter_list,&arg_ls)
         {
@@ -474,14 +477,14 @@ remove_frame(&mut self)
 
 
 fn
-operate_call(&mut self, coll: &Collection, dst_addr: usize, ci: &CallInfo)
+operate_call(&mut self, f_ls: &Vec<Function>, dst_addr: usize, ci: &CallInfo)
 {
-  self.new_frame(coll,dst_addr,ci.function_index,&ci.argument_list);
+  self.new_frame(f_ls,dst_addr,ci.function_index,&ci.argument_list);
 }
 
 
 fn
-operate(&mut self, coll: &Collection, ln: &Line)
+operate(&mut self, f_ls: &Vec<Function>, ln: &Line)
 {
     match ln
     {
@@ -498,7 +501,7 @@ operate(&mut self, coll: &Collection, ln: &Line)
           AllocatingOperation::MoveF64(f)=>{self.put_word(dst_addr,Word::from_f64(*f));},
           AllocatingOperation::Address(target)=>{self.operate_address(dst_addr,target);},
           AllocatingOperation::Phi(opls,defau)=>{self.operate_phi(dst_addr,*sz,opls,defau);},
-          AllocatingOperation::Call(ci)=>{self.operate_call(coll,dst_addr,ci);},
+          AllocatingOperation::Call(ci)=>{self.operate_call(f_ls,dst_addr,ci);},
             }
         }
   Line::CopyWord(dst,src)=>
@@ -513,8 +516,9 @@ operate(&mut self, coll: &Collection, ln: &Line)
   Line::CopyString(dst,src,sz)=>
         {
           let  dst_addr = self.get_absolute_address(dst);
+          let  src_addr = self.get_absolute_address(src);
 
-          self.transfer(dst_addr,src,*sz);
+          Self::transfer(&mut self.memory,dst_addr,src_addr,*sz,self.debug_flag);
         }
   Line::Message(s)=>
         {
@@ -543,18 +547,18 @@ operate(&mut self, coll: &Collection, ln: &Line)
         },
   Line::Jump(bl)=>
         {
-          self.change_bi(bl);
+          self.change_bi(bl.index);
         },
   Line::Branch(cond,on_true,on_false)=>
         {
             if self.get_bool(cond)
             {
-              self.change_bi(on_true);
+              self.change_bi(on_true.index);
             }
 
           else
             {
-              self.change_bi(on_false);
+              self.change_bi(on_false.index);
             }
         },
   Line::Return(opt)=>
@@ -562,8 +566,9 @@ operate(&mut self, coll: &Collection, ln: &Line)
             if let Some((src,sz)) = opt
             {
               let  dst_addr = self.memory.get_u64(self.bp as usize) as usize;
+              let  src_addr = self.get_absolute_address(src);
 
-              self.transfer(dst_addr,src,*sz);
+              Self::transfer(&mut self.memory,dst_addr,src_addr,*sz,self.debug_flag);
             }
 
 
@@ -574,20 +579,22 @@ operate(&mut self, coll: &Collection, ln: &Line)
 
 
 pub fn
-step(&mut self, coll: &Collection)-> Result<(),()>
+step(&mut self, f_ls: &Vec<Function>)-> Result<(),()>
 {
     if self.calling_depth != 0
     {
 self.print_context();
-      let  f = &coll.function_list[self.fi as usize];
+      let  f = &f_ls[self.fi as usize];
 
-        if (self.pc as usize) < f.line_list.content.len()
+      let  pc = self.pc as usize;
+
+        if pc < f.line_list.len()
         {
-          let  ln = &f.line_list.content[self.pc as usize];
+          let  ln = &f_ls[self.fi as usize].line_list[pc];
 
           self.pc += 1;
 
-          self.operate(coll,ln);
+          self.operate(f_ls,ln);
         }
 
 
@@ -600,7 +607,7 @@ self.print_context();
 
 
 pub fn
-run(&mut self, coll: &Collection, count_opt: Option<usize>)-> RunResult
+run(&mut self, f_ls: &Vec<Function>, count_opt: Option<usize>)-> RunResult
 {
   self.halt_flag = false;
 
@@ -618,7 +625,7 @@ run(&mut self, coll: &Collection, count_opt: Option<usize>)-> RunResult
         }
 
 
-        if self.step(coll).is_err()
+        if self.step(f_ls).is_err()
         {
           return RunResult::Finish(self.get_final_return_value());
         }
@@ -639,9 +646,9 @@ get_final_return_value(&self)-> Memory
 
 
 pub fn
-print_local_variables(&self, coll: &Collection)
+print_local_variables(&self, f_ls: &Vec<Function>)
 {
-  let  f = &coll.function_list[self.fi as usize];
+  let  f = &f_ls[self.fi as usize];
 
     for alo in &f.allocation_list
     {

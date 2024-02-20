@@ -10,11 +10,11 @@ use super::allocation::{
 };
 
 use super::line::{
-  LineList,
   Line,
 };
 
 use super::collection::{
+  DestinationTable,
   Collection,
 };
 
@@ -25,6 +25,7 @@ use super::executor::{
 
 
 
+#[derive(Clone)]
 pub struct
 Function
 {
@@ -34,7 +35,7 @@ Function
 
   pub(crate) return_size: usize,
 
-  pub(crate) line_list: LineList,
+  pub(crate) line_list: Vec<Line>,
 
   pub(crate) allocation_list: Vec<Allocation>,
 
@@ -56,7 +57,7 @@ new(name: &str, sz: usize)-> Function
     name: String::from(name),
     return_size: sz,
     parameter_list: Vec::new(),
-    line_list: LineList::new(),
+    line_list: Vec::new(),
     allocation_list: Vec::new(),
     parameter_stack_size: 0,
         local_stack_size: 0,
@@ -65,16 +66,16 @@ new(name: &str, sz: usize)-> Function
 
 
 pub fn
-set_line_list(&mut self, ln_ls: LineList)
+set_line_list(&mut self, ln_ls: Vec<Line>)
 {
   self.line_list = ln_ls;
 }
 
 
 pub fn
-add_line_list(&mut self, mut ln_ls: LineList)
+add_line_list(&mut self, mut ln_ls: Vec<Line>)
 {
-  self.line_list.content.append(&mut ln_ls.content);
+  self.line_list.append(&mut ln_ls);
 }
 
 
@@ -155,7 +156,7 @@ build_local_allocation(&mut self)
 {
   let  mut ls: Vec<(String,usize)> = Vec::new();
 
-    for ln in &self.line_list.content
+    for ln in &self.line_list
     {
         if let Some((name,size)) = ln.get_allocation_data()
         {
@@ -182,9 +183,9 @@ get_label_info_list(&self)-> Vec<(String,usize)>
 {
   let  mut ls: Vec<(String,usize)> = Vec::new();
 
-    for i in 0..self.line_list.content.len()
+    for i in 0..self.line_list.len()
     {
-        if let Line::Label(name) = &self.line_list.content[i]
+        if let Line::Label(name) = &self.line_list[i]
         {
           ls.push((name.clone(),i));
         }
@@ -202,7 +203,9 @@ finalize(&mut self, fi: usize, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String
 
   let  lb_ls = self.get_label_info_list();
 
-    for ln in &mut self.line_list.content
+  let  mut tbl = DestinationTable::new(g_alo_ls);
+
+    for ln in &mut self.line_list
     {
         if ln.link_to_function(fname_ls).is_err()
         {
@@ -220,7 +223,10 @@ finalize(&mut self, fi: usize, g_alo_ls: &Vec<Allocation>, fname_ls: &Vec<String
         }
 
 
-        if ln.link_to_allocation(g_alo_ls,&self.allocation_list,&self.parameter_list).is_err()
+      tbl.update_local_list(&self.allocation_list);
+      tbl.update_parameter_list(&self.parameter_list);
+
+        if ln.link_to_allocation(&tbl).is_err()
         {
           println!("function::finalize error");
 
@@ -248,7 +254,7 @@ print(&self)
 
   print!("\n{{\n");
 
-    for ln in &self.line_list.content
+    for ln in &self.line_list
     {
       ln.print();
 
@@ -264,6 +270,37 @@ print(&self)
 
 }
 
+
+
+
+impl
+core::ops::AddAssign<Line> for Function
+{
+
+
+fn
+add_assign(&mut self, ln: Line)
+{
+  self.line_list.push(ln);
+}
+
+
+}
+
+
+impl
+core::ops::AddAssign<Line> for Vec<Line>
+{
+
+
+fn
+add_assign(&mut self, ln: Line)
+{
+  self.push(ln);
+}
+
+
+}
 
 
 

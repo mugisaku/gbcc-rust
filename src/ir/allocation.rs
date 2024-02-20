@@ -1,6 +1,11 @@
 
 
-use super::collection::Collection;
+use super::collection::{
+  DestinationTable,
+  Collection,
+};
+
+
 use super::memory::{
   Memory,
   get_aligned,
@@ -33,30 +38,13 @@ fn  set_data(&mut self, id: AllocationID, off: usize);
 
 
 fn
-link(&mut self, g_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, para_ls: &Vec<Allocation>)-> Result<(),()>
+link(&mut self, tbl: &DestinationTable)-> Result<(),()>
 {
   let  name = self.get_name();
 
-
-    if let Some((i,off)) = Allocation::find_index_and_offset(l_alo_ls,name)
+    if let Some(dst) = tbl.find(name)
     {
-      self.set_data(AllocationID::Local(i),off);
-
-      Ok(())
-    }
-
-  else
-    if let Some((i,off)) = Allocation::find_index_and_offset(para_ls,name)
-    {
-      self.set_data(AllocationID::Parameter(i),off);
-
-      Ok(())
-    }
-
-  else
-    if let Some((i,off)) = Allocation::find_index_and_offset(g_alo_ls,name)
-    {
-      self.set_data(AllocationID::Global(i),off);
+      self.set_data(dst.id,dst.offset);
 
       Ok(())
     }
@@ -75,6 +63,7 @@ link(&mut self, g_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, para_ls:
 
 
 
+#[derive(Clone)]
 pub struct
 Source
 {
@@ -120,6 +109,7 @@ set_data(&mut self, id: AllocationID, off: usize)
 pub fn  new_operand_list()-> Vec<Source>{Vec::new()}
 
 
+#[derive(Clone)]
 pub struct
 Destination
 {
@@ -199,7 +189,7 @@ release(mut self)-> Vec<Source>
 pub fn  build_args()-> SourceListWrapper{SourceListWrapper{list: Vec::new()}}
 
 
-#[derive()]
+#[derive(Clone)]
 pub struct
 Allocation
 {

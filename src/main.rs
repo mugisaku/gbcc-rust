@@ -79,13 +79,10 @@ fn
 evaluate(s: &str)
 {
   use crate::language::expression::Expression;
-  use crate::language::library::Library;
 
-  let  mut lib = Library::new();
-
-    if let Ok(e) = Expression::make_from_string(s,&mut lib)
+//    if let Ok(e) = Expression::make_from_string(s)
     {
-      e.print(&lib);
+//      e.print();
 
 /*
       let  v = e.to_value(None);
@@ -103,13 +100,10 @@ fn
 execute(s: &str)
 {
   use crate::language::statement::Statement;
-  use crate::language::library::Library;
 
-  let  mut lib = Library::new();
-
-    if let Ok(st) = Statement::make_from_string(s,&mut lib)
+//    if let Ok(st) = Statement::make_from_string(s)
     {
-      st.print(&lib);
+//      st.print(0);
 
       print!("\n");
     }
@@ -119,11 +113,11 @@ execute(s: &str)
 fn
 execute_program(s: &str)
 {
-  use crate::language::library::Library;
+  use crate::language::declaration::Space;
 
-    if let Ok(lib) = Library::make_from_string(s)
+//    if let Ok(lib) = Library::make_from_string(s)
     {
-      lib.print();
+//      lib.print();
 
       print!("\n");
     }
@@ -133,8 +127,39 @@ execute_program(s: &str)
 fn
 load()
 {
-  use crate::language::library::Library;
+  use crate::language::declaration::Space;
+  use crate::language::typesystem::TypeCode;
 
+TypeCode::new_enum("Test",vec![("a",0),("v",2)]).print();
+
+  let  args: Vec<String> = env::args().collect();
+
+  let  mut buf = String::new();
+
+    for i in 1..args.len()
+    {
+      buf.push_str(&args[i]);
+    }
+
+
+/*
+  let  unff = Unff::from(&buf);
+
+  unff.print();
+
+  println!("");
+
+  let  s = unff.to_string();
+
+  println!("{}",&s);
+*/
+
+//  let  new_unff = Unff::from(&s);
+
+//  new_unff.print();
+
+  println!("");
+/*
   let  mut lib = Library::new();
 
   use std::io::Read;
@@ -157,18 +182,17 @@ load()
             }
         }
     }
+*/
+
 }
 
 
 fn
 type_make(s: &str)
 {
-  use crate::language::typesystem::Type;
-  use crate::language::library::Library;
+  use crate::language::typesystem::TypeItem;
 
-  let  mut lib = Library::new();
-
-    if let Ok(t) = Type::make_from_string(s,&mut lib)
+//    if let Ok(t) = TypeItem::make_from_string(s)
     {
 //      t.print();
 
@@ -180,10 +204,7 @@ type_make(s: &str)
 fn
 main()
 {
-//  let  (res,_) = crate::language::typesystem::Type::parse("fn(i8,u32,u32)",0);
-
-//  res.print();
-crate::ir::test::test();
+load();
 
 return; 
 /*

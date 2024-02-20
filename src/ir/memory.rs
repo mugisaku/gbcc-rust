@@ -77,6 +77,7 @@ impl  From<bool> for Word{fn from(b: bool)-> Word{if b{Word::from_u64(1)}else{Wo
 
 
 
+#[derive(Clone)]
 pub struct
 Memory
 {

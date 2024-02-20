@@ -3,11 +3,9 @@
 pub mod expression;
 pub mod typesystem;
 pub mod statement;
-pub mod evaluate;
+//pub mod compile;
 pub mod value;
-pub mod library;
-pub mod compile;
-pub mod compile_expression;
+pub mod declaration;
 
 
 use crate::language::{

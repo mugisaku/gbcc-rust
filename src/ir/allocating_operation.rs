@@ -22,6 +22,7 @@ use super::function::{
 };
 
 use super::collection::{
+  DestinationTable,
   Collection,
 
 };
@@ -62,6 +63,7 @@ link(&mut self, ls: &Vec<(String,usize)>)-> Result<(),()>
 
 
 
+#[derive(Clone)]
 pub struct
 JumpDestination
 {
@@ -95,6 +97,7 @@ fn  set_index(&mut self, i: usize){self.index = i;}
 
 
 
+#[derive(Clone)]
 pub struct
 JumpSource
 {
@@ -128,6 +131,7 @@ fn  set_index(&mut self, i: usize){self.index = i;}
 
 
 
+#[derive(Clone)]
 pub struct
 CallInfo
 {
@@ -275,6 +279,7 @@ print(&self)
 
 
 
+#[derive(Clone)]
 pub struct
 PhiPair
 {
@@ -327,6 +332,7 @@ build_phi_pairs()-> PhiPairListWrapper
 
 
 
+#[derive(Clone)]
 pub enum
 AllocatingOperation
 {
@@ -352,18 +358,18 @@ AllocatingOperation
 
 
 pub fn
-link_to_allocation(&mut self, g_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocation>, para_ls: &Vec<Allocation>)-> Result<(),()>
+link_to_allocation(&mut self, tbl: &DestinationTable)-> Result<(),()>
 {
     match self
     {
   AllocatingOperation::Unary(o,_)=>
         {
-          o.link(g_alo_ls,l_alo_ls,para_ls)
+          o.link(tbl)
         },
   AllocatingOperation::Binary(l,r,_)=>
         {
-            if  l.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
-             && r.link(g_alo_ls,l_alo_ls,para_ls).is_ok()
+            if  l.link(tbl).is_ok()
+             && r.link(tbl).is_ok()
             {
               Ok(())
             }
@@ -375,26 +381,26 @@ link_to_allocation(&mut self, g_alo_ls: &Vec<Allocation>, l_alo_ls: &Vec<Allocat
         },
   AllocatingOperation::Address(l)=>
         {
-          l.link(g_alo_ls,l_alo_ls,para_ls)
+          l.link(tbl)
         },
   AllocatingOperation::Phi(ops,defau)=>
         {
             for o in ops
             {
-                if o.value.link(g_alo_ls,l_alo_ls,para_ls).is_err()
+                if o.value.link(tbl).is_err()
                 {
                   return Err(());
                 }
             }
 
 
-          defau.link(g_alo_ls,l_alo_ls,para_ls)
+          defau.link(tbl)
         },
   AllocatingOperation::Call(ci)=>
         {
             for a in &mut ci.argument_list
             {
-                if a.link(g_alo_ls,l_alo_ls,para_ls).is_err()
+                if a.link(tbl).is_err()
                 {
                   return Err(());
                 }

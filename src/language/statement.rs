@@ -1,192 +1,60 @@
 
 
-pub mod read_statement;
-pub mod read_declaration;
-pub mod dictionary;
+use crate::syntax::print_indent;
 
-use super::library::{
-  ExpressionIndex,
-  StringIndex,
-  DeclarationIndex,
-  Library
-};
-
-use std::cell::Cell;
 use super::get_aligned_size;
-use super::expression::Expression;
-use super::value::Value;
-use super::typesystem::{
-  Type,
-  r#struct::Struct,
-  r#enum::Enum,
+use super::declaration::{
+  Declaration,
+
+};
+
+use super::expression::{
+  Expression,
+  ExpressionKeeper,
 
 };
 
 
-pub struct
-Storage
-{
-  pub(crate) r#type: Type,
-
-  pub(crate) expression_index_opt: Option<ExpressionIndex>,
-
-}
-
-
-impl
-Storage
-{
-
-
-pub fn
-print(&self, lib: &Library)
-{
-  self.r#type.print();
-
-    if let Some(ei) = &self.expression_index_opt
-    {
-      print!(" = ");
-
-        if let Some(e) = lib.get_expression(*ei)
-        {
-          e.print(lib);
-        }
-    }
-}
-
-
-}
-
-
-
-
-pub struct
-Function
-{
-  pub(crate) parameter_list: Vec<DeclarationIndex>,
-
-  pub(crate) return_type: Type,
-
-  pub(crate) block_index: BlockIndex,
-
-}
-
-
-
-
+#[derive(Clone)]
 pub enum
-Definition
+AssignOperator
 {
-  Fn(Function),
-  Var(Storage),
-  Static(Storage),
-  Const(Storage),
-  Parameter(Storage),
-  Struct(Struct),
-  Union(Struct),
-  Enum(Enum),
-  Alias(Type),
-
-}
-
-
-
-
-pub struct
-Declaration
-{
-  pub(crate) name: String,
-
-  pub(crate) definition: Definition,
+  Nop,
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Rem,
+  Shl,
+  Shr,
+  And,
+  Or,
+  Xor,
 
 }
 
 
 impl
-Declaration
+AssignOperator
 {
 
 
 pub fn
-new(name: &str, def: Definition)-> Declaration
+print(&self)
 {
-  Declaration{name: String::from(name), definition: def}
-}
-
-
-pub fn
-print(&self, lib: &Library)
-{
-    match &self.definition
+    match self
     {
-  Definition::Fn(f)=>
-        {
-          print!("fn\n{}(",&self.name);
-
-            for p in &f.parameter_list
-            {
-              lib.print_declaration(*p);
-            }
-
-
-          print!(")-> ");
-
-          f.return_type.print();
-
-
-          print!("\n");
-
-            if let Some(blk) = lib.get_block(f.block_index)
-            {
-              blk.print(lib);
-            }
-        },
-  Definition::Var(s)=>
-        {
-          print!("var\n{}: ",&self.name);
-
-          s.print(lib);
-        },
-  Definition::Static(s)=>
-        {
-          print!("static\n{}: ",&self.name);
-
-          s.print(lib);
-        },
-  Definition::Const(s)=>
-        {
-          print!("const\n{}: ",&self.name);
-
-          s.print(lib);
-        },
-  Definition::Parameter(s)=>
-        {
-          print!("para\n{}: ",&self.name);
-
-          s.print(lib);
-        },
-  Definition::Struct(st)=>
-        {
-          print!("struct\n{}",&self.name);
-
-          st.print();
-        },
-  Definition::Union(un)=>
-        {
-          print!("union\n{}",&self.name);
-
-          un.print();
-        },
-  Definition::Enum(en)=>
-        {
-          print!("enum\n{}",&self.name);
-
-          en.print(lib);
-        },
-  Definition::Alias(ti)=>
-        {
-          print!("alias\n{}: ",&self.name);
-        },
+  AssignOperator::Nop=>{print!("=");},
+  AssignOperator::Add=>{print!("+=");},
+  AssignOperator::Sub=>{print!("-=");},
+  AssignOperator::Mul=>{print!("*=");},
+  AssignOperator::Div=>{print!("/=");},
+  AssignOperator::Rem=>{print!("%=");},
+  AssignOperator::Shl=>{print!("<<=");},
+  AssignOperator::Shr=>{print!(">>=");},
+  AssignOperator::And=>{print!("&=");},
+  AssignOperator::Or=>{print!("|=");},
+  AssignOperator::Xor=>{print!("^=");},
     }
 }
 
@@ -200,16 +68,12 @@ pub enum
 Statement
 {
   Empty,
-  Declaration(DeclarationIndex),
-  Block(BlockIndex),
-  If((ExpressionIndex,BlockIndex),Vec<(ExpressionIndex,BlockIndex)>,Option<BlockIndex>),
-  For(BlockIndex),
-  While((ExpressionIndex,BlockIndex)),
-  Loop(BlockIndex),
+  Declaration(Declaration),
+  Block(Block),
   Break,
   Continue,
-  Return(Option<ExpressionIndex>),
-  Expression(ExpressionIndex),
+  Return(Option<ExpressionKeeper>),
+  Expression(ExpressionKeeper,Option<(AssignOperator,ExpressionKeeper)>),
 
 }
 
@@ -220,100 +84,35 @@ Statement
 
 
 pub fn
-make_from_string(s: &str, lib: &mut Library)-> Result<Statement,()>
+print(&self, indent: usize)
 {
-  use crate::syntax::dictionary::Dictionary;
+  print_indent(indent);
 
-  let       dic = self::dictionary::get_dictionary();
-  let  expr_dic = super::expression::dictionary::get_dictionary();
-  let    ty_dic = super::typesystem::dictionary::get_dictionary();
-
-  let  dics: Vec<&Dictionary> = vec![dic,expr_dic,ty_dic];
-
-    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"statement",Some(dics))
-    {
-      let  cur = crate::syntax::Cursor::new(&dir);
-
-        if let Some(e_dir) = cur.get_directory()
-        {
-//                  e_dir.print(0);
-
-          return self::read_statement::read_statement(&e_dir,lib);
-        }
-    }
-
-
-  println!("make_from_string error: parse is failed");
-
-  Err(())
-}
-
-
-pub fn
-print(&self, lib: &Library)
-{
     match self
     {
-  Statement::Empty=>{print!(";");},
-  Statement::Declaration(di)=>{lib.print_declaration(*di);},
-  Statement::Block(bi)=>{lib.print_block(*bi);},
-  Statement::If((top_ei,top_bi),(elif_ls),el_bi_opt)=>
-        {
-          print!("if ");
-
-          lib.print_expression(*top_ei);
-
-          lib.print_block(*top_bi);
-
-            for (ei,bi) in elif_ls
-            {
-              print!("else if ");
-
-              lib.print_expression(*ei);
-
-              lib.print_block(*bi);
-            }
-
-
-            if let Some(bi) = el_bi_opt
-            {
-              print!("else ");
-
-              lib.print_block(*bi);
-            }
-        },
-  Statement::For(blks)=>{},
-  Statement::While((ei,bi))=>
-        {
-          print!("while ");
-
-          lib.print_block(*bi);
-        },
-  Statement::Loop(bi)=>
-        {
-          print!("loop\n");
-
-          lib.print_block(*bi);
-        },
+  Statement::Empty=>{},
+  Statement::Declaration(d)=>{d.print();},
+  Statement::Block(b)=>{b.print(indent);},
   Statement::Break=>{print!("break");},
   Statement::Continue=>{print!("continue");},
-  Statement::Return(ei_opt)=>
+  Statement::Return(ek_opt)=>
         {
           print!("return ");
 
-            if let Some(ei) = ei_opt
+            if let Some(ek) = ek_opt
             {
-                if let Some(e) = lib.get_expression(*ei)
-                {
-                  e.print(lib);
-                }
+              ek.expression.print();
             }
         },
-  Statement::Expression(ei)=>
+  Statement::Expression(ek,ass_opt)=>
         {
-            if let Some(e) = lib.get_expression(*ei)
+          ek.expression.print();
+
+            if let Some((o,r)) = ass_opt
             {
-              e.print(lib);
+              o.print();
+
+              r.expression.print();
             }
         },
     }
@@ -325,21 +124,29 @@ print(&self, lib: &Library)
 
 
 
-#[derive(PartialEq,Clone,Copy)]
-pub struct
-BlockIndex
+pub fn
+print_statement_list(ls: &Vec<Statement>, indent: usize)
 {
-  pub(crate) value: usize,
+    for stmt in ls
+    {
+      stmt.print(indent);
 
+      print!(";\n");
+    }
 }
 
 
-pub struct
+
+
+pub enum
 Block
 {
-  pub(crate) parent_block_index_opt: Option<BlockIndex>,
-
-  pub(crate) statement_list: Vec<Statement>,
+  Plain(Vec<Statement>),
+  IfList(Vec<Block>),
+  If(ExpressionKeeper,Vec<Statement>),
+  While(ExpressionKeeper,Vec<Statement>),
+  Loop(Vec<Statement>),
+  For,
 
 }
 
@@ -350,31 +157,80 @@ Block
 
 
 pub fn
-new(parent_block_index_opt: Option<BlockIndex>)-> Block
+print(&self, indent: usize)
 {
-  Block{parent_block_index_opt, statement_list: Vec::new()}
-}
-
-
-pub fn
-get_statement_list(&self)-> &Vec<Statement>
-{
-  &self.statement_list
-}
-
-
-pub fn
-print(&self, lib: &Library)
-{
-  print!("{{\n");
-
-    for stmt in &self.statement_list
+    match self
     {
-      stmt.print(lib);
+  Block::Plain(ls)=>
+        {
+          print!("\n");
 
-      print!("\n");
+          print_indent(indent);
+
+          print!("{{\n");
+
+          print_statement_list(ls,indent+1);
+        },
+  Block::IfList(ls)=>
+        {
+            if let Some(top) = ls.first()
+            {
+              top.print(indent);
+
+                for i in 1..ls.len()
+                {
+                  print!(" else ");
+
+                  ls[i].print(indent);
+                }
+            }
+
+
+          return;
+        },
+  Block::If(cond,ls)=>
+        {
+          print!("if ");
+
+          cond.expression.print();
+
+          print!("\n");
+
+          print_indent(indent);
+
+          print!("{{\n");
+
+          print_statement_list(ls,indent+1);
+        },
+  Block::For=>{},
+  Block::While(cond,ls)=>
+        {
+          print!("while ");
+
+          cond.expression.print();
+
+          print!("\n");
+
+          print_indent(indent);
+
+          print!("{{\n");
+
+          print_statement_list(&ls,indent+1);
+        },
+  Block::Loop(ls)=>
+        {
+          print!("loop\n");
+
+          print_indent(indent);
+
+          print!("{{\n");
+
+          print_statement_list(&ls,indent+1);
+        },
     }
 
+
+  print_indent(indent);
 
   print!("}}\n");
 }

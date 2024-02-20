@@ -1,92 +1,100 @@
 
 
-pub mod read_expression;
-pub mod dictionary;
-
-use super::library::{
-  ExpressionIndex,
-  StringIndex,
-  Library
-};
-
 use super::typesystem::{
-  Type,
+  TypeItem,
   TypeInfo,
+
 };
+
+use super::declaration::{
+  Declaration,
+  DeclarationLink,
+
+};
+
+use super::value::{
+  Value,
+  ValueData,
+
+};
+
+
+
 
 #[derive(Clone)]
-pub enum
-OperandCore
+pub struct
+StringKeeper
 {
-  Identifier(String),
-  Integer(u64),
-  Floating(f64),
-  Character(char),
-  String(StringIndex),
-  Expression(ExpressionIndex),
+  pub(crate) string: String,
+  pub(crate) offset: usize,
 
 }
 
 
 impl
-OperandCore
+StringKeeper
 {
 
 
 pub fn
-get_type(&self, lib: &Library)-> Result<Type,()>
+new(s: &str)-> StringKeeper
 {
-    match self
-    {
-  OperandCore::Identifier(s)=>
-        {
-               if s ==  "true"{return Ok(Type::Bool);}
-          else if s == "false"{return Ok(Type::Bool);}
-        },
-  OperandCore::Integer(_)  =>{return Ok(Type::U64);},
-  OperandCore::Floating(_) =>{return Ok(Type::F64);},
-  OperandCore::Character(_)=>{return Ok(Type::Char);},
-  OperandCore::String(_)   =>{return Ok(Type::Reference(Box::new(Type::Char)));},
-  OperandCore::Expression(i)=>
-        {
-            if let Some(e) = lib.get_expression(*i)
-            {
-              return e.get_type(lib);
-            }
-        },
-    }
+  StringKeeper{
+    string: s.to_string(),
+    offset: 0,
+  }
+}
 
 
-  Err(())
+}
+
+
+
+
+#[derive(Clone)]
+pub struct
+ExpressionKeeper
+{
+  pub(crate) expression: Box<Expression>,
+  pub(crate) preevaluated_value_opt: Option<Box<Value>>,
+
+}
+
+
+impl
+ExpressionKeeper
+{
+
+
+pub fn
+new(e: Expression)-> ExpressionKeeper
+{
+  ExpressionKeeper{
+    expression: Box::new(e),
+    preevaluated_value_opt: None,
+  }
 }
 
 
 pub fn
-print(&self, lib: &Library)
+get_value_mut(&mut self, decln: &DeclarationLink)-> Option<&Value>
 {
-    match self
+    if let None = &self.preevaluated_value_opt
     {
-  OperandCore::Identifier(s)=>{print!("{}",s);},
-  OperandCore::Integer(u)=>{print!("{}",u);},
-  OperandCore::Floating(f)=>{print!("{}",f);},
-  OperandCore::Character(c)=>{print!("{}",c);},
-  OperandCore::String(i)=>
+        if let Ok(v) = self.expression.try_get_value_mut(decln)
         {
-            if let Some(s) = lib.get_string(*i)
-            {
-              print!("\"{}\"",s);
-            }
-        },
-  OperandCore::Expression(i)=>
-        {
-            if let Some(e) = lib.get_expression(*i)
-            {
-              print!("(");
-              e.print(lib);
-              print!(")");
-            }
-        },
+          self.preevaluated_value_opt = Some(Box::new(v));
+        }
     }
+
+
+    if let Some(v) = &self.preevaluated_value_opt
+    {
+      return Some(v);
+    }
+
+
+  None
 }
 
 
@@ -100,9 +108,8 @@ pub enum
 PostfixOperator
 {
   Access(String),
-  Subscript(ExpressionIndex),
-  Call(Vec<ExpressionIndex>),
-  NameResolution(String),
+  Subscript(ExpressionKeeper),
+  Call(Vec<ExpressionKeeper>),
   Increment,
   Decrement,
 
@@ -115,33 +122,10 @@ PostfixOperator
 
 
 pub fn
-get_type(&self, ty: &Type, lib: &Library)-> Result<Type,()>
+evaluate(&self, decln: &DeclarationLink, e: &mut ExpressionKeeper)-> Result<Value,()>
 {
-    match self
+    if let Some(v) = e.get_value_mut(decln)
     {
-  PostfixOperator::Access(s)=>
-        {
-/*
-            if let Ok(ti) = TypeInfo::make(tx,lib)
-            {
-                if let Some(f) = ti.get_field(s)
-                {
-                  return Ok(f.type_index);
-                }
-            }
-*/
-        },
-  PostfixOperator::Subscript(_)=>
-        {
-        },
-  PostfixOperator::Call(_)=>
-        {
-        },
-  PostfixOperator::NameResolution(_)=>
-        {
-        },
-  PostfixOperator::Increment=>{},
-  PostfixOperator::Decrement=>{},
     }
 
 
@@ -150,40 +134,30 @@ get_type(&self, ty: &Type, lib: &Library)-> Result<Type,()>
 
 
 pub fn
-print(&self, lib: &Library)
+print(&self)
 {
     match self
     {
   PostfixOperator::Access(s)=>{print!(".{}",s);},
-  PostfixOperator::Subscript(i)=>
+  PostfixOperator::Subscript(ek)=>
         {
-            if let Some(e) = lib.get_expression(*i)
-            {
-              print!("[");
-              e.print(lib);
-              print!("]");
-            }
+          print!("[");
+          ek.expression.print();
+          print!("]");
         },
   PostfixOperator::Call(args)=>
         {
           print!("(");
 
-            for i in args
+            for ek in args
             {
-                if let Some(e) = lib.get_expression(*i)
-                {
-                  e.print(lib);
-                }
-
+              ek.expression.print();
 
               print!(", ");
             }
 
+
           print!(")");
-        },
-  PostfixOperator::NameResolution(s)=>
-        {
-          print!("::{}",s);
         },
   PostfixOperator::Increment=>{print!("++");},
   PostfixOperator::Decrement=>{print!("--");},
@@ -217,84 +191,14 @@ PrefixOperator
 
 
 pub fn
-get_type(&self, ty: &Type, lib: &Library)-> Result<Type,()>
+evaluate(&self, decln: &DeclarationLink, e: &mut ExpressionKeeper)-> Result<Value,()>
 {
-    match self
+    if let Some(v) = e.get_value_mut(decln)
     {
-  PrefixOperator::Neg=>
-        {
-            if ty.is_signed_integer() || ty.is_floating()
-            {
-              Ok(ty.clone())
-            }
-
-          else
-            {
-              Err(())
-            }
-        },
-  PrefixOperator::Not=>
-        {
-            if ty.is_integer()
-            {
-              Ok(ty.clone())
-            }
-
-          else
-            {
-              Err(())
-            }
-        },
-  PrefixOperator::Address=>
-         {
-            match ty
-            {
-          Type::Reference(_)=>{Ok(Type::U64)}
-          _=>{Err(())}
-            }
-        },
-  PrefixOperator::Dereference=>
-         {
-            match ty
-            {
-          Type::Pointer(_)=>{Ok(Type::I64)}
-          Type::Reference(_)=>{Ok(Type::I64)}
-          _=>{Err(())}
-            }
-        },
-  PrefixOperator::LogicalNot=>
-         {
-            match ty
-            {
-          Type::Bool=>{Ok(Type::Bool)}
-          _=>{Err(())}
-            }
-        },
-  PrefixOperator::Increment=>
-         {
-            match ty
-            {
-          Type::I8=>{Ok(Type::I64)}
-          Type::I16=>{Ok(Type::I64)}
-          Type::I32=>{Ok(Type::I64)}
-          Type::I64=>{Ok(Type::I64)}
-          Type::ISize=>{Ok(Type::ISize)}
-          _=>{Err(())}
-            }
-        },
-  PrefixOperator::Decrement=>
-        {
-            match ty
-            {
-          Type::I8=>{Ok(Type::I64)}
-          Type::I16=>{Ok(Type::I64)}
-          Type::I32=>{Ok(Type::I64)}
-          Type::I64=>{Ok(Type::I64)}
-          Type::ISize=>{Ok(Type::ISize)}
-          _=>{Err(())}
-            }
-        },
     }
+
+
+  Err(())
 }
 
 
@@ -351,117 +255,229 @@ BinaryOperator
 
 
 fn
-for_arithmetic(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+for_i(l: &Value, r: &Value)-> Option<i64>
 {
-    if  (lt.is_i8()    == rt.is_i8())
-     || (lt.is_i16()   == rt.is_i16())
-     || (lt.is_i32()   == rt.is_i32())
-     || (lt.is_i64()   == rt.is_i64())
-     || (lt.is_isize() == rt.is_isize())
-     || (lt.is_u8()    == rt.is_u8())
-     || (lt.is_u16()   == rt.is_u16())
-     || (lt.is_u32()   == rt.is_u32())
-     || (lt.is_u64()   == rt.is_u64())
-     || (lt.is_usize() == rt.is_usize())
-     || (lt.is_f32()   == rt.is_f32())
-     || (lt.is_f64()   == rt.is_f64())
+    if (l.type_item.is_i8()    == r.type_item.is_i8())
+    || (l.type_item.is_i16()   == r.type_item.is_i16())
+    || (l.type_item.is_i32()   == r.type_item.is_i32())
+    || (l.type_item.is_i64()   == r.type_item.is_i64())
+    || (l.type_item.is_isize() == r.type_item.is_isize())
     {
-      return Ok(lt.clone());
+        if let ValueData::I64(ri) = r.data
+        {
+          return Some(ri);
+        }
     }
 
 
-  Err(())
+  None
 }
 
 
 fn
-for_comparison(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+for_u(l: &Value, r: &Value)-> Option<u64>
 {
-    if  (lt.is_char()  == rt.is_char())
-     || (lt.is_i8()    == rt.is_i8())
-     || (lt.is_i16()   == rt.is_i16())
-     || (lt.is_i32()   == rt.is_i32())
-     || (lt.is_i64()   == rt.is_i64())
-     || (lt.is_isize() == rt.is_isize())
-     || (lt.is_u8()    == rt.is_u8())
-     || (lt.is_u16()   == rt.is_u16())
-     || (lt.is_u32()   == rt.is_u32())
-     || (lt.is_u64()   == rt.is_u64())
-     || (lt.is_usize() == rt.is_usize())
-     || (lt.is_f32()   == rt.is_f32())
-     || (lt.is_f64()   == rt.is_f64())
+    if (l.type_item.is_u8()    == r.type_item.is_u8())
+    || (l.type_item.is_u16()   == r.type_item.is_u16())
+    || (l.type_item.is_u32()   == r.type_item.is_u32())
+    || (l.type_item.is_u64()   == r.type_item.is_u64())
+    || (l.type_item.is_usize() == r.type_item.is_usize())
     {
-      return Ok(lt.clone());
+        if let ValueData::U64(ri) = r.data
+        {
+          return Some(ri);
+        }
     }
 
 
-  Err(())
+  None
 }
 
 
 fn
-for_bitshift(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+for_f(l: &Value, r: &Value)-> Option<f64>
 {
-    if lt.is_integer() && rt.is_unsigned_integer()
+    if (l.type_item.is_f32()   == r.type_item.is_f32())
+    || (l.type_item.is_f64()   == r.type_item.is_f64())
     {
-      return Ok(lt.clone());
+        if let ValueData::F64(ri) = r.data
+        {
+          return Some(ri);
+        }
     }
 
 
-  Err(())
+  None
 }
 
 
 fn
-for_bitwise(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+for_shu(l: &Value, r: &Value)-> Option<u64>
 {
-    if lt.is_integer() && rt.is_unsigned_integer()
+    if (l.type_item.is_u8()
+    ||  l.type_item.is_u16()
+    ||  l.type_item.is_u32()
+    ||  l.type_item.is_u64()
+    ||  l.type_item.is_usize())
+    && r.type_item.is_usize()
     {
-      return Ok(lt.clone());
+        if let ValueData::U64(ri) = r.data
+        {
+          return Some(ri);
+        }
     }
 
 
-  Err(())
+  None
 }
 
 
 fn
-for_logical(lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+for_shi(l: &Value, r: &Value)-> Option<u64>
 {
-    if lt.is_bool() && rt.is_bool()
+    if (l.type_item.is_i8()
+    ||  l.type_item.is_i16()
+    ||  l.type_item.is_i32()
+    ||  l.type_item.is_i64()
+    ||  l.type_item.is_isize())
+    && r.type_item.is_usize()
     {
-      return Ok(Type::Bool);
+        if let ValueData::U64(ri) = r.data
+        {
+          return Some(ri);
+        }
     }
 
 
-  Err(())
+  None
+}
+
+
+fn
+for_log(l: &Value, r: &Value)-> Option<bool>
+{
+    if l.type_item.is_bool() && r.type_item.is_bool()
+    {
+        if let ValueData::U64(ri) = r.data
+        {
+          return Some(ri != 0);
+        }
+    }
+
+
+  None
 }
 
 
 pub fn
-get_type(&self, lt: &Type, rt: &Type, lib: &Library)-> Result<Type,()>
+evaluate(&self, decln: &DeclarationLink, le: &mut ExpressionKeeper, re: &mut ExpressionKeeper)-> Result<Value,()>
 {
-    match self
+    if let Some(lv) = le.get_value_mut(decln)
     {
-  BinaryOperator::Add=>{Self::for_arithmetic(lt,rt,lib)},
-  BinaryOperator::Sub=>{Self::for_arithmetic(lt,rt,lib)},
-  BinaryOperator::Mul=>{Self::for_arithmetic(lt,rt,lib)},
-  BinaryOperator::Div=>{Self::for_arithmetic(lt,rt,lib)},
-  BinaryOperator::Rem=>{Self::for_arithmetic(lt,rt,lib)},
-  BinaryOperator::Shl=>{Self::for_bitshift(lt,rt,lib)},
-  BinaryOperator::Shr=>{Self::for_bitshift(lt,rt,lib)},
-  BinaryOperator::And=>{Self::for_bitwise(lt,rt,lib)},
-  BinaryOperator::Or =>{Self::for_bitwise(lt,rt,lib)},
-  BinaryOperator::Xor=>{Self::for_bitwise(lt,rt,lib)},
-  BinaryOperator::Eq  =>{Self::for_comparison(lt,rt,lib)},
-  BinaryOperator::Neq =>{Self::for_comparison(lt,rt,lib)},
-  BinaryOperator::Lt  =>{Self::for_comparison(lt,rt,lib)},
-  BinaryOperator::Lteq=>{Self::for_comparison(lt,rt,lib)},
-  BinaryOperator::Gt  =>{Self::for_comparison(lt,rt,lib)},
-  BinaryOperator::Gteq=>{Self::for_comparison(lt,rt,lib)},
-  BinaryOperator::LogicalAnd=>{Self::for_logical(lt,rt,lib)},
-  BinaryOperator::LogicalOr =>{Self::for_logical(lt,rt,lib)},
+        if let Some(rv) = re.get_value_mut(decln)
+        {
+            match self
+            {
+          BinaryOperator::Add=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.addu(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.addi(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.addf(r));}
+                }
+          BinaryOperator::Sub=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.subu(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.subi(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.subf(r));}
+                }
+          BinaryOperator::Mul=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.mulu(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.muli(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.mulf(r));}
+                }
+          BinaryOperator::Div=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.divu(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.divi(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.divf(r));}
+                }
+          BinaryOperator::Rem=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.remu(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.remi(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.remf(r));}
+                }
+          BinaryOperator::Shl=>
+                {
+                       if let Some(r) = Self::for_shu(&lv,&rv){return Ok(lv.shlu(r));}
+                  else if let Some(r) = Self::for_shi(&lv,&rv){return Ok(lv.shli(r));}
+                }
+          BinaryOperator::Shr=>
+                {
+                       if let Some(r) = Self::for_shu(&lv,&rv){return Ok(lv.shru(r));}
+                  else if let Some(r) = Self::for_shi(&lv,&rv){return Ok(lv.shri(r));}
+                }
+          BinaryOperator::And=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.andu(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.andi(r));}
+                }
+          BinaryOperator::Or=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.oru(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.ori(r));}
+                }
+          BinaryOperator::Xor=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.xoru(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.xori(r));}
+                }
+          BinaryOperator::Eq=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.equ(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.eqi(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.eqf(r));}
+                }
+          BinaryOperator::Neq=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.nequ(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.neqi(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.neqf(r));}
+                }
+          BinaryOperator::Lt=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.ltu(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.lti(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.ltf(r));}
+                }
+          BinaryOperator::Lteq=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.ltequ(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.lteqi(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.lteqf(r));}
+                }
+          BinaryOperator::Gt=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.gtu(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.gti(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.gtf(r));}
+                }
+          BinaryOperator::Gteq=>
+                {
+                       if let Some(r) = Self::for_u(&lv,&rv){return Ok(lv.gtequ(r));}
+                  else if let Some(r) = Self::for_i(&lv,&rv){return Ok(lv.gteqi(r));}
+                  else if let Some(r) = Self::for_f(&lv,&rv){return Ok(lv.gteqf(r));}
+                }
+          BinaryOperator::LogicalAnd=>{if let Some(r) = Self::for_log(&lv,&rv){return Ok(lv.log_and(r));}}
+          BinaryOperator::LogicalOr =>{if let Some(r) = Self::for_log(&lv,&rv){return Ok(lv.log_or( r));}}
+          _=>{}
+            }
+        }
     }
+
+
+  Err(())
 }
 
 
@@ -498,45 +514,36 @@ print(&self)
 
 
 #[derive(Clone)]
-pub enum
-AssignOperator
+pub struct
+Path
 {
-  Nop,
-  Add,
-  Sub,
-  Mul,
-  Div,
-  Rem,
-  Shl,
-  Shr,
-  And,
-  Or,
-  Xor,
-
+  pub(crate) identifier_list: Vec<String>,
 }
 
 
 impl
-AssignOperator
+Path
 {
+
+
+pub fn
+new()-> Path
+{
+  Path{identifier_list: Vec::new()}
+}
 
 
 pub fn
 print(&self)
 {
-    match self
+    if let Some(first) = self.identifier_list.first()
     {
-  AssignOperator::Nop=>{print!("=");},
-  AssignOperator::Add=>{print!("+=");},
-  AssignOperator::Sub=>{print!("-=");},
-  AssignOperator::Mul=>{print!("*=");},
-  AssignOperator::Div=>{print!("/=");},
-  AssignOperator::Rem=>{print!("%=");},
-  AssignOperator::Shl=>{print!("<<=");},
-  AssignOperator::Shr=>{print!(">>=");},
-  AssignOperator::And=>{print!("&=");},
-  AssignOperator::Or=>{print!("|=");},
-  AssignOperator::Xor=>{print!("^=");},
+      print!("{}",first);
+
+        for i in 1..self.identifier_list.len()
+        {
+          print!("::{}",&self.identifier_list[i]);
+        }
     }
 }
 
@@ -548,151 +555,20 @@ print(&self)
 
 #[derive(Clone)]
 pub enum
-Operator
-{
-  Prefix(PrefixOperator),
-  Postfix(PostfixOperator),
-  Binary(BinaryOperator),
-
-}
-
-
-impl
-Operator
-{
-
-
-pub fn
-get_priority(&self)-> usize
-{
-    match self
-    {
-  Operator::Postfix(o)=>{return 3;},
-  Operator::Prefix(o)=>  {return 2;},
-  Operator::Binary(o)=> {return 1;},
-    }
-}
-
-
-pub fn
-print(&self, lib: &Library)
-{
-    match self
-    {
-  Operator::Postfix(o)=>{o.print(lib);},
-  Operator::Prefix(o)=>{o.print();},
-  Operator::Binary(o)=>{o.print();},
-    }
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-Operand
-{
-  pub(crate) prefix_operator_list: Vec<PrefixOperator>,
-
-  pub(crate) core: OperandCore,
-
-  pub(crate) postfix_operator_list: Vec<PostfixOperator>,
-
-}
-
-
-impl
-Operand
-{
-
-
-pub fn
-get_type(&self, lib: &Library)-> Result<Type,()>
-{
-    if let Ok(mut lt) = self.core.get_type(lib)
-    {
-        for o in &self.postfix_operator_list
-        {
-            if let Ok(t) = o.get_type(&lt,lib)
-            {
-              lt = t;
-            }
-
-          else
-            {
-              return Err(());
-            }
-        }
-
-
-        for o in &self.prefix_operator_list
-        {
-            if let Ok(t) = o.get_type(&lt,lib)
-            {
-              lt = t;
-            }
-
-          else
-            {
-              return Err(());
-            }
-        }
-
-
-      return Ok(lt);
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-print(&self, lib: &Library)
-{
-    for o in &self.prefix_operator_list
-    {
-      o.print();
-    }
-
-
-  self.core.print(lib);
-
-    for o in &self.postfix_operator_list
-    {
-      o.print(lib);
-    }
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-ExpressionTail
-{
-  pub(crate) operator: BinaryOperator,
-
-  pub(crate) operand: Operand,
-
-}
-
-
-#[derive(Clone)]
-pub struct
 Expression
 {
-  pub(crate) operand: Operand,
+  Identifier(Path),
+  Integer(u64),
+  Floating(f64),
+  Character(char),
+  String(StringKeeper),
 
-  pub(crate) tail_list: Vec<ExpressionTail>,
+  SubExpression(ExpressionKeeper),
 
-  pub(crate) assign_part_opt: Option<(AssignOperator,ExpressionIndex)>,
+  PostfixOperation(PostfixOperator,ExpressionKeeper),
+   PrefixOperation(PrefixOperator,ExpressionKeeper),
+
+  BinaryOperation(BinaryOperator,ExpressionKeeper,ExpressionKeeper),
 
 }
 
@@ -703,11 +579,11 @@ Expression
 
 
 pub fn
-make_from_string(s: &str, lib: &mut Library)-> Result<Expression,()>
+try_from(s: &str)-> Result<Expression,()>
 {
   use crate::syntax::dictionary::Dictionary;
 
-  let  dic = self::dictionary::get_dictionary();
+  let  dic = super::declaration::expression_dictionary::get_dictionary();
 
   let  dics: Vec<&Dictionary> = vec![];
 
@@ -719,7 +595,7 @@ make_from_string(s: &str, lib: &mut Library)-> Result<Expression,()>
         {
 //          e_dir.print(0);
 
-          return self::read_expression::read_expression(&e_dir,lib);
+          return crate::language::declaration::read_expression::read_expression(&e_dir);
         }
     }
 
@@ -731,66 +607,85 @@ make_from_string(s: &str, lib: &mut Library)-> Result<Expression,()>
 
 
 pub fn
-get_type(&self, lib: &Library)-> Result<Type,()>
+try_get_value_mut(&mut self, decln: &DeclarationLink)-> Result<Value,()>
 {
-    if let Ok(mut lt) = self.operand.get_type(lib)
+    match self
     {
-        for tail in &self.tail_list
+  Expression::Identifier(path)=>
         {
-            if let Ok(rt) = tail.operand.get_type(lib)
+          Err(())
+        },
+  Expression::Integer(u)=>{Ok(Value::new_u64(*u))},
+  Expression::Floating(f)=>{Ok(Value::new_f64(*f))},
+  Expression::Character(c)=>{Ok(Value::new_char(*c))},
+  Expression::String(sk)=>
+        {
+Err(())
+//          Ok(Value::new_string(&sk.string))
+        },
+  Expression::SubExpression(ek)=>
+        {
+            if let Some(v) = ek.get_value_mut(decln)
             {
-                if let Ok(new_t) = tail.operator.get_type(&lt,&rt,lib)
-                {
-                  lt = new_t;
-                }
-
-              else
-                {
-                  return Err(());
-                }
+              Ok(v.clone())
             }
 
           else
             {
-              return Err(());
+              Err(())
             }
-        }
-
-
-        if let Some(_) = &self.assign_part_opt
+        },
+  Expression::PrefixOperation(o,e)=>
         {
-          return Ok(Type::Void);
-        }
-
-
-      return Ok(lt);
+          o.evaluate(decln,e)
+        },
+  Expression::PostfixOperation(o,e)=>
+        {
+          o.evaluate(decln,e)
+        },
+  Expression::BinaryOperation(o,l,r)=>
+        {
+          o.evaluate(decln,l,r)
+        },
     }
-
-
-  Err(())
 }
 
 
 pub fn
-print(&self, lib: &Library)
+print(&self)
 {
-  self.operand.print(lib);
-
-    for t in &self.tail_list
+    match self
     {
-      t.operator.print();
-      t.operand.print(lib);
-    }
-
-
-    if let Some((a,ei)) = &self.assign_part_opt
-    {
-      a.print();
-
-        if let Some(e) = lib.get_expression(*ei)
+  Expression::Identifier(path)=>{path.print();},
+  Expression::Integer(u)=>{print!("{}",u);},
+  Expression::Floating(f)=>{print!("{}",f);},
+  Expression::Character(c)=>{print!("{}",c);},
+  Expression::String(sk)=>
         {
-          e.print(lib);
-        }
+          print!("\"{}\"",&sk.string);
+        },
+  Expression::SubExpression(ek)=>
+        {
+          print!("(");
+          ek.expression.print();
+          print!(")");
+        },
+  Expression::PrefixOperation(o,e)=>
+        {
+          o.print();
+          e.expression.print();
+        },
+  Expression::PostfixOperation(o,e)=>
+        {
+          e.expression.print();
+          o.print();
+        },
+  Expression::BinaryOperation(o,l,r)=>
+        {
+          l.expression.print();
+          o.print();
+          r.expression.print();
+        },
     }
 }
 

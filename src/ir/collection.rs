@@ -27,6 +27,128 @@ use super::function::Function;
 
 #[derive()]
 pub struct
+DestinationTable
+{
+  pub(crate)    global_list: Vec<Destination>,
+  pub(crate)     local_list: Vec<Destination>,
+  pub(crate) parameter_list: Vec<Destination>,
+
+}
+
+
+impl
+DestinationTable
+{
+
+
+fn
+new_id(base_id: AllocationID, i: usize)-> AllocationID
+{
+    match base_id
+    {
+  AllocationID::Global(_)=>   {AllocationID::Global(i)},
+  AllocationID::Local(_)=>    {AllocationID::Local(i)},
+  AllocationID::Parameter(_)=>{AllocationID::Parameter(i)},
+    }
+}
+
+
+fn
+copy(dst_ls: &mut Vec<Destination>, alo_ls: &Vec<Allocation>, base_id: AllocationID)
+{
+  dst_ls.clear();
+
+    for i in 0..alo_ls.len()
+    {
+      let  alo = &alo_ls[i];
+
+      let  dst = Destination{name: alo.name.clone(), id: Self::new_id(base_id,i), offset: alo.offset};
+
+      dst_ls.push(dst);
+    }
+}
+
+
+fn
+find_destination<'a>(ls: &'a Vec<Destination>, name: &str)-> Option<&'a Destination>
+{
+    for dst in ls
+    {
+        if dst.name == name
+        {
+          return Some(dst);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+new(g_alo_ls: &Vec<Allocation>)-> DestinationTable
+{
+  let  mut tbl = DestinationTable{
+       global_list: Vec::new(),
+        local_list: Vec::new(),
+    parameter_list: Vec::new(),
+  };
+
+
+  Self::copy(&mut tbl.global_list,g_alo_ls,AllocationID::Global(0));
+
+  tbl
+}
+
+
+pub fn
+find(&self, name: &str)-> Option<&Destination>
+{
+    if let Some(dst) = Self::find_destination(&self.local_list,name)
+    {
+      Some(dst)
+    }
+
+  else
+    if let Some(dst) = Self::find_destination(&self.parameter_list,name)
+    {
+      Some(dst)
+    }
+
+  else
+    if let Some(dst) = Self::find_destination(&self.global_list,name)
+    {
+      Some(dst)
+    }
+
+  else
+    {
+      None
+    }
+}
+
+
+pub fn
+update_parameter_list(&mut self, alo_ls: &Vec<Allocation>)
+{
+  Self::copy(&mut self.parameter_list,alo_ls,AllocationID::Parameter(0));
+}
+
+
+pub fn
+update_local_list(&mut self, alo_ls: &Vec<Allocation>)
+{
+  Self::copy(&mut self.local_list,alo_ls,AllocationID::Local(0));
+}
+
+
+}
+
+
+
+
+#[derive()]
+pub struct
 Collection
 {
   pub(crate) allocation_list: Vec<Allocation>,

@@ -7,11 +7,25 @@ static DIC_S: &'static str =
 r##"
 #statement
 
+assign_operator:
+    "="
+  | "+="
+  | "-="
+  | "*="
+  | "/="
+  | "%="
+  | "|=" 
+  | "&="
+  | "^="
+  | "<<="
+  | ">>="
+  ;
+
+
+expression_or_assign: expression::expression & [assign_operator & expression::expression];
+
+
 statement: ";"
-  |  if
-  | loop
-  | while
-  | for
   | break
   | continue
   | block
@@ -24,26 +38,33 @@ statement: ";"
   | union
   | enum
   | alias
-  | expression::expression
+  | expression_or_assign
   ;
 
-else    : 'else & block;
-else_if : 'else & 'if & conditional_block;
-if      : 'if -> conditional_block & [{else_if}] & [else];
-loop    : 'loop -> block;
-while   : 'while -> conditional_block;
-for     : 'for -> block;
+
 break   : 'break;
 continue: 'continue;
-block   : "{" & [{statement}] & "}";
 return  : 'return -> [expression::expression];
 
-conditional_block: expression::expression & block;
+
+block: if_list | while | for | loop | statement_list;
+
+statement_list: "{" & [{statement}] & "}";
+
+statement_list_with_condition: expression::expression & statement_list;
+
+if_list : 'if -> statement_list_with_condition & [{else_if}] & [else];
+else_if : 'else & 'if & statement_list_with_condition;
+else    : 'else & statement_list;
+loop    : 'loop -> statement_list;
+while   : 'while -> statement_list_with_condition;
+for     : 'for -> statement_list;
+
 
 parameter: .Identifier & ":" & typesystem::type;
 parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
 
-fn    : 'fn -> .Identifier & parameter_list & ["->" & typesystem::type] & block;
+fn    : 'fn -> .Identifier & parameter_list & ["->" & typesystem::type] & statement_list;
 var   : 'var -> .Identifier & [":" & typesystem::type] & ["=" & expression::expression];
 static: 'static -> .Identifier & ":" & typesystem::type & "=" & expression::expression;
 const : 'const  -> .Identifier & ":" & typesystem::type & "=" & expression::expression;
