@@ -9,7 +9,6 @@ use crate::syntax::{
 
 use crate::language::expression::{
   Expression,
-  ExpressionKeeper,
 
 };
 
@@ -17,7 +16,7 @@ use crate::language::declaration::read_expression::read_expression;
 
 
 use crate::language::statement::{
-  Block, Statement, AssignOperator,
+  ConditionalBlock, Statement, AssignOperator,
 };
 
 
@@ -56,17 +55,14 @@ read_expression_or_assign(dir: &Directory)-> Result<Statement,()>
                     {
                         if let Ok(r) = read_expression(r_dir)
                         {
-                          let  lk = ExpressionKeeper::new(e);
-                          let  rk = ExpressionKeeper::new(r);
-
-                          return Ok(Statement::Expression(lk,Some((o,rk))));
+                          return Ok(Statement::Expression(e,Some((o,r))));
                         }
                     }
                 }
 
               else
                 {
-                  return Ok(Statement::Expression(ExpressionKeeper::new(e),None));
+                  return Ok(Statement::Expression(e,None));
                 }
             }
         }
@@ -111,59 +107,74 @@ read_return(dir: &Directory)-> Result<Statement,()>
     {
         if let Ok(e) = read_expression(d)
         {
-          return Ok(Statement::Return(Some(ExpressionKeeper::new(e))));
+          return Ok(Statement::Return(e));
         }
     }
 
 
-  Ok(Statement::Return(None))
+  Ok(Statement::Return(Expression::None))
 }
 
 
 pub fn
-read_if_list(dir: &Directory)-> Result<Block,()>
+read_if(dir: &Directory)-> Result<Statement,()>
 {
-    if let Ok((first_expr,first_ls)) = read_some_conditional(dir,1)
+  let  mut cur = Cursor::new(dir);
+
+  let  mut cond_blk_ls: Vec<ConditionalBlock> = Vec::new();
+
+  cur.advance(1);
+
+    while let Some(expr_d) = cur.get_directory_with_name("expression")
     {
-      let  mut cur = Cursor::new(dir);
-
-      cur.advance(2);
-
-      let  mut block_ls: Vec<Block> = Vec::new();
-
-      block_ls.push(Block::If(ExpressionKeeper::new(first_expr),first_ls));
-
-        while let Some(elif_d) = cur.seek_directory_with_name("else_if")
+        if let Ok(condition) = read_expression(expr_d)
         {
-            if let Ok((expr,ls)) = read_some_conditional(elif_d,2)
-            {
-              block_ls.push(Block::If(ExpressionKeeper::new(expr),ls));
+          cur.advance(1);
 
-              cur.advance(1);
-            }
-
-          else
+            if let Some(ls_d) = cur.get_directory_with_name("statement_list")
             {
-              return Err(());
+                if let Ok(statement_list) = read_statement_list(ls_d)
+                {
+                  cond_blk_ls.push(ConditionalBlock{condition, statement_list});
+
+                  cur.advance(1);
+
+                    if cur.test_keyword("else")
+                    {
+                      cur.advance(1);
+
+                        if cur.test_keyword("if")
+                        {
+                          cur.advance(1);
+
+                          continue;
+                        }
+
+                      else
+                        if let Some(ls_d) = cur.get_directory_with_name("statement_list")
+                        {
+                            if let Ok(statement_list) = read_statement_list(ls_d)
+                            {
+                              cond_blk_ls.push(ConditionalBlock{condition: Expression::None, statement_list});
+                            }
+                        }
+                    }
+
+
+                  return Ok(Statement::If(cond_blk_ls));
+                }
+
+              else
+                {
+                  break;
+                }
             }
         }
 
-
-        if let Some(el_d) = cur.seek_directory_with_name("else")
+      else
         {
-            if let Ok(ls) = read_some_unconditional(el_d,1)
-            {
-              block_ls.push(Block::Plain(ls));
-            }
-
-          else
-            {
-              return Err(());
-            }
+          break;
         }
-
-
-      return Ok(Block::IfList(block_ls));
     }
 
 
@@ -172,15 +183,26 @@ read_if_list(dir: &Directory)-> Result<Block,()>
 
 
 pub fn
-read_some_conditional(dir: &Directory, skip_n: usize)-> Result<(Expression,Vec<Statement>),()>
+read_while(dir: &Directory)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
-  cur.advance(skip_n);
+  cur.advance(1);
 
-    if let Some(ls_d) = cur.get_directory_with_name("statement_list_with_condition")
+    if let Some(expr_d) = cur.get_directory_with_name("expression")
     {
-      return read_statement_list_with_condition(ls_d);
+        if let Ok(condition) = read_expression(expr_d)
+        {
+          cur.advance(1);
+
+            if let Some(ls_d) = cur.get_directory_with_name("statement_list")
+            {
+                if let Ok(statement_list) = read_statement_list(ls_d)
+                {
+                  return Ok(Statement::While(ConditionalBlock{condition, statement_list}));
+                }
+            }
+        }
     }
 
 
@@ -189,15 +211,18 @@ read_some_conditional(dir: &Directory, skip_n: usize)-> Result<(Expression,Vec<S
 
 
 pub fn
-read_some_unconditional(dir: &Directory, skip_n: usize)-> Result<Vec<Statement>,()>
+read_loop(dir: &Directory)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
-  cur.advance(skip_n);
+  cur.advance(1);
 
     if let Some(ls_d) = cur.get_directory_with_name("statement_list")
     {
-      return read_statement_list(ls_d);
+        if let Ok(ls) = read_statement_list(ls_d)
+        {
+          return Ok(Statement::Loop(ls));
+        }
     }
 
 
@@ -206,7 +231,7 @@ read_some_unconditional(dir: &Directory, skip_n: usize)-> Result<Vec<Statement>,
 
 
 pub fn
-read_for(dir: &Directory)-> Result<Block,()>
+read_for(dir: &Directory)-> Result<Statement,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -222,74 +247,21 @@ read_for(dir: &Directory)-> Result<Block,()>
 
 
 pub fn
-read_block(dir: &Directory)-> Result<Block,()>
+read_conditional_block(dir: &Directory)-> Result<ConditionalBlock,()>
 {
   let  mut cur = Cursor::new(dir);
 
-    if let Some(d) = cur.get_directory()
+    if let Some(cond_d) = cur.get_directory_with_name("expression")
     {
-      let  d_name = d.get_name();
-
-        if d_name == "if_list"
-        {
-          return read_if_list(d);
-        }
-
-      else
-        if d_name == "while"
-        {
-            if let Ok((expr,ls)) = read_some_conditional(d,1)
-            {
-              return Ok(Block::While(ExpressionKeeper::new(expr),ls));
-            }
-        }
-
-      else
-        if d_name == "loop"
-        {
-            if let Ok(ls) = read_some_unconditional(d,1)
-            {
-              return Ok(Block::Loop(ls));
-            }
-        }
-
-      else
-        if d_name == "for"
-        {
-          return read_for(d);
-        }
-
-      else
-        if d_name == "statement_list"
-        {
-            if let Ok(ls) = read_statement_list(d)
-            {
-              return Ok(Block::Plain(ls));
-            }
-        }
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_statement_list_with_condition(dir: &Directory)-> Result<(Expression,Vec<Statement>),()>
-{
-  let  mut cur = Cursor::new(dir);
-
-    if let Some(expr_d) = cur.get_directory_with_name("expression")
-    {
-        if let Ok(expr) = read_expression(expr_d)
+        if let Ok(condition) = read_expression(cond_d)
         {
           cur.advance(1);
 
             if let Some(ls_d) = cur.get_directory_with_name("statement_list")
             {
-                if let Ok(ls) = read_statement_list(ls_d)
+                if let Ok(statement_list) = read_statement_list(ls_d)
                 {
-                  return Ok((expr,ls));
+                  return Ok(ConditionalBlock{condition, statement_list});
                 }
             }
         }
@@ -343,12 +315,30 @@ read_statement(dir: &Directory)-> Result<Statement,()>
     {
       let  d_name = d.get_name();
 
-        if d_name == "block"
+        if d_name == "statement_list"
         {
-            if let Ok(blk) = read_block(d)
+            if let Ok(ls) = read_statement_list(d)
             {
-              return Ok(Statement::Block(blk));
+              return Ok(Statement::Block(ls));
             }
+        }
+
+      else
+        if d_name == "if"
+        {
+          return read_if(d);
+        }
+
+      else
+        if d_name == "while"
+        {
+          return read_while(d);
+        }
+
+      else
+        if d_name == "loop"
+        {
+          return read_loop(d);
         }
 
       else

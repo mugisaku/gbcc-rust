@@ -28,7 +28,11 @@ expression_or_assign: expression::expression & [assign_operator & expression::ex
 statement: ";"
   | break
   | continue
-  | block
+  | if
+  | while
+  | for
+  | loop
+  | statement_list
   | return
   | fn
   | var
@@ -47,18 +51,13 @@ continue: 'continue;
 return  : 'return -> [expression::expression];
 
 
-block: if_list | while | for | loop | statement_list;
+if: 'if -> expression::expression & statement_list & [{'else & 'if & expression::expression & statement_list} & ['else & statement_list]];
 
 statement_list: "{" & [{statement}] & "}";
 
-statement_list_with_condition: expression::expression & statement_list;
-
-if_list : 'if -> statement_list_with_condition & [{else_if}] & [else];
-else_if : 'else & 'if & statement_list_with_condition;
-else    : 'else & statement_list;
-loop    : 'loop -> statement_list;
-while   : 'while -> statement_list_with_condition;
-for     : 'for -> statement_list;
+loop : 'loop -> statement_list;
+while: 'while -> expression::expression & statement_list;
+for  : 'for;
 
 
 parameter: .Identifier & ":" & typesystem::type;

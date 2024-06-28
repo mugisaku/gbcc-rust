@@ -2,7 +2,7 @@ mod token;
 mod source_file;
 mod syntax;
 mod language;
-mod ir;
+//mod ir;
 mod debug;
 
 use std::env;
@@ -127,40 +127,25 @@ execute_program(s: &str)
 fn
 load()
 {
-  use crate::language::declaration::Space;
-  use crate::language::typesystem::TypeCode;
+  use crate::language::declaration::{
+    Space, Function
+  };
 
-TypeCode::new_enum("Test",vec![("a",0),("v",2)]).print();
+  use crate::language::expression::{
+    Path, Expression, BinaryOperator,
+  };
 
-  let  args: Vec<String> = env::args().collect();
+  use crate::language::statement::{
+    Statement,
+  };
 
-  let  mut buf = String::new();
+  use crate::language::typesystem::{
+    TypeInfo,
+  };
 
-    for i in 1..args.len()
-    {
-      buf.push_str(&args[i]);
-    }
+  use crate::language::operation::Operation;
 
-
-/*
-  let  unff = Unff::from(&buf);
-
-  unff.print();
-
-  println!("");
-
-  let  s = unff.to_string();
-
-  println!("{}",&s);
-*/
-
-//  let  new_unff = Unff::from(&s);
-
-//  new_unff.print();
-
-  println!("");
-/*
-  let  mut lib = Library::new();
+  let  mut sp = Space::new();
 
   use std::io::Read;
 
@@ -170,27 +155,25 @@ TypeCode::new_enum("Test",vec![("a",0),("v",2)]).print();
 
       let  _ = f.read_to_string(&mut s);
 
-        if let Ok(lib) = Library::make_from_string(&s)
-        {
-          lib.print();
+      sp.append_from_str(&s);
 
-          print!("\n");
+      sp.print();
 
-            if let Ok(coll) = language::compile::compile(&lib)
-            {
-              coll.print();
-            }
-        }
+      print!("\n");
+
+      let  mut recmgr = language::compile::RecordManager::new();
+
+      recmgr.compile(&sp)
+
+//      recmgr.print();
     }
-*/
-
 }
 
 
 fn
 type_make(s: &str)
 {
-  use crate::language::typesystem::TypeItem;
+  use crate::language::typesystem::TypeInfo;
 
 //    if let Ok(t) = TypeItem::make_from_string(s)
     {

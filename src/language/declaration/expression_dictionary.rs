@@ -7,11 +7,11 @@ static DIC_S: &'static str =
 r##"
 #expression
 
-path: .Identifier & [{"::" & .Identifiier}];
+path: .Identifier & [{"::" & .Identifier}];
 
 operand_core: path | .Integer | .Floating | .Character | .String | ("(" & expression & ")");
 
-prefix_operator: "!" | "++" | "--" | "-" | "~" | "*" | "&";
+unary_operator: "!" | "++" | "--" | "-" | "~" | "*" | "&";
 
 binary_operator:
     "+"
@@ -37,7 +37,7 @@ decrement      : "++";
 
 postfix_operator: access | subscript | call | increment | decrement;
 
-operand: [{prefix_operator}] & operand_core & [{postfix_operator}];
+operand: [{unary_operator}] & operand_core & [{postfix_operator}];
 
 expression: operand & [{binary_operator & operand}];
 

@@ -3,8 +3,8 @@
 pub mod expression;
 pub mod typesystem;
 pub mod statement;
-//pub mod compile;
-pub mod value;
+pub mod operation;
+pub mod compile;
 pub mod declaration;
 
 

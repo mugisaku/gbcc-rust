@@ -8,13 +8,10 @@ use crate::syntax::{
 
 
 use crate::language::expression::{
-  PrefixOperator,
-  PostfixOperator,
+  UnaryOperator,
   BinaryOperator,
   Path,
   Expression,
-  ExpressionKeeper,
-  StringKeeper,
 
 };
 
@@ -44,10 +41,10 @@ read_expression(dir: &Directory)-> Result<Expression,()>
                         {
                           cur.advance(1);
 
-                          let  l = ExpressionKeeper::new(     e);
-                          let  r = ExpressionKeeper::new(next_e);
+                          let  l = Box::new(     e);
+                          let  r = Box::new(next_e);
 
-                          e = Expression::BinaryOperation(b,l,r);
+                          e = Expression::Binary(b,l,r);
                         }
                     }
 
@@ -76,19 +73,16 @@ read_expression(dir: &Directory)-> Result<Expression,()>
 
 
 pub fn
-read_prefix_operator(dir: &Directory)-> Result<PrefixOperator,()>
+read_unary_operator(dir: &Directory)-> Result<UnaryOperator,()>
 {
   let  cur = Cursor::new(dir);
 
     if let Some(s) = cur.get_others_string()
     {
-           if s == "~"{return Ok(PrefixOperator::Not);}
-      else if s == "!"{return Ok(PrefixOperator::LogicalNot);}
-      else if s == "-"{return Ok(PrefixOperator::Neg);}
-      else if s == "*"{return Ok(PrefixOperator::Dereference);}
-      else if s == "&"{return Ok(PrefixOperator::Address);}
-      else if s == "++"{return Ok(PrefixOperator::Increment);}
-      else if s == "--"{return Ok(PrefixOperator::Decrement);}
+           if s == "~"{return Ok(UnaryOperator::Not);}
+      else if s == "!"{return Ok(UnaryOperator::LogicalNot);}
+      else if s == "-"{return Ok(UnaryOperator::Neg);}
+      else if s == "*"{return Ok(UnaryOperator::Deref);}
     }
 
 
@@ -129,7 +123,7 @@ read_binary_operator(dir: &Directory)-> Result<BinaryOperator,()>
 
 
 pub fn
-read_postfix_operator(dir: &Directory)-> Result<PostfixOperator,()>
+read_postfix_operator(dir: &Directory, e: Box<Expression>)-> Result<Expression,()>
 {
   let  cur = Cursor::new(dir);
 
@@ -137,11 +131,9 @@ read_postfix_operator(dir: &Directory)-> Result<PostfixOperator,()>
     {
       let  name = subdir.get_name();
 
-           if name == "access"   {return read_access(subdir);}
-      else if name == "subscript"{return read_subscript(subdir);}
-      else if name == "call"     {return read_call(subdir);}
-      else if name == "increment"{return Ok(PostfixOperator::Increment);}
-      else if name == "decrement"{return Ok(PostfixOperator::Decrement);}
+           if name == "access"   {return read_access(subdir,e);}
+      else if name == "subscript"{return read_subscript(subdir,e);}
+      else if name == "call"     {return read_call(subdir,e);}
     }
 
 
@@ -150,7 +142,7 @@ read_postfix_operator(dir: &Directory)-> Result<PostfixOperator,()>
 
 
 pub fn
-read_access(dir: &Directory)-> Result<PostfixOperator,()>
+read_access(dir: &Directory, e: Box<Expression>)-> Result<Expression,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -160,7 +152,7 @@ read_access(dir: &Directory)-> Result<PostfixOperator,()>
     {
         if let ObjectData::Identifier(s) = o.get_data()
         {
-          return Ok(PostfixOperator::Access(s.clone()));
+          return Ok(Expression::Access(e,s.clone()));
         }
     }
 
@@ -170,7 +162,7 @@ read_access(dir: &Directory)-> Result<PostfixOperator,()>
 
 
 pub fn
-read_subscript(dir: &Directory)-> Result<PostfixOperator,()>
+read_subscript(dir: &Directory, target_e: Box<Expression>)-> Result<Expression,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -180,7 +172,7 @@ read_subscript(dir: &Directory)-> Result<PostfixOperator,()>
     {
         if let Ok(e) = read_expression(e_dir)
         {
-          return Ok(PostfixOperator::Subscript(ExpressionKeeper::new(e)));
+          return Ok(Expression::Subscript(target_e,Box::new(e)));
         }
     }
 
@@ -190,19 +182,19 @@ read_subscript(dir: &Directory)-> Result<PostfixOperator,()>
 
 
 pub fn
-read_call(dir: &Directory)-> Result<PostfixOperator,()>
+read_call(dir: &Directory, fe: Box<Expression>)-> Result<Expression,()>
 {
   let  mut cur = Cursor::new(dir);
 
   cur.advance(1);
 
-  let  mut args: Vec<ExpressionKeeper> = Vec::new();
+  let  mut args: Vec<Expression> = Vec::new();
 
     if let Some(first_e_dir) = cur.get_directory_with_name("expression")
     {
         if let Ok(e) = read_expression(first_e_dir)
         {
-          args.push(ExpressionKeeper::new(e));
+          args.push(e);
 
           cur.advance(2);
         }
@@ -217,7 +209,7 @@ read_call(dir: &Directory)-> Result<PostfixOperator,()>
         {
             if let Ok(e) = read_expression(e_dir)
             {
-              args.push(ExpressionKeeper::new(e));
+              args.push(e);
 
               cur.advance(2);
             }
@@ -230,7 +222,7 @@ read_call(dir: &Directory)-> Result<PostfixOperator,()>
     }
 
 
-  Ok(PostfixOperator::Call(args))
+  Ok(Expression::Call(fe,args))
 }
 
 
@@ -279,8 +271,7 @@ read_operand_core(dir: &Directory)-> Result<Expression,()>
         {
       ObjectData::Integer(i)=>   {return Ok(Expression::Integer(*i));},
       ObjectData::Floating(f)=>  {return Ok(Expression::Floating(*f));},
-      ObjectData::Character(c)=> {return Ok(Expression::Character(*c));},
-      ObjectData::String(s)=>    {return Ok(Expression::String(StringKeeper::new(s.as_str())));},
+      ObjectData::String(s)=>    {return Ok(Expression::String(s.clone()));},
       ObjectData::OthersString(s)=>
           {
               if s == "("
@@ -291,7 +282,7 @@ read_operand_core(dir: &Directory)-> Result<Expression,()>
                   {
                       if let Ok(e) = read_expression(e_dir)
                       {
-                        return Ok(Expression::SubExpression(ExpressionKeeper::new(e)));
+                        return Ok(Expression::SubExpression(Box::new(e)));
                       }
                   }
               }
@@ -310,15 +301,15 @@ read_operand(dir: &Directory)-> Result<Expression,()>
 {
   let  mut cur = Cursor::new(dir);
 
-  let  mut pre_ls: Vec<PrefixOperator> = Vec::new();
+  let  mut un_ls: Vec<UnaryOperator> = Vec::new();
 
-    while let Some(pre_dir) = cur.get_directory_with_name("prefix_operator")
+    while let Some(un_dir) = cur.get_directory_with_name("unary_operator")
     {
-        if let Ok(pre) = read_prefix_operator(pre_dir)
+        if let Ok(pre) = read_unary_operator(un_dir)
         {
           cur.advance(1);
 
-          pre_ls.push(pre);
+          un_ls.push(pre);
         }
 
       else
@@ -336,13 +327,11 @@ read_operand(dir: &Directory)-> Result<Expression,()>
 
             while let Some(post_dir) = cur.get_directory_with_name("postfix_operator")
             {
-                if let Ok(post) = read_postfix_operator(post_dir)
+                if let Ok(new_e) = read_postfix_operator(post_dir,Box::new(e))
                 {
                   cur.advance(1);
 
-                  let  ek = ExpressionKeeper::new(e);
-
-                  e = Expression::PostfixOperation(post,ek);
+                  e = new_e;
                 }
 
               else
@@ -352,11 +341,9 @@ read_operand(dir: &Directory)-> Result<Expression,()>
             }
 
 
-            while let Some(pre) = pre_ls.pop()
+            while let Some(un) = un_ls.pop()
             {
-              let  ek = ExpressionKeeper::new(e);
-
-              e = Expression::PrefixOperation(pre,ek);
+              e = Expression::Unary(un,Box::new(e));
             }
 
 

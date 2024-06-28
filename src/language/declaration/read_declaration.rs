@@ -9,23 +9,19 @@ use crate::syntax::{
 
 use crate::language::expression::{
   Expression,
-  ExpressionKeeper,
 
 };
 
 use super::read_expression;
 use super::read_type;
 use crate::language::typesystem::{
-  TypeItem,
-  TypeItemKeeper,
-  Parameter,
-  EnumParameter,
+  TypeInfo,
 
 };
 
 
 use super::{
-  Definition,
+  Component,
   Declaration,
   Storage,
   Function,
@@ -34,7 +30,6 @@ use super::{
 
 
 use crate::language::statement::{
-  Block,
   Statement,
 
 };
@@ -43,14 +38,13 @@ use crate::language::statement::{
 use super::{
   read_type::read_type,
   read_expression::read_expression,
-  read_statement::read_block,
   read_statement::read_statement_list,
 
 };
 
 
 pub fn
-read_parameter(dir: &Directory)-> Result<Parameter,()>
+read_parameter(dir: &Directory)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -64,7 +58,9 @@ read_parameter(dir: &Directory)-> Result<Parameter,()>
         {
             if let Ok(ty) = read_type(ty_d)
             {
-              return Ok(Parameter{name, type_item_keeper: TypeItemKeeper::new(ty)});
+              let  com = Component::Type(ty);
+
+              return Ok(Declaration::new(name,com));
             }
         }
     }
@@ -75,10 +71,10 @@ read_parameter(dir: &Directory)-> Result<Parameter,()>
 
 
 pub fn
-read_parameter_list(dir: &Directory)-> Result<Vec<Parameter>,()>
+read_parameter_list(dir: &Directory)-> Result<Vec<Declaration>,()>
 {
   let  mut cur = Cursor::new(dir);
-  let  mut ls: Vec<Parameter> = Vec::new();
+  let  mut ls: Vec<Declaration> = Vec::new();
 
     while let Some(d) = cur.seek_directory_with_name("parameter")
     {
@@ -119,7 +115,7 @@ read_fn(dir: &Directory)-> Result<Declaration,()>
             {
               cur.advance(1);
 
-              let  mut ret_ty = TypeItem::Void;
+              let  mut ret_ty = TypeInfo::new_void();
 
                 if let Some(ty_d) = cur.seek_directory_with_name("type")
                 {
@@ -136,9 +132,14 @@ read_fn(dir: &Directory)-> Result<Declaration,()>
                 {
                     if let Ok(stmts) = read_statement_list(stmts_d)
                     {
-                      let  f = Function{parameter_list: para_ls, return_type_item_keeper: TypeItemKeeper::new(ret_ty), statement_list: stmts};
+                      let  f = Function::new()
+                              .set_parameter_space(para_ls)
+                              .set_return_type_info(ret_ty)
+                              .set_statement_list(stmts)
+                              ;
 
-                      let  decl = Declaration::new(&name,Definition::Fn(f));
+
+                      let  decl = Declaration::new(name,Component::Fn(f));
 
                       return Ok(decl);
                     }
@@ -163,7 +164,7 @@ read_storage(dir: &Directory)-> Result<(String,Storage),()>
     {
       let  name = id_s.clone();
 
-      let  mut sto = Storage{type_item_keeper: TypeItemKeeper::new(TypeItem::Void), expression_keeper_opt: None};
+      let  mut sto = Storage{type_info: TypeInfo::new_void(), expression: Expression::None};
 
       cur.advance(1);
 
@@ -171,7 +172,7 @@ read_storage(dir: &Directory)-> Result<(String,Storage),()>
         {
             if let Ok(ty) = read_type(ty_d)
             {
-              sto.type_item_keeper = TypeItemKeeper::new(ty);
+              sto.type_info = ty;
             }
 
 
@@ -183,7 +184,7 @@ read_storage(dir: &Directory)-> Result<(String,Storage),()>
         {
             if let Ok(e) = read_expression(e_d)
             {
-              sto.expression_keeper_opt = Some(ExpressionKeeper::new(e));
+              sto.expression = e;
             }
         }
 
@@ -201,9 +202,9 @@ read_var(dir: &Directory)-> Result<Declaration,()>
 {
     if let Ok((name,sto)) = read_storage(dir)
     {
-      let  def = Definition::Var(sto);
+      let  com = Component::Var(sto);
 
-      let  decl = Declaration::new(&name,def);
+      let  decl = Declaration::new(name,com);
 
       return Ok(decl);
     }
@@ -218,9 +219,9 @@ read_static(dir: &Directory)-> Result<Declaration,()>
 {
     if let Ok((name,sto)) = read_storage(dir)
     {
-      let  def = Definition::Static(sto);
+      let  com = Component::Static(sto);
 
-      let  decl = Declaration::new(&name,def);
+      let  decl = Declaration::new(name,com);
 
       return Ok(decl);
     }
@@ -235,9 +236,9 @@ read_const(dir: &Directory)-> Result<Declaration,()>
 {
     if let Ok((name,sto)) = read_storage(dir)
     {
-      let  def = Definition::Const(sto);
+      let  com = Component::Const(sto);
 
-      let  decl = Declaration::new(&name,def);
+      let  decl = Declaration::new(name,com);
 
       return Ok(decl);
     }
@@ -267,7 +268,7 @@ read_struct(dir: &Directory)-> Result<Declaration,()>
             {
               let  st = Struct::from(ls);
 
-              let  def = Definition::Struct(st);
+              let  def = Component::Struct(st);
 
               let  decl = Declaration::new(&name,def);
 
@@ -302,7 +303,7 @@ read_union(dir: &Directory)-> Result<Declaration,()>
 /*
               let  un = Union::from(ls);
 
-              let  def = Definition::Union(un);
+              let  def = Component::Union(un);
 
               let  decl = Declaration::new(&name,def);
 
@@ -318,7 +319,7 @@ read_union(dir: &Directory)-> Result<Declaration,()>
 
 
 pub fn
-read_enumerator(dir: &Directory)-> Result<EnumParameter,()>
+read_enumerator(dir: &Directory)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -328,7 +329,9 @@ read_enumerator(dir: &Directory)-> Result<EnumParameter,()>
 
       cur.advance(2);
 
-      let  mut en = EnumParameter{name, value: 0};
+      let  com = Component::Enumerator(Expression::Integer(0));
+
+      let  mut en = Declaration::new(name,com);
 
         if let Some(expr_d) = cur.get_directory_with_name("expression")
         {
@@ -348,10 +351,10 @@ read_enumerator(dir: &Directory)-> Result<EnumParameter,()>
 
 
 pub fn
-read_enumerator_list(dir: &Directory)-> Result<Vec<EnumParameter>,()>
+read_enumerator_list(dir: &Directory)-> Result<Vec<Declaration>,()>
 {
   let  mut cur = Cursor::new(dir);
-  let  mut ls: Vec<EnumParameter> = Vec::new();
+  let  mut ls: Vec<Declaration> = Vec::new();
 
     while let Some(d) = cur.seek_directory_with_name("enumerator")
     {
@@ -390,13 +393,15 @@ read_enum(dir: &Directory)-> Result<Declaration,()>
         {
             if let Ok(ls) = read_enumerator_list(ls_d)
             {
+/*
               let  ti = TypeItem::Enum(ls);
 
-              let  def = Definition::Type(TypeItemKeeper::new(ti));
+              let  def = Component::Type(TypeItemNode::new(ti));
 
               let  decl = Declaration::new(&name,def);
 
               return Ok(decl);
+*/
             }
         }
     }
@@ -423,9 +428,9 @@ read_alias(dir: &Directory)-> Result<Declaration,()>
         {
             if let Ok(ty) = read_type(ty_d)
             {
-              let  def = Definition::Type(TypeItemKeeper::new(ty));
+              let  com = Component::Type(TypeInfo::new_void());
 
-              let  decl = Declaration::new(&name,def);
+              let  decl = Declaration::new(name,com);
 
               return Ok(decl);
             }

@@ -7,16 +7,26 @@ use crate::syntax::{
 };
 
 
+use crate::language::expression::{
+  Path,
+  Expression,
+
+};
+
+use crate::language::declaration::{
+  Component,
+  Declaration,
+
+};
+
 use super::{
-  TypeItem,
-  TypeItemKeeper,
-  Parameter,
+  TypeInfo,
 
 };
 
 
 pub fn
-read_type(dir: &Directory)-> Result<TypeItem,()>
+read_type(dir: &Directory)-> Result<TypeInfo,()>
 {
   let  mut cur = Cursor::new(dir);
  
@@ -40,7 +50,11 @@ read_type(dir: &Directory)-> Result<TypeItem,()>
   else
     if let Some(s) = cur.get_identifier()
     {
-      return Ok(TypeItem::ByName(s.clone()));
+      let  mut path = Path::new();
+
+      path.identifier_list.push(s.clone());
+
+      return Ok(TypeInfo::new_external(path));
     }
 
 
@@ -49,7 +63,7 @@ read_type(dir: &Directory)-> Result<TypeItem,()>
 
 
 pub fn
-read_parameter(dir: &Directory)-> Result<Parameter,()>
+read_parameter(dir: &Directory)-> Result<Declaration,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -63,7 +77,9 @@ read_parameter(dir: &Directory)-> Result<Parameter,()>
         {
             if let Ok(t) = read_type(&subdir)
             {
-              return Ok(Parameter{name: s, type_item_keeper: TypeItemKeeper::new(t)});
+              let  com = Component::Type(t);
+
+              return Ok(Declaration::new(s,com));
             }
         }
     }
@@ -74,11 +90,11 @@ read_parameter(dir: &Directory)-> Result<Parameter,()>
 
 
 pub fn
-read_parameter_list(dir: &Directory)-> Result<Vec<Parameter>,()>
+read_parameter_list(dir: &Directory)-> Result<Vec<Declaration>,()>
 {
   let  mut cur = Cursor::new(dir);
 
-  let  mut ls: Vec<Parameter> = Vec::new();
+  let  mut ls: Vec<Declaration> = Vec::new();
 
     while let Some(subdir) = cur.seek_directory_with_name("member")
     {
@@ -101,17 +117,17 @@ read_parameter_list(dir: &Directory)-> Result<Vec<Parameter>,()>
 
  
 pub fn
-read_type_list(dir: &Directory)-> Result<Vec<Parameter>,()>
+read_type_list(dir: &Directory)-> Result<Vec<TypeInfo>,()>
 {
   let  mut cur = Cursor::new(dir);
 
-  let  mut ls: Vec<Parameter> = Vec::new();
+  let  mut ls: Vec<TypeInfo> = Vec::new();
 
     while let Some(subdir) = cur.seek_directory_with_name("type")
     {
         if let Ok(t) = read_type(&subdir)
         {
-          ls.push(Parameter{name: String::new(), type_item_keeper: TypeItemKeeper::new(t)});
+          ls.push(t);
 
           cur.advance(1);
         }
@@ -128,7 +144,7 @@ read_type_list(dir: &Directory)-> Result<Vec<Parameter>,()>
 
  
 pub fn
-read_tuple(dir: &Directory)-> Result<TypeItem,()>
+read_tuple(dir: &Directory)-> Result<TypeInfo,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -138,7 +154,7 @@ read_tuple(dir: &Directory)-> Result<TypeItem,()>
     {
         if let Ok(ls) = read_type_list(&subdir)
         {
-          return Ok(TypeItem::Tuple(ls));
+          return Ok(TypeInfo::new_tuple(ls));
         }
     }
 
@@ -148,7 +164,7 @@ read_tuple(dir: &Directory)-> Result<TypeItem,()>
 
 
 pub fn
-read_function_reference(dir: &Directory)-> Result<TypeItem,()>
+read_function_reference(dir: &Directory)-> Result<TypeInfo,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -164,7 +180,7 @@ read_function_reference(dir: &Directory)-> Result<TypeItem,()>
             {
                 if let Ok(ti) = read_type(&subdir)
                 {
-                  return Ok(TypeItem::FunctionReference(TypeItemKeeper::new(ti),ls))
+                  return Ok(TypeInfo::new_function_reference(ls,ti))
                 }
 
               else
@@ -184,27 +200,17 @@ read_function_reference(dir: &Directory)-> Result<TypeItem,()>
 
 
 pub fn
-read_primitive(dir: &Directory)-> Result<TypeItem,()>
+read_primitive(dir: &Directory)-> Result<TypeInfo,()>
 {
   let  mut cur = Cursor::new(dir);
  
     if let Some(s) = cur.get_keyword()
     {
-           if s == "bool" {return Ok(TypeItem::Bool);}
-      else if s == "char" {return Ok(TypeItem::Char);}
-      else if s == "void" {return Ok(TypeItem::Void);}
-      else if s == "i8"   {return Ok(TypeItem::I8);}
-      else if s == "i16"  {return Ok(TypeItem::I16);}
-      else if s == "i32"  {return Ok(TypeItem::I32);}
-      else if s == "i64"  {return Ok(TypeItem::I64);}
-      else if s == "isize"{return Ok(TypeItem::ISize);}
-      else if s == "u8"   {return Ok(TypeItem::U8);}
-      else if s == "u16"  {return Ok(TypeItem::U16);}
-      else if s == "u32"  {return Ok(TypeItem::U32);}
-      else if s == "u64"  {return Ok(TypeItem::U64);}
-      else if s == "usize"{return Ok(TypeItem::USize);}
-      else if s == "f32"  {return Ok(TypeItem::F32);}
-      else if s == "f64"  {return Ok(TypeItem::F64);}
+      let  mut path = Path::new();
+
+      path.identifier_list.push(s.clone());
+
+      return Ok(TypeInfo::new_external(path));
     }
 
 

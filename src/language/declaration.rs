@@ -8,7 +8,7 @@ pub mod expression_dictionary;
 pub mod statement_dictionary;
 pub mod typesystem_dictionary;
 
-use std::rc::Rc;
+use std::cell::Cell;
 
 use super::{
   WORD_SIZE,
@@ -16,20 +16,24 @@ use super::{
 };
 
 use super::expression::{
+  Path,
   Expression,
-  ExpressionKeeper,
+
 };
 
 use super::typesystem::{
-  TypeItem,
-  TypeItemKeeper,
-  Parameter,
-  EnumParameter,
+  TypeInfo,
   FieldInfo,
 
 };
 
-use super::value::Value;
+use super::operation::{
+  Source,
+  Destination,
+  Operation,
+
+};
+
 use super::statement::{
   Statement,
 
@@ -38,70 +42,12 @@ use super::statement::{
 
 
 
-pub trait
-ObjectManager
-{
-
-
-fn  find_definition(&self, name: &str)-> Option<&Definition>;
-fn  find_struct(&self, name: &str)-> Option<&Vec<Parameter>>;
-fn   find_union(&self, name: &str)-> Option<&Vec<Parameter>>;
-fn    find_enum(&self, name: &str)-> Option<&Vec<EnumParameter>>;
-fn   find_alias(&self, name: &str)-> Option<&TypeItem>;
-
-
-}
-
-
-
-
-pub struct
-IDDistributor
-{
-  pub(crate)   plain_id: usize,
-  pub(crate) if_list_id: usize,
-  pub(crate)   while_id: usize,
-  pub(crate)     for_id: usize,
-  pub(crate)    loop_id: usize,
-
-  pub(crate) expression_id: usize,
-  pub(crate)     string_id: usize,
-
-}
-
-
-impl
-IDDistributor
-{
-
-
-pub fn
-new()-> IDDistributor
-{
-  IDDistributor{
-    plain_id: 0,
-  if_list_id: 0,
-    while_id: 0,
-      for_id: 0,
-     loop_id: 0,
-
-    expression_id: 0,
-        string_id: 0,
-  }
-}
-
-
-}
-
-
-
-
 pub struct
 Storage
 {
-  pub(crate) type_item_keeper: TypeItemKeeper,
+  pub(crate) type_info: TypeInfo,
 
-  pub(crate) expression_keeper_opt: Option<ExpressionKeeper>,
+  pub(crate) expression: Expression,
 
 }
 
@@ -114,13 +60,17 @@ Storage
 pub fn
 print(&self)
 {
-  self.type_item_keeper.type_item.print();
+  self.type_info.print();
 
-    if let Some(ek) = &self.expression_keeper_opt
+    if let Expression::None = &self.expression
+    {
+    }
+
+  else
     {
       print!(" = ");
 
-      ek.expression.print();
+      self.expression.print();
     }
 }
 
@@ -133,9 +83,9 @@ print(&self)
 pub struct
 Function
 {
-  pub(crate) parameter_list: Vec<Parameter>,
+  pub(crate) parameter_space: Space,
 
-  pub(crate) return_type_item_keeper: TypeItemKeeper,
+  pub(crate) return_type_info: TypeInfo,
 
   pub(crate) statement_list: Vec<Statement>,
 
@@ -148,9 +98,87 @@ Function
 
 
 pub fn
-find_parameter(&self, name: &str)-> Option<&Parameter>
+new()-> Function
 {
-    for para in &self.parameter_list
+  Function{
+    parameter_space: Space{declaration_list: Vec::new()},
+
+    return_type_info: TypeInfo::new_void(),
+
+    statement_list: Vec::new(),
+  }
+}
+
+
+pub fn
+set_statement_list(mut self, ls: Vec<Statement>)-> Function
+{
+  self.statement_list = ls;
+
+  self
+}
+
+
+pub fn
+add_statement(mut self, stmt: Statement)-> Function
+{
+  self.statement_list.push(stmt);
+
+  self
+}
+
+
+pub fn
+add_parameter(mut self, name: &str, ti: TypeInfo)-> Function
+{
+  let  decl = Declaration::new(name.to_string(),Component::Type(ti));
+
+  self.parameter_space.declaration_list.push(decl);
+
+  self
+}
+
+
+pub fn
+set_parameter_space(mut self, ls: Vec<Declaration>)-> Function
+{
+  self.parameter_space = Space{declaration_list: ls};
+
+  self
+}
+
+
+pub fn
+set_return_type_info(mut self, ti: TypeInfo)-> Function
+{
+  self.return_type_info = ti;
+
+  self
+}
+
+
+pub fn
+get_reference_type_info(&self)-> TypeInfo
+{
+  let  mut ls: Vec<TypeInfo> = Vec::new();
+
+    for p in &self.parameter_space.declaration_list
+    {
+        if let Component::Type(ti) = &p.component
+        {
+          ls.push(ti.clone());
+        }
+    }
+
+
+  TypeInfo::new_function_reference(ls,self.return_type_info.clone())
+}
+
+
+pub fn
+find_parameter(&self, name: &str)-> Option<&Declaration>
+{
+    for para in &self.parameter_space.declaration_list
     {
         if para.name == name
         {
@@ -188,14 +216,20 @@ find_declaration(&self, name: &str)-> Option<&Declaration>
 
 
 pub enum
-Definition
+Component
 {
-  Space(Space),
+  Dummy,
+
   Fn(Function),
   Var(Storage),
   Static(Storage),
   Const(Storage),
-  Type(TypeItemKeeper),
+  Space(Space),
+  Struct(Space),
+  Union(Space),
+  Enum(Space),
+  Enumerator(Expression),
+  Type(TypeInfo),
 
 }
 
@@ -207,7 +241,7 @@ Declaration
 {
   pub(crate) name: String,
 
-  pub(crate) definition: Definition,
+  pub(crate) component: Component,
 
 }
 
@@ -218,32 +252,91 @@ Declaration
 
 
 pub fn
-new(name: &str, def: Definition)-> Declaration
+new(name: String, com: Component)-> Self
 {
-  Declaration{name: String::from(name), definition: def}
+  Self{name: name, component: com}
+}
+
+
+pub fn
+get_storage_mut(&mut self)-> Option<&mut Storage>
+{
+    match &mut self.component
+    {
+  Component::Var(st)=>{Some(st)}
+  Component::Static(st)=>{Some(st)}
+  Component::Const(st)=>{Some(st)}
+  _=>{None}
+    }
+}
+
+
+pub fn
+get_storage(&self)-> Option<&Storage>
+{
+    match &self.component
+    {
+  Component::Var(st)=>{Some(st)}
+  Component::Static(st)=>{Some(st)}
+  Component::Const(st)=>{Some(st)}
+  _=>{None}
+    }
+}
+
+
+pub fn
+get_space_mut(&mut self)-> Option<&mut Space>
+{
+    match &mut self.component
+    {
+  Component::Space(sp)=> {Some(sp)}
+  Component::Struct(sp)=>{Some(sp)}
+  Component::Union(sp)=> {Some(sp)}
+  Component::Enum(sp)=>  {Some(sp)}
+  _=>{None}
+    }
+}
+
+
+pub fn
+get_space(&self)-> Option<&Space>
+{
+    match &self.component
+    {
+  Component::Space(sp)=> {Some(sp)}
+  Component::Struct(sp)=>{Some(sp)}
+  Component::Union(sp)=> {Some(sp)}
+  Component::Enum(sp)=>  {Some(sp)}
+  _=>{None}
+    }
 }
 
 
 pub fn
 print(&self)
 {
-    match &self.definition
+    match &self.component
     {
-  Definition::Space(sp)=>
+  Component::Dummy=>{print!("{}(DUMMY)",&self.name)}
+  Component::Space(sp)=>
         {
-          print!("space\n{}(",&self.name);
+          print!("space\n{}",&self.name);
 
           sp.print();
         }
-  Definition::Fn(f)=>
+  Component::Fn(f)=>
         {
           print!("fn\n{}(",&self.name);
 
-            for p in &f.parameter_list
+            for p in &f.parameter_space.declaration_list
             {
               print!("{}: ",&p.name);
 
-              p.type_item_keeper.type_item.print();
+                if let Component::Type(ti) = &p.component
+                {
+                  ti.print();
+                }
+
 
               print!(", ");
             }
@@ -251,37 +344,55 @@ print(&self)
 
           print!(")-> ");
 
-          f.return_type_item_keeper.type_item.print();
+          f.return_type_info.print();
 
           print!("\n{{\n");
 
-          super::statement::print_statement_list(&f.statement_list,1);
+          super::statement::Statement::print_statement_list(&f.statement_list,1);
 
           print!("}}");
         },
-  Definition::Var(s)=>
+  Component::Var(s)=>
         {
           print!("var  {}: ",&self.name);
 
           s.print();
         },
-  Definition::Static(s)=>
+  Component::Static(s)=>
         {
           print!("static  {}: ",&self.name);
 
           s.print();
         },
-  Definition::Const(s)=>
+  Component::Const(s)=>
         {
           print!("const  {}: ",&self.name);
 
           s.print();
         },
-  Definition::Type(tk)=>
+  Component::Struct(sp)=>
+        {
+          print!("{}: ",&self.name);
+        },
+  Component::Union(sp)=>
+        {
+          print!("{}: ",&self.name);
+        },
+  Component::Enum(sp)=>
+        {
+          print!("{}: ",&self.name);
+        },
+  Component::Enumerator(e)=>
+        {
+          print!("{} = ",&self.name);
+
+          e.print();
+        },
+  Component::Type(ti)=>
         {
           print!("{}: ",&self.name);
 
-          tk.type_item.print();
+          ti.print();
         },
     }
 }
@@ -317,10 +428,54 @@ new()-> Self
 }
 
 
+pub fn 
+add_new_dummy(&mut self, name: &str)
+{
+  self.declaration_list.push(Declaration::new(name.to_string(),Component::Dummy))
+}
+
+
+pub fn 
+add_new_space(&mut self, name: &str)-> &mut Space
+{
+  let  decl = Declaration::new(name.to_string(),Component::Space(Space::new()));
+
+  self.declaration_list.push(decl);
+
+    if let Component::Space(sp) = &mut self.declaration_list.last_mut().unwrap().component
+    {
+      return sp;
+    }
+
+
+  panic!();
+}
+
+
+pub fn 
+get_space_mut(&mut self, name: &str)-> &mut Space
+{
+    for decl in &mut self.declaration_list
+    {
+        if decl.name == name
+        {
+            if let Component::Space(sp) = &mut decl.component
+            {
+              return sp;
+            }
+
+
+          break;
+        }
+    }
+
+
+  panic!();
+}
 
 
 pub fn
-find_declaration(&self, name: &str)-> Option<&Declaration>
+find_declaration_by_name(&self, name: &str)-> Option<&Declaration>
 {
     for decl in &self.declaration_list
     {
@@ -389,85 +544,6 @@ print(&self)
 
 
   print!("}}\n\n");
-}
-
-
-}
-
-
-
-
-pub struct
-DeclarationLink
-{
-  pub(crate) table_list: Vec<Vec<*mut Declaration>>,
-
-}
-
-
-impl
-DeclarationLink
-{
-
-
-pub fn
-new()-> DeclarationLink
-{
-  DeclarationLink{
-    table_list: vec![Vec::new()],
-  }
-}
-
-
-pub fn
-new_table(&mut self)
-{
-  self.table_list.push(Vec::new());
-}
-
-
-pub fn
-delete_last_table(&mut self)
-{
-  let  _ = self.table_list.pop();
-}
-
-
-pub fn
-push(&mut self, decl: &mut Declaration)
-{
-    if let Some(tbl) = self.table_list.last_mut()
-    {
-      tbl.push(decl as *mut Declaration);
-    }
-}
-
-
-pub fn
-find(&self, name: &str)-> Option<&mut Declaration>
-{
-  let  l = self.table_list.len();
-
-    for i in 0..l
-    {
-      let  tbl = &self.table_list[l-1-i];
-
-        for ptr in tbl
-        {
-            unsafe
-            {
-              let  decl = &mut **ptr;
-
-                if decl.name == name
-                {
-                  return Some(decl);
-                }
-            }
-        }
-    }
-
-
-  None
 }
 
 
