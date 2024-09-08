@@ -1,14 +1,17 @@
 
 
 use super::get_aligned_size;
+use super::get_default_aligned_size;
 
 use super::declaration::{
   Declaration,
   Space,
+  Symbol,
 
 };
 
 use super::expression::{
+  collect_string,
   Expression,
   Path,
 
@@ -21,258 +24,277 @@ pub const WORD_SIZE: usize = 8;
 
 #[derive(Clone)]
 pub struct
-FieldInfo
+TyInfo
 {
-  pub(crate)      name: String,
-  pub(crate) type_info: TypeInfo,
-
-  pub(crate)  index: usize,
-  pub(crate) offset: usize,
-
-}
-
-
-#[derive(Clone)]
-pub enum
-TypeInfoSubData
-{
-  None,
-  External(Path,Option<Box<TypeInfo>>),
-  Target(Box<TypeInfo>,Expression,Option<usize>),
-  Named(Box<TypeInfo>,String),
-  Signature(Vec<TypeInfo>,Box<TypeInfo>),
-  FieldInfoList(String,Vec<FieldInfo>),
-
-}
-
-
-#[derive(Clone)]
-pub struct
-TypeInfo
-{
-  pub(crate) symbol: u8,
-
   pub(crate)  size: usize,
   pub(crate) align: usize,
-
-  pub(crate) complete_flag: bool,
-
-  pub(crate) sub_data: TypeInfoSubData,
 
 }
 
 
 impl
-TypeInfo
+TyInfo
 {
 
 
 pub fn
-default()-> TypeInfo
+from_size(sz: usize)-> Self
 {
-  Self::new_void()
-}
-
-
-pub fn
-new(sym: u8, sz: usize, comp: bool, subdat: TypeInfoSubData)-> TypeInfo
-{
-  TypeInfo{
-        symbol: sym,
-          size: sz,
-         align: sz,
-    complete_flag: comp,
-    sub_data: subdat,
-  }
-}
-
-
-pub fn  new_void()->  TypeInfo{Self::new( VOID_SYM,0,true,TypeInfoSubData::None)}
-pub fn  new_bool()->  TypeInfo{Self::new( BOOL_SYM,1,true,TypeInfoSubData::None)}
-pub fn  new_u8()->    TypeInfo{Self::new(   U8_SYM,1,true,TypeInfoSubData::None)}
-pub fn  new_u16()->   TypeInfo{Self::new(  U16_SYM,2,true,TypeInfoSubData::None)}
-pub fn  new_u32()->   TypeInfo{Self::new(  U32_SYM,4,true,TypeInfoSubData::None)}
-pub fn  new_u64()->   TypeInfo{Self::new(  U64_SYM,8,true,TypeInfoSubData::None)}
-pub fn  new_usize()-> TypeInfo{Self::new(USIZE_SYM,8,true,TypeInfoSubData::None)}
-pub fn  new_i8()->    TypeInfo{Self::new(   I8_SYM,1,true,TypeInfoSubData::None)}
-pub fn  new_i16()->   TypeInfo{Self::new(  I16_SYM,2,true,TypeInfoSubData::None)}
-pub fn  new_i32()->   TypeInfo{Self::new(  I32_SYM,4,true,TypeInfoSubData::None)}
-pub fn  new_i64()->   TypeInfo{Self::new(  I64_SYM,8,true,TypeInfoSubData::None)}
-pub fn  new_isize()-> TypeInfo{Self::new(ISIZE_SYM,8,true,TypeInfoSubData::None)}
-pub fn  new_ilit()-> TypeInfo{Self::new(ILIT_SYM,8,true,TypeInfoSubData::None)}
-pub fn  new_ulit()-> TypeInfo{Self::new(ULIT_SYM,8,true,TypeInfoSubData::None)}
-pub fn  new_flit()-> TypeInfo{Self::new(FLIT_SYM,8,true,TypeInfoSubData::None)}
-pub fn  new_f32()->   TypeInfo{Self::new(  F32_SYM,4,true,TypeInfoSubData::None)}
-pub fn  new_f64()->   TypeInfo{Self::new(  F64_SYM,8,true,TypeInfoSubData::None)}
-pub fn  new_str_lit()-> TypeInfo{Self::new(STRLIT_SYM,16,true,TypeInfoSubData::None)}
-
-pub fn
-new_pointer(ti: TypeInfo)-> TypeInfo
-{
-  let  comp = ti.complete_flag;
-
-  Self::new(POINTER_SYM,8,comp,TypeInfoSubData::Target(Box::new(ti),Expression::None,None))
-}
-
-
-pub fn
-new_reference(ti: TypeInfo)-> TypeInfo
-{
-  let  comp = ti.complete_flag;
-
-  Self::new(REFERENCE_SYM,8,comp,TypeInfoSubData::Target(Box::new(ti),Expression::None,None))
-}
-
-
-pub fn
-new_array(ti: TypeInfo, n: usize)-> TypeInfo
-{
-  let  comp = ti.complete_flag;
-
-  let   size = ti.size*n;
-  let  align = ti.align;
-
-  TypeInfo{
-        symbol: ARRAY_SYM,
-          size,
-         align,
-    complete_flag: comp,
-    sub_data: TypeInfoSubData::Target(Box::new(ti),Expression::None,Some(n)),
+  Self{
+    size: sz, align: sz,
   }
 }
 
 
 pub fn
-new_tuple(mut ls: Vec<TypeInfo>)-> TypeInfo
+update_size(&mut self, new_sz: usize)
 {
-  let  mut fi_ls: Vec<FieldInfo> = Vec::new();
-  let  mut index = 0;
-
-    for ti in ls
+    if new_sz > self.size
     {
-      let  fi = FieldInfo{name: String::new(), type_info: ti, index, offset:0};
+      self.size = new_sz;
+    }
+}
 
-      fi_ls.push(fi);
 
-      index  += 1;
+pub fn
+update_align(&mut self, new_al: usize)
+{
+    if new_al > self.align
+    {
+      self.align = new_al;
+    }
+}
+
+
+}
+
+
+
+
+#[derive(Clone)]
+pub struct
+TySet
+{
+  pub(crate) field_list: Vec<Field>,
+  pub(crate)   info_opt: Option<TyInfo>,
+
+}
+
+
+impl
+TySet
+{
+
+
+pub fn
+new()-> Self
+{
+  Self{
+    field_list: Vec::new(),
+    info_opt: None,
+  }
+}
+
+
+pub fn
+from(ls: Vec<Field>)-> Self
+{
+  Self{
+    field_list: ls,
+    info_opt: None,
+  }
+}
+
+
+pub fn
+find(&self, name: &str)-> Option<&Field>
+{
+    for fld in &self.field_list
+    {
+        if fld.name == name
+        {
+          return Some(fld);
+        }
     }
 
 
-  TypeInfo{
-        symbol: TUPLE_SYM,
-          size: 0,
-         align: 0,
-    complete_flag: false,
-    sub_data: TypeInfoSubData::FieldInfoList(String::new(),fi_ls),
-  }
+  None
 }
 
 
 pub fn
-new_struct(name: String, ls: Vec<(String,TypeInfo)>)-> TypeInfo
+add(&mut self, name: String, ty: Ty)-> bool
 {
-  let  mut fi_ls: Vec<FieldInfo> = Vec::new();
-  let  mut index = 0;
-
-    for e in ls
+    if name.len() != 0
     {
-      let  fi = FieldInfo{name: e.0, type_info: e.1, index, offset: 0};
-
-      fi_ls.push(fi);
-
-      index += 1;
+        if let Some(_) = self.find(&name)
+        {
+          return false;
+        }
     }
 
 
-  TypeInfo{
-        symbol: STRUCT_SYM,
-          size: 0,
-         align: 0,
-    complete_flag: false,
-    sub_data: TypeInfoSubData::FieldInfoList(name,fi_ls),
-  }
+  let  index = self.field_list.len();
+
+  let  fld = Field{
+    index, name, ty, offset: 0,
+  };
+
+
+  self.field_list.push(fld);
+
+  self. info_opt = None;
+
+  true
 }
 
 
 pub fn
-new_union(name: String, ls: Vec<(String,TypeInfo)>)-> TypeInfo
+complete_as_struct(&mut self, sym_tbl: &Vec<Symbol>)-> bool
 {
-  let  mut fi_ls: Vec<FieldInfo> = Vec::new();
-  let  mut index = 0;
-
-    for e in ls
+    if let Some(_) = &self.info_opt
     {
-      let  fi = FieldInfo{name: e.0, type_info: e.1, index, offset: 0};
-
-      fi_ls.push(fi);
-
-      index += 1;
+      return true;
     }
 
 
-  TypeInfo{
-        symbol: UNION_SYM,
-          size: 0,
-         align: 0,
-    complete_flag: false,
-    sub_data: TypeInfoSubData::FieldInfoList(name,fi_ls),
-  }
-}
+  let  mut ti = TyInfo::from_size(0);
 
-
-pub fn
-new_function_reference(ls: Vec<TypeInfo>, ret_ti: TypeInfo)-> TypeInfo
-{
-  let  mut param_ls: Vec<TypeInfo> = Vec::new();
-
-    for e in ls
+    for i in 0..self.field_list.len()
     {
-      param_ls.push(e);
+      let  fld = &mut self.field_list[i];
+
+      let  ty = &mut fld.ty;
+
+        if !ty.complete(sym_tbl)
+        {
+          return false;
+        }
+
+
+      let  cur_ti = ty.get_info();
+
+        if cur_ti.size != 0
+        {
+          fld.offset = get_aligned_size(ti.size,cur_ti.align);
+
+          ti.size += cur_ti.size;
+
+          ti.update_align(cur_ti.align);
+        }
+
+      else
+        {
+          fld.offset = ti.size;
+        }
     }
 
 
-  TypeInfo{
-        symbol: FUNCTION_REFERENCE_SYM,
-          size: 8,
-         align: 8,
-    complete_flag: false,
-    sub_data: TypeInfoSubData::Signature(param_ls,Box::new(ret_ti)),
-  }
+  self.info_opt = Some(ti);
+
+  true
 }
 
 
 pub fn
-new_external(path: Path)-> TypeInfo
+complete_as_union(&mut self, sym_tbl: &Vec<Symbol>)-> bool
 {
-  TypeInfo{
-        symbol: EXTERNAL_SYM,
-          size: 0,
-         align: 0,
-    complete_flag: false,
-    sub_data: TypeInfoSubData::External(path,None),
-  }
+    if let Some(_) = &self.info_opt
+    {
+      return true;
+    }
+
+
+  let  mut ti = TyInfo::from_size(0);
+
+    for i in 0..self.field_list.len()
+    {
+      let  fld = &mut self.field_list[i];
+
+      let  ty = &mut fld.ty;
+
+        if !ty.complete(sym_tbl)
+        {
+          return false;
+        }
+
+
+      let  cur_ti = ty.get_info();
+
+        if cur_ti.size != 0
+        {
+          ti.update_size( cur_ti.size );
+          ti.update_align(cur_ti.align);
+        }
+    }
+
+
+  self.info_opt = Some(ti);
+
+  true
 }
 
 
 pub fn
-new_named(ti: TypeInfo, name: String)-> TypeInfo
+print(&self)
 {
-  let   size = ti.size;
-  let  align = ti.align;
-  let  complete_flag = ti.complete_flag;
+    for fld in &self.field_list
+    {
+      print!("{}: ",&fld.name);
 
-  TypeInfo{
-        symbol: NAMED_SYM,
-          size,
-         align,
-    complete_flag,
-    sub_data: TypeInfoSubData::Named(Box::new(ti),name),
-  }
+      fld.ty.print();
+
+      print!("({}), ",fld.offset);
+    }
 }
 
 
+}
+
+
+
+
+#[derive(Clone)]
+pub enum
+Ty
+{
+  Void,
+  Bool,
+
+  U8, U16, U32, U64, USize,
+  ULiteral,
+  I8, I16, I32, I64, ISize,
+  ILiteral,
+
+  F32, F64,
+  FLiteral,
+
+  StringLiteral,
+
+  FunctionPort(Box<Ty>,Vec<Ty>,bool),
+
+      Pointer(Box<Ty>),
+    Reference(Box<Ty>),
+  Dereference(Box<Ty>),
+
+  Array(Box<Ty>,Expression,Option<usize>),
+  Tuple(TySet),
+  Struct(TySet),
+  Union(TySet),
+  Enum(Vec<Enumerator>,bool),
+
+  External(Path,Option<Box<Ty>>),
+
+}
+
+
+impl
+Ty
+{
+
+
 pub fn
-try_from(s: &str)-> Result<TypeInfo,()>
+try_from(s: &str)-> Result<Ty,()>
 {
   use crate::syntax::dictionary::Dictionary;
 
@@ -299,37 +321,109 @@ try_from(s: &str)-> Result<TypeInfo,()>
 }
 
 
+pub fn
+complete(&mut self, sym_tbl: &Vec<Symbol>)-> bool
+{
+    match self
+    {
+  Ty::Array(ty,e,sz_opt)=>
+      {
+          if let Some(_) = sz_opt
+          {
+            return true;
+          }
+
+        else
+          if let Ok(sz) = e.get_size_value()
+          {
+            *sz_opt = Some(sz);
+
+            return true;
+          }
 
 
-pub fn  is_void(&self)->  bool{self.symbol ==  VOID_SYM}
-pub fn  is_bool(&self)->  bool{self.symbol ==  BOOL_SYM}
-pub fn  is_u8(&self)->    bool{self.symbol ==    U8_SYM}
-pub fn  is_u16(&self)->   bool{self.symbol ==   U16_SYM}
-pub fn  is_u32(&self)->   bool{self.symbol ==   U32_SYM}
-pub fn  is_u64(&self)->   bool{self.symbol ==   U64_SYM}
-pub fn  is_usize(&self)-> bool{self.symbol == USIZE_SYM}
-pub fn  is_i8(&self)->    bool{self.symbol ==    I8_SYM}
-pub fn  is_i16(&self)->   bool{self.symbol ==   I16_SYM}
-pub fn  is_i32(&self)->   bool{self.symbol ==   I32_SYM}
-pub fn  is_i64(&self)->   bool{self.symbol ==   I64_SYM}
-pub fn  is_isize(&self)-> bool{self.symbol == ISIZE_SYM}
-pub fn  is_ilit(&self)-> bool{self.symbol == ILIT_SYM}
-pub fn  is_ulit(&self)-> bool{self.symbol == ULIT_SYM}
-pub fn  is_flit(&self)-> bool{self.symbol == FLIT_SYM}
-pub fn  is_f32(&self)->   bool{self.symbol ==   F32_SYM}
-pub fn  is_f64(&self)->   bool{self.symbol ==   F64_SYM}
-pub fn  is_str_lit(&self)-> bool{self.symbol == STRLIT_SYM}
-
-pub fn  is_pointer(&self)-> bool{self.symbol == POINTER_SYM}
-pub fn  is_reference(&self)-> bool{self.symbol == REFERENCE_SYM}
-pub fn  is_tuple(&self)-> bool{self.symbol == TUPLE_SYM}
-pub fn  is_struct(&self)-> bool{self.symbol == STRUCT_SYM}
-pub fn  is_union(&self)-> bool{self.symbol == UNION_SYM}
-pub fn  is_enum(&self)-> bool{self.symbol == ENUM_SYM}
-pub fn  is_array(&self)-> bool{self.symbol == ARRAY_SYM}
-pub fn  is_function_reference(&self)-> bool{self.symbol == FUNCTION_REFERENCE_SYM}
+        false
+      }
+  Ty::Tuple(set)=>
+      {
+        set.complete_as_struct(sym_tbl)
+      }
+  Ty::Struct(set)=>
+      {
+        set.complete_as_struct(sym_tbl)
+      }
+  Ty::Union(set)=>
+      {
+        set.complete_as_union(sym_tbl)
+      }
+  Ty::Enum(ls,comp_flag)=>
+      {
+          if !*comp_flag
+          {
+          }
 
 
+        true
+      }
+  Ty::FunctionPort(ret_ty,param_ty_ls,comp_flag)=>
+      {
+          if !*comp_flag
+          {
+              for ty in param_ty_ls
+              {
+                ty.print();
+              }
+
+
+            ret_ty.print();
+          }
+
+
+        true
+      }
+  Ty::External(path,ty_opt)=>
+      {
+          if let Some(ty) = ty_opt
+          {
+            return ty.complete(sym_tbl);
+          }
+
+
+        false
+      }
+  _=>{true}
+    }
+}
+
+
+pub fn  is_void(&self)->  bool{if let Ty::Void = self{true} else{false}}
+pub fn  is_bool(&self)->  bool{if let Ty::Bool = self{true} else{false}}
+pub fn  is_u8(&self)->    bool{if let Ty::U8 = self{true} else{false}}
+pub fn  is_u16(&self)->   bool{if let Ty::U16 = self{true} else{false}}
+pub fn  is_u32(&self)->   bool{if let Ty::U32 = self{true} else{false}}
+pub fn  is_u64(&self)->   bool{if let Ty::U64 = self{true} else{false}}
+pub fn  is_usize(&self)-> bool{if let Ty::USize = self{true} else{false}}
+pub fn  is_i8(&self)->    bool{if let Ty::I8 = self{true} else{false}}
+pub fn  is_i16(&self)->   bool{if let Ty::I16 = self{true} else{false}}
+pub fn  is_i32(&self)->   bool{if let Ty::I32 = self{true} else{false}}
+pub fn  is_i64(&self)->   bool{if let Ty::I64 = self{true} else{false}}
+pub fn  is_isize(&self)-> bool{if let Ty::ISize = self{true} else{false}}
+pub fn  is_iltr(&self)-> bool{if let Ty::ILiteral = self{true} else{false}}
+pub fn  is_ultr(&self)-> bool{if let Ty::ULiteral = self{true} else{false}}
+pub fn  is_fltr(&self)-> bool{if let Ty::FLiteral = self{true} else{false}}
+pub fn  is_f32(&self)->   bool{if let Ty::F32 = self{true} else{false}}
+pub fn  is_f64(&self)->   bool{if let Ty::F64 = self{true} else{false}}
+pub fn  is_sltr(&self)-> bool{if let Ty::StringLiteral = self{true} else{false}}
+
+pub fn  is_pointer(&self)-> bool{if let Ty::Pointer(_) = self{true} else{false}}
+pub fn  is_reference(&self)-> bool{if let Ty::Reference(_) = self{true} else{false}}
+pub fn  is_dereference(&self)-> bool{if let Ty::Dereference(_) = self{true} else{false}}
+pub fn  is_tuple(&self)-> bool{if let Ty::Tuple(_) = self{true} else{false}}
+pub fn  is_struct(&self)-> bool{if let Ty::Struct(_) = self{true} else{false}}
+pub fn  is_union(&self)-> bool{if let Ty::Union(_) = self{true} else{false}}
+pub fn  is_enum(&self)-> bool{if let Ty::Enum(_,_) = self{true} else{false}}
+pub fn  is_array(&self)-> bool{if let Ty::Array(_,_,_) = self{true} else{false}}
+pub fn  is_function_port(&self)-> bool{if let Ty::FunctionPort(_,_,_) = self{true} else{false}}
 
 
 pub fn
@@ -340,7 +434,7 @@ is_unsigned_integer(&self)-> bool
   || self.is_u32()  
   || self.is_u64()  
   || self.is_usize()
-  || self.is_ulit()
+  || self.is_ultr()
 }
 
 
@@ -352,16 +446,7 @@ is_signed_integer(&self)-> bool
   || self.is_i32()  
   || self.is_i64()  
   || self.is_isize()
-  || self.is_ilit()
-}
-
-
-pub fn
-is_floating(&self)-> bool
-{
-     self.is_f32()
-  || self.is_f64()
-  || self.is_flit()
+  || self.is_iltr()
 }
 
 
@@ -374,6 +459,15 @@ is_integer(&self)-> bool
 
 
 pub fn
+is_floating(&self)-> bool
+{
+     self.is_f32()
+  || self.is_f64()
+  || self.is_fltr()
+}
+
+
+pub fn
 is_word(&self)-> bool
 {
        self.is_signed_integer()
@@ -382,502 +476,174 @@ is_word(&self)-> bool
 }
 
 
-
-
 pub fn
-pointer_target(&self)-> Option<&Self>
+get_info(&self)-> TyInfo
 {
-    if self.is_pointer()
+    match self
     {
-        if let TypeInfoSubData::Target(ti_box,_,_) = &self.sub_data
-        {
-          return Some(&**ti_box);
-        }
-    }
+  Ty::Void=>{TyInfo::from_size(0)}
+  Ty::Bool=>{TyInfo::from_size(1)}
+  Ty::I8=>   {TyInfo::from_size(1)}
+  Ty::I16=>  {TyInfo::from_size(2)}
+  Ty::I32=>  {TyInfo::from_size(4)}
+  Ty::I64=>  {TyInfo::from_size(8)}
+  Ty::ISize=>{TyInfo::from_size(8)}
+  Ty::ILiteral=>{TyInfo::from_size(8)}
+  Ty::U8=>   {TyInfo::from_size(1)}
+  Ty::U16=>  {TyInfo::from_size(2)}
+  Ty::U32=>  {TyInfo::from_size(4)}
+  Ty::U64=>  {TyInfo::from_size(8)}
+  Ty::USize=>{TyInfo::from_size(8)}
+  Ty::ULiteral=>{TyInfo::from_size(8)}
+  Ty::F32=>{TyInfo::from_size(4)}
+  Ty::F64=>{TyInfo::from_size(8)}
+  Ty::FLiteral=>{TyInfo::from_size(8)}
+  Ty::Pointer(_)=>{TyInfo::from_size(8)}
+  Ty::Reference(_)=>{TyInfo::from_size(8)}
+  Ty::Dereference(_)=>{TyInfo::from_size(8)}
+  Ty::Array(ty,e,sz_opt)=>
+      {
+          if let Some(sz) = sz_opt
+          {
+            let  base = ty.get_info();
 
-
-  None
-}
-
-
-pub fn
-reference_target(&self)-> Option<&Self>
-{
-    if self.is_reference()
-    {
-        if let TypeInfoSubData::Target(ti_box,_,_) = &self.sub_data
-        {
-          return Some(&**ti_box);
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-complete_for_struct(&mut self)-> bool
-{
-    if let TypeInfoSubData::FieldInfoList(_,ls) = &mut self.sub_data
-    {
-      let  mut max_align: usize = 0;
-      let  mut    offset: usize = 0;
-
-        for fld in ls
-        {
-            if fld.type_info.complete() == false
-            {
-              return false;
+            TyInfo{
+               size: base.size*(*sz),
+              align: base.align,
             }
+          }
 
-
-          let   ti_size = fld.type_info.size;
-          let  ti_align = fld.type_info.align;
-
-            if ti_align != 0
-            {
-              offset = (offset+(ti_align-1))/ti_align*ti_align;
-            }
-
-
-          fld.offset = offset           ;
-                       offset += ti_size;
-
-          max_align = std::cmp::max(max_align,ti_align);
-        }
-
-
-      self.size  =    offset;
-      self.align = max_align;
-      self.complete_flag = true;
+        else
+          {
+            panic!();
+          }
+      }
+  Ty::Tuple(set)=>
+      {
+        panic!();
+      }
+  Ty::Struct(set)=>
+      {
+        panic!();
+      }
+  Ty::Union(set)=>
+      {
+        panic!();
+      }
+  Ty::Enum(_,_)=>{TyInfo::from_size(8)}
+  Ty::FunctionPort(_,_,_)=>{TyInfo::from_size(8)}
+  _=>{panic!();}
     }
-
-
-  self.complete_flag
-}
-
-
-pub fn
-complete_for_union(&mut self)-> bool
-{
-    if let TypeInfoSubData::FieldInfoList(_,ls) = &mut self.sub_data
-    {
-      let  mut max_align: usize = 0;
-      let  mut  max_size: usize = 0;
-
-        for fld in ls
-        {
-            if fld.type_info.complete() == false
-            {
-              return false;
-            }
-
-
-          let   ti_size = fld.type_info.size;
-          let  ti_align = fld.type_info.align;
-
-          max_size  = std::cmp::max(max_size ,ti_size );
-          max_align = std::cmp::max(max_align,ti_align);
-        }
-
-
-      self.size  =  max_size;
-      self.align = max_align;
-      self.complete_flag = true;
-    }
-
-
-  self.complete_flag
-}
-
-
-pub fn
-complete(&mut self)-> bool
-{
-    if self.complete_flag
-    {
-      return true;
-    }
-
-
-    match self.symbol
-    {
-  POINTER_SYM=>
-      {
-          if let TypeInfoSubData::Target(ti,_,_) = &mut self.sub_data
-          {
-            self.complete_flag = ti.complete();
-          }
-      }
-  REFERENCE_SYM=>
-      {
-          if let TypeInfoSubData::Target(ti,_,_) = &mut self.sub_data
-          {
-            self.complete_flag = ti.complete();
-          }
-      }
-  ARRAY_SYM=>
-      {
-          if let TypeInfoSubData::Target(ti,_,n_opt) = &mut self.sub_data
-          {
-              if let None = n_opt
-              {
-              }
-
-
-              if let Some(n) = n_opt
-              {
-                self.complete_flag = ti.complete();
-
-                self.size  = ti.size*(*n);
-                self.align = ti.align;
-              }
-          }
-      }
-  TUPLE_SYM=> {self.complete_for_struct();}
-  STRUCT_SYM=>{self.complete_for_struct();}
-  UNION_SYM=> {self.complete_for_union();}
-  ENUM_SYM=>
-      {
-      }
-  FUNCTION_REFERENCE_SYM=>
-      {
-          if let TypeInfoSubData::Signature(param_ls,ret_ti) = &mut self.sub_data
-          {
-              for p in param_ls
-              {
-                  if p.complete() == false
-                  {
-                    return false;
-                  }
-              }
-
-
-           self.complete_flag = ret_ti.complete();
-          }
-      }
-  EXTERNAL_SYM=>
-      {
-          if let TypeInfoSubData::External(path,ti_opt) = &mut self.sub_data
-          {
-              if let Some(ti) = ti_opt
-              {
-              }
-          }
-      }
-  _=>{}
-    }
-
-
-  self.complete_flag
-}
-
-
-
-
-fn
-print_name(buf: &mut Vec<u8>, name: &str)
-{
-    for byte in name.as_bytes()
-    {
-      buf.push(*byte);
-    }
-}
-
-
-fn
-print_usize(buf: &mut Vec<u8>, n: usize)
-{
-  buf.push(((n>>56)&0xFF) as u8);
-  buf.push(((n>>48)&0xFF) as u8);
-  buf.push(((n>>40)&0xFF) as u8);
-  buf.push(((n>>32)&0xFF) as u8);
-  buf.push(((n>>24)&0xFF) as u8);
-  buf.push(((n>>16)&0xFF) as u8);
-  buf.push(((n>> 8)&0xFF) as u8);
-  buf.push(((n>> 0)&0xFF) as u8);
-}
-
-
-fn
-print_id(&self, buf: &mut Vec<u8>)
-{
-    if !self.complete_flag
-    {
-      panic!();
-    }
-
-
-  buf.push(self.symbol);
-
-    match self.symbol
-    {
-  POINTER_SYM=>
-      {
-          if let TypeInfoSubData::Target(ti,_,_) = &self.sub_data
-          {
-            ti.print_id(buf);
-          }
-      }
-  REFERENCE_SYM=>
-      {
-          if let TypeInfoSubData::Target(ti,_,_) = &self.sub_data
-          {
-            ti.print_id(buf);
-          }
-      }
-  ARRAY_SYM=>
-      {
-          if let TypeInfoSubData::Target(ti,_,n_opt) = &self.sub_data
-          {
-            Self::print_usize(buf,n_opt.unwrap());
-
-            ti.print_id(buf);
-          }
-      }
-  TUPLE_SYM=>
-      {
-          if let TypeInfoSubData::FieldInfoList(name,ls) = &self.sub_data
-          {
-            Self::print_name(buf,name);
-
-              for fi in ls
-              {
-                fi.type_info.print_id(buf);
-              }
-          }
-      }
-  STRUCT_SYM=>
-      {
-          if let TypeInfoSubData::FieldInfoList(name,ls) = &self.sub_data
-          {
-            Self::print_name(buf,name);
-
-              for fi in ls
-              {
-                Self::print_name(buf,&fi.name);
-
-                fi.type_info.print();
-              }
-          }
-      }
-  UNION_SYM=>
-      {
-          if let TypeInfoSubData::FieldInfoList(name,ls) = &self.sub_data
-          {
-            Self::print_name(buf,name);
-
-              for fi in ls
-              {
-                Self::print_name(buf,&fi.name);
-
-                fi.type_info.print();
-              }
-          }
-      }
-  ENUM_SYM=>
-      {
-      }
-  FUNCTION_REFERENCE_SYM=>
-      {
-          if let TypeInfoSubData::Signature(param_ls,ret_ti) = &self.sub_data
-          {
-              for para in param_ls
-              {
-                para.print_id(buf);
-              }
-
-
-            ret_ti.print_id(buf);
-          }
-      }
-  EXTERNAL_SYM=>
-      {
-          if let TypeInfoSubData::External(_,ti_opt) = &self.sub_data
-          {
-              if let Some(ti) = ti_opt
-              {
-                ti.print_id(buf);
-              }
-          }
-      }
-  _=>{}
-    }
-}
-
-
-pub fn
-get_id(&self)-> Vec<u8>
-{
-  let  mut buf: Vec<u8> = Vec::new();
-
-  self.print_id(&mut buf);
-
-  buf
-}
-
-
-pub fn
-get_size(&self)-> usize
-{
-  self.size
-}
-
-
-pub fn
-get_align(&self)-> usize
-{
-  self.align
 }
 
 
 pub fn
 print(&self)
 {
-    match self.symbol
+    match self
     {
-  VOID_SYM=>{print!("void");}
-  BOOL_SYM=>{print!("bool");}
-  I8_SYM=>   {print!("i8");}
-  I16_SYM=>  {print!("i16");}
-  I32_SYM=>  {print!("i32");}
-  I64_SYM=>  {print!("i64");}
-  ISIZE_SYM=>{print!("isize");}
-  ILIT_SYM=>{print!("ilit");}
-  U8_SYM=>   {print!("u8");}
-  U16_SYM=>  {print!("u16");}
-  U32_SYM=>  {print!("u32");}
-  U64_SYM=>  {print!("u64");}
-  USIZE_SYM=>{print!("usize");}
-  ULIT_SYM=>{print!("ulit");}
-  F32_SYM=>{print!("f32");}
-  F64_SYM=>{print!("f64");}
-  FLIT_SYM=>{print!("flit");}
-  POINTER_SYM=>
+  Ty::Void=>{print!("void");}
+  Ty::Bool=>{print!("bool");}
+  Ty::I8=>   {print!("i8");}
+  Ty::I16=>  {print!("i16");}
+  Ty::I32=>  {print!("i32");}
+  Ty::I64=>  {print!("i64");}
+  Ty::ISize=>{print!("isize");}
+  Ty::ILiteral=>{print!("iltr");}
+  Ty::U8=>   {print!("u8");}
+  Ty::U16=>  {print!("u16");}
+  Ty::U32=>  {print!("u32");}
+  Ty::U64=>  {print!("u64");}
+  Ty::USize=>{print!("usize");}
+  Ty::ULiteral=>{print!("ultr");}
+  Ty::F32=>{print!("f32");}
+  Ty::F64=>{print!("f64");}
+  Ty::FLiteral=>{print!("fltr");}
+  Ty::StringLiteral=>{print!("strltr");}
+  Ty::Pointer(ty)=>
       {
         print!("*");
 
-          if let TypeInfoSubData::Target(ti,_,_) = &self.sub_data
-          {
-            ti.print();
-          }
+        ty.print();
       }
-  REFERENCE_SYM=>
+  Ty::Reference(ty)=>
       {
         print!("&");
 
-          if let TypeInfoSubData::Target(ti,_,_) = &self.sub_data
-          {
-            ti.print();
-          }
+        ty.print();
       }
-  ARRAY_SYM=>
+  Ty::Dereference(ty)=>
       {
-          if let TypeInfoSubData::Target(ti,e,n_opt) = &self.sub_data
-          {
-            ti.print();
+        print!("*&");
 
-            print!("[");
-
-              if let Some(n) = n_opt
-              {
-                print!("{}",*n);
-              }
-
-            else
-              {
-                e.print();
-              }
-
-
-            print!("]");
-          }
+        ty.print();
       }
-  TUPLE_SYM=>
+  Ty::Array(ty,e,sz_opt)=>
+      {
+        ty.print();
+
+        print!("[");
+
+          if let Some(sz) = sz_opt
+          {
+            print!("{}",sz);
+          }
+
+        else
+          {
+            e.print();
+          }
+
+
+        print!("]");
+      }
+  Ty::Tuple(set)=>
       {
         print!("(");
 
-          if let TypeInfoSubData::FieldInfoList(_,ls) = &self.sub_data
-          {
-              for fi in ls
-              {
-                fi.type_info.print();
-
-                print!(", ");
-              }
-          }
+        set.print();
 
         print!(")");
       }
-  STRUCT_SYM=>
+  Ty::Struct(set)=>
       {
-          if let TypeInfoSubData::FieldInfoList(name,ls) = &self.sub_data
+        print!("struct{{");
+
+        set.print();
+
+        print!("}}");
+      }
+  Ty::Union(set)=>
+      {
+        print!("union{{");
+
+        set.print();
+
+        print!("}}");
+      }
+  Ty::Enum(ls,_)=>
+      {
+      }
+  Ty::FunctionPort(ret_ty,param_ty_ls,_)=>
+      {
+        print!("fn(");
+
+          for ty in param_ty_ls
           {
-            print!("struct {}{{",name);
+            ty.print();
 
-              for fi in ls
-              {
-                print!("{}: ",&fi.name);
-
-                fi.type_info.print();
-
-                print!("({}), ",fi.offset);
-              }
-
-
-            print!("}}(sz: {}, al: {})",self.size,self.align);
+            print!(", ");
           }
+
+
+        print!(")-> ");
+
+        ret_ty.print();
       }
-  UNION_SYM=>
+  Ty::External(path,_)=>
       {
-          if let TypeInfoSubData::FieldInfoList(name,ls) = &self.sub_data
-          {
-            print!("union {}{{",name);
-
-              for fi in ls
-              {
-                print!("{}: ",&fi.name);
-
-                fi.type_info.print();
-
-                print!(", ");
-              }
-
-
-            print!("}}");
-          }
+        path.print();
       }
-  ENUM_SYM=>
-      {
-      }
-  FUNCTION_REFERENCE_SYM=>
-      {
-          if let TypeInfoSubData::Signature(param_ls,ret_ti) = &self.sub_data
-          {
-            print!("fn(");
-
-              for para in param_ls
-              {
-                para.print();
-
-                print!(", ");
-              }
-
-
-            print!(")-> ");
-
-            ret_ti.print();
-          }
-      }
-  EXTERNAL_SYM=>
-      {
-          if let TypeInfoSubData::External(path,_) = &self.sub_data
-          {
-            path.print();
-          }
-      }
-  _=>{}
     }
 }
 
@@ -885,55 +651,49 @@ print(&self)
 }
 
 
-enum
-TypeSymbol
+
+
+#[derive(Clone)]
+pub struct
+Field
 {
-  Void, Bool,
-  U8, U16, U32, U64, USize,
-  I8, I16, I32, I64, ISize,
-  ILiteral,
-  ULiteral,
-  F32, F64,
-  FLiteral,
-  StringLiteral,
-  Pointer, Reference, Array, Tuple, Struct, Union, Enum,
-  FunctionReference,
-  External,
-  Named,
+  pub(crate)   name: String,
+  pub(crate)     ty: Ty,
+  pub(crate)  index: usize,
+  pub(crate) offset: usize,
 
 }
 
 
-const SYM_BASE: u8 = 0x80;
-pub const VOID_SYM: u8 = SYM_BASE+TypeSymbol::Void as u8;
-pub const BOOL_SYM: u8 = SYM_BASE+TypeSymbol::Bool as u8;
-pub const    U8_SYM: u8 = SYM_BASE+TypeSymbol::U8    as u8;
-pub const   U16_SYM: u8 = SYM_BASE+TypeSymbol::U16   as u8;
-pub const   U32_SYM: u8 = SYM_BASE+TypeSymbol::U32   as u8;
-pub const   U64_SYM: u8 = SYM_BASE+TypeSymbol::U64   as u8;
-pub const USIZE_SYM: u8 = SYM_BASE+TypeSymbol::USize as u8;
-pub const    I8_SYM: u8 = SYM_BASE+TypeSymbol::I8    as u8;
-pub const   I16_SYM: u8 = SYM_BASE+TypeSymbol::I16   as u8;
-pub const   I32_SYM: u8 = SYM_BASE+TypeSymbol::I32   as u8;
-pub const   I64_SYM: u8 = SYM_BASE+TypeSymbol::I64   as u8;
-pub const ISIZE_SYM: u8 = SYM_BASE+TypeSymbol::ISize as u8;
-pub const ILIT_SYM: u8 = SYM_BASE+TypeSymbol::ILiteral as u8;
-pub const ULIT_SYM: u8 = SYM_BASE+TypeSymbol::ULiteral as u8;
-pub const   F32_SYM: u8 = SYM_BASE+TypeSymbol::F32   as u8;
-pub const   F64_SYM: u8 = SYM_BASE+TypeSymbol::F64   as u8;
-pub const FLIT_SYM: u8 = SYM_BASE+TypeSymbol::FLiteral as u8;
-pub const STRLIT_SYM: u8 = SYM_BASE+TypeSymbol::StringLiteral as u8;
-pub const   POINTER_SYM: u8 = SYM_BASE+TypeSymbol::Pointer as u8;
-pub const REFERENCE_SYM: u8 = SYM_BASE+TypeSymbol::Reference as u8;
-pub const     ARRAY_SYM: u8 = SYM_BASE+TypeSymbol::Array as u8;
-pub const     TUPLE_SYM: u8 = SYM_BASE+TypeSymbol::Tuple as u8;
-pub const    STRUCT_SYM: u8 = SYM_BASE+TypeSymbol::Struct as u8;
-pub const     UNION_SYM: u8 = SYM_BASE+TypeSymbol::Union as u8;
-pub const      ENUM_SYM: u8 = SYM_BASE+TypeSymbol::Enum as u8;
+impl
+Field
+{
 
-pub const FUNCTION_REFERENCE_SYM: u8 = SYM_BASE+TypeSymbol::FunctionReference as u8;
-pub const EXTERNAL_SYM: u8 = SYM_BASE+TypeSymbol::External as u8;
-pub const NAMED_SYM: u8 = SYM_BASE+TypeSymbol::Named as u8;
+
+pub fn
+new()-> Self
+{
+  Self{
+      name: String::new(),
+        ty: Ty::Void,
+     index: 0,
+    offset: 0,
+  }
+}
+
+
+}
+
+
+#[derive(Clone)]
+pub struct
+Enumerator
+{
+  pub(crate)           name: String,
+  pub(crate) expression_opt: Option<Expression>,
+  pub(crate)      value_opt: Option<usize>,
+
+}
 
 
 

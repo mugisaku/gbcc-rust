@@ -9,6 +9,7 @@ use crate::syntax::{
 
 use crate::language::expression::{
   Expression,
+  AssignOperator,
 
 };
 
@@ -16,7 +17,7 @@ use crate::language::declaration::read_expression::read_expression;
 
 
 use crate::language::statement::{
-  ConditionalBlock, Statement, AssignOperator,
+  ConditionalBlock, Statement,
 };
 
 
@@ -107,12 +108,12 @@ read_return(dir: &Directory)-> Result<Statement,()>
     {
         if let Ok(e) = read_expression(d)
         {
-          return Ok(Statement::Return(e));
+          return Ok(Statement::Return(Some(e)));
         }
     }
 
 
-  Ok(Statement::Return(Expression::None))
+  Ok(Statement::Return(None))
 }
 
 
@@ -155,13 +156,13 @@ read_if(dir: &Directory)-> Result<Statement,()>
                         {
                             if let Ok(statement_list) = read_statement_list(ls_d)
                             {
-                              cond_blk_ls.push(ConditionalBlock{condition: Expression::None, statement_list});
+                              return Ok(Statement::If(cond_blk_ls,Some(statement_list)));
                             }
                         }
                     }
 
 
-                  return Ok(Statement::If(cond_blk_ls));
+                  return Ok(Statement::If(cond_blk_ls,None));
                 }
 
               else

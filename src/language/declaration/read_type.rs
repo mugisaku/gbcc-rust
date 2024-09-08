@@ -13,20 +13,16 @@ use crate::language::expression::{
 
 };
 
-use crate::language::declaration::{
-  Component,
-  Declaration,
-
-};
-
-use super::{
-  TypeInfo,
+use crate::language::typesystem::{
+  Ty,
+  TySet,
+  Field,
 
 };
 
 
 pub fn
-read_type(dir: &Directory)-> Result<TypeInfo,()>
+read_type(dir: &Directory)-> Result<Ty,()>
 {
   let  mut cur = Cursor::new(dir);
  
@@ -44,7 +40,7 @@ read_type(dir: &Directory)-> Result<TypeInfo,()>
   else
     if let Some(subdir) = cur.get_directory_with_name("function_reference")
     {
-      return read_function_reference(&subdir);
+      return read_function_port(&subdir);
     }
 
   else
@@ -54,7 +50,7 @@ read_type(dir: &Directory)-> Result<TypeInfo,()>
 
       path.identifier_list.push(s.clone());
 
-      return Ok(TypeInfo::new_external(path));
+      return Ok(Ty::External(path,None));
     }
 
 
@@ -63,65 +59,11 @@ read_type(dir: &Directory)-> Result<TypeInfo,()>
 
 
 pub fn
-read_parameter(dir: &Directory)-> Result<Declaration,()>
+read_type_list(dir: &Directory)-> Result<Vec<Ty>,()>
 {
   let  mut cur = Cursor::new(dir);
 
-    if let Some(id) = cur.get_identifier()
-    {
-      let  s = id.clone();
-
-      cur.advance(2);
-
-        if let Some(subdir) = cur.get_directory_with_name("type")
-        {
-            if let Ok(t) = read_type(&subdir)
-            {
-              let  com = Component::Type(t);
-
-              return Ok(Declaration::new(s,com));
-            }
-        }
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_parameter_list(dir: &Directory)-> Result<Vec<Declaration>,()>
-{
-  let  mut cur = Cursor::new(dir);
-
-  let  mut ls: Vec<Declaration> = Vec::new();
-
-    while let Some(subdir) = cur.seek_directory_with_name("member")
-    {
-        if let Ok(m) = read_parameter(&subdir)
-        {
-          ls.push(m);
-
-          cur.advance(1);
-        }
-
-      else
-        {
-          return Err(());
-        }
-    }
-
-
-  Ok(ls)
-}
-
- 
-pub fn
-read_type_list(dir: &Directory)-> Result<Vec<TypeInfo>,()>
-{
-  let  mut cur = Cursor::new(dir);
-
-  let  mut ls: Vec<TypeInfo> = Vec::new();
+  let  mut ls: Vec<Ty> = Vec::new();
 
     while let Some(subdir) = cur.seek_directory_with_name("type")
     {
@@ -144,7 +86,7 @@ read_type_list(dir: &Directory)-> Result<Vec<TypeInfo>,()>
 
  
 pub fn
-read_tuple(dir: &Directory)-> Result<TypeInfo,()>
+read_tuple(dir: &Directory)-> Result<Ty,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -154,7 +96,15 @@ read_tuple(dir: &Directory)-> Result<TypeInfo,()>
     {
         if let Ok(ls) = read_type_list(&subdir)
         {
-          return Ok(TypeInfo::new_tuple(ls));
+          let  mut set = TySet::new();
+
+            for ti in ls
+            {
+              set.add(String::new(),ti);
+            }
+
+
+          return Ok(Ty::Tuple(set));
         }
     }
 
@@ -164,7 +114,7 @@ read_tuple(dir: &Directory)-> Result<TypeInfo,()>
 
 
 pub fn
-read_function_reference(dir: &Directory)-> Result<TypeInfo,()>
+read_function_port(dir: &Directory)-> Result<Ty,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -178,9 +128,9 @@ read_function_reference(dir: &Directory)-> Result<TypeInfo,()>
 
             if let Some(subdir) = cur.seek_directory_with_name("type")
             {
-                if let Ok(ti) = read_type(&subdir)
+                if let Ok(ty) = read_type(&subdir)
                 {
-                  return Ok(TypeInfo::new_function_reference(ls,ti))
+                  return Ok(Ty::FunctionPort(Box::new(ty),ls,false));
                 }
 
               else
@@ -200,7 +150,7 @@ read_function_reference(dir: &Directory)-> Result<TypeInfo,()>
 
 
 pub fn
-read_primitive(dir: &Directory)-> Result<TypeInfo,()>
+read_primitive(dir: &Directory)-> Result<Ty,()>
 {
   let  mut cur = Cursor::new(dir);
  
@@ -210,7 +160,7 @@ read_primitive(dir: &Directory)-> Result<TypeInfo,()>
 
       path.identifier_list.push(s.clone());
 
-      return Ok(TypeInfo::new_external(path));
+      return Ok(Ty::External(path,None));
     }
 
 

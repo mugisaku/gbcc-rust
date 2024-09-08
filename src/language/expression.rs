@@ -1,7 +1,7 @@
 
 
 use super::typesystem::{
-  TypeInfo,
+  Ty,
 
 };
 
@@ -13,7 +13,7 @@ use super::operation::{
 };
 
 use super::declaration::{
-  Storage,
+  Value,
   Declaration,
   Component,
   Space,
@@ -23,8 +23,41 @@ use super::declaration::{
 use super::statement::{
   Scope,
   StorageInfo,
+  StorageKind,
 
 };
+
+
+
+
+pub struct
+PrimitiveFunction
+{
+  pub(crate)   left_ty: Ty,
+  pub(crate)  right_ty: Ty,
+  pub(crate) return_ty: Ty,
+
+  pub(crate) operation_list: Vec<Operation>,
+
+}
+
+
+impl
+PrimitiveFunction
+{
+
+
+pub fn
+new(left_ty: Ty, right_ty: Ty, return_ty: Ty)-> Self
+{
+  Self{
+    left_ty, right_ty, return_ty,
+    operation_list: Vec::new(),
+  }
+}
+
+
+}
 
 
 
@@ -47,17 +80,17 @@ UnaryOperator
 
 
 pub fn
-compile(&self, dst: Destination, src: Source, ti: TypeInfo, buf: &mut Vec<Operation>)-> Result<TypeInfo,()>
+compile(&self, dst: Destination, src: Source, ti: Ty, buf: &mut Vec<Operation>)-> Result<Ty,()>
 {
     match self
     {
   UnaryOperator::Neg=>
         {
-            if ti.is_ulit()
+            if ti.is_ultr()
             {
               buf.push(Operation::Neg(dst,src));
 
-              return Ok(TypeInfo::new_ilit());
+              return Ok(Ty::ILiteral);
             }
 
           else
@@ -96,6 +129,7 @@ compile(&self, dst: Destination, src: Source, ti: TypeInfo, buf: &mut Vec<Operat
         }
   UnaryOperator::Deref=>
         {
+/*
             if let Some(target) = ti.pointer_target()
             {
               return Ok(target.clone());
@@ -106,6 +140,7 @@ compile(&self, dst: Destination, src: Source, ti: TypeInfo, buf: &mut Vec<Operat
             {
               return Ok(target.clone());
             }
+*/
         }
     }
 
@@ -170,20 +205,20 @@ BinaryOperator
 
 
 fn
-is_boolean(l_ti: &TypeInfo, r_ti: &TypeInfo)-> bool
+is_boolean(l_ti: &Ty, r_ti: &Ty)-> bool
 {
   l_ti.is_bool() && r_ti.is_bool()
 }
 
 
 fn
-check_bitwise_operatable(l_ti: &TypeInfo, r_ti: &TypeInfo)-> Result<TypeInfo,()>
+check_bitwise_operatable(l_ti: &Ty, r_ti: &Ty)-> Result<Ty,()>
 {
-    if ((l_ti.is_u8()    || l_ti.is_i8()    || l_ti.is_ulit()) && (r_ti.is_u8()    || r_ti.is_ulit()))
-    || ((l_ti.is_u16()   || l_ti.is_i16()   || l_ti.is_ulit()) && (r_ti.is_u16()   || r_ti.is_ulit()))
-    || ((l_ti.is_u32()   || l_ti.is_i32()   || l_ti.is_ulit()) && (r_ti.is_u32()   || r_ti.is_ulit()))
-    || ((l_ti.is_u64()   || l_ti.is_i64()   || l_ti.is_ulit()) && (r_ti.is_u64()   || r_ti.is_ulit()))
-    || ((l_ti.is_usize() || l_ti.is_isize() || l_ti.is_ulit()) && (r_ti.is_usize() || r_ti.is_ulit()))
+    if ((l_ti.is_u8()    || l_ti.is_i8()    || l_ti.is_ultr()) && (r_ti.is_u8()    || r_ti.is_ultr()))
+    || ((l_ti.is_u16()   || l_ti.is_i16()   || l_ti.is_ultr()) && (r_ti.is_u16()   || r_ti.is_ultr()))
+    || ((l_ti.is_u32()   || l_ti.is_i32()   || l_ti.is_ultr()) && (r_ti.is_u32()   || r_ti.is_ultr()))
+    || ((l_ti.is_u64()   || l_ti.is_i64()   || l_ti.is_ultr()) && (r_ti.is_u64()   || r_ti.is_ultr()))
+    || ((l_ti.is_usize() || l_ti.is_isize() || l_ti.is_ultr()) && (r_ti.is_usize() || r_ti.is_ultr()))
     {
       Ok(l_ti.clone())
     }
@@ -196,7 +231,7 @@ check_bitwise_operatable(l_ti: &TypeInfo, r_ti: &TypeInfo)-> Result<TypeInfo,()>
 
 
 fn
-is_bitshiftable(l_ti: &TypeInfo, r_ti: &TypeInfo)-> bool
+is_bitshiftable(l_ti: &Ty, r_ti: &Ty)-> bool
 {
      l_ti.is_integer()         
   && r_ti.is_unsigned_integer()
@@ -204,35 +239,35 @@ is_bitshiftable(l_ti: &TypeInfo, r_ti: &TypeInfo)-> bool
 
 
 fn
-check(l_ti: &TypeInfo, r_ti: &TypeInfo)-> Result<TypeInfo,()>
+check(l_ti: &Ty, r_ti: &Ty)-> Result<Ty,()>
 {
-       if l_ti.is_u8()    && r_ti.is_u8()   {return Ok(TypeInfo::new_u8()  );}
-  else if l_ti.is_u16()   && r_ti.is_u16()  {return Ok(TypeInfo::new_u16() );}
-  else if l_ti.is_u32()   && r_ti.is_u32()  {return Ok(TypeInfo::new_u32() );}
-  else if l_ti.is_u64()   && r_ti.is_u64()  {return Ok(TypeInfo::new_u64() );}
-  else if l_ti.is_usize() && r_ti.is_usize(){return Ok(TypeInfo::new_usize());}
-  else if l_ti.is_i8()    && r_ti.is_i8()   {return Ok(TypeInfo::new_i8()  );}
-  else if l_ti.is_i16()   && r_ti.is_i16()  {return Ok(TypeInfo::new_i16() );}
-  else if l_ti.is_i32()   && r_ti.is_i32()  {return Ok(TypeInfo::new_i32() );}
-  else if l_ti.is_i64()   && r_ti.is_i64()  {return Ok(TypeInfo::new_i64() );}
-  else if l_ti.is_isize() && r_ti.is_isize(){return Ok(TypeInfo::new_isize());}
-  else if l_ti.is_f32()   && r_ti.is_f32()  {return Ok(TypeInfo::new_f32() );}
-  else if l_ti.is_f64()   && r_ti.is_f64()  {return Ok(TypeInfo::new_f64() );}
-  else if l_ti.is_ulit() && r_ti.is_unsigned_integer(){return Ok(r_ti.clone());}
-  else if l_ti.is_unsigned_integer() && r_ti.is_ulit(){return Ok(l_ti.clone());}
-  else if l_ti.is_ilit() && r_ti.is_signed_integer(){return Ok(r_ti.clone());}
-  else if l_ti.is_signed_integer() && r_ti.is_ilit(){return Ok(l_ti.clone());}
-  else if l_ti.is_ulit() && r_ti.is_ilit(){return Ok(r_ti.clone());}
-  else if l_ti.is_ilit() && r_ti.is_ulit(){return Ok(l_ti.clone());}
-  else if l_ti.is_flit() && r_ti.is_floating(){return Ok(r_ti.clone());}
-  else if l_ti.is_floating() && r_ti.is_flit(){return Ok(l_ti.clone());}
+       if l_ti.is_u8()    && r_ti.is_u8()   {return Ok(Ty::U8  );}
+  else if l_ti.is_u16()   && r_ti.is_u16()  {return Ok(Ty::U16 );}
+  else if l_ti.is_u32()   && r_ti.is_u32()  {return Ok(Ty::U32 );}
+  else if l_ti.is_u64()   && r_ti.is_u64()  {return Ok(Ty::U64 );}
+  else if l_ti.is_usize() && r_ti.is_usize(){return Ok(Ty::USize);}
+  else if l_ti.is_i8()    && r_ti.is_i8()   {return Ok(Ty::I8  );}
+  else if l_ti.is_i16()   && r_ti.is_i16()  {return Ok(Ty::I16 );}
+  else if l_ti.is_i32()   && r_ti.is_i32()  {return Ok(Ty::I32 );}
+  else if l_ti.is_i64()   && r_ti.is_i64()  {return Ok(Ty::I64 );}
+  else if l_ti.is_isize() && r_ti.is_isize(){return Ok(Ty::ISize);}
+  else if l_ti.is_f32()   && r_ti.is_f32()  {return Ok(Ty::F32 );}
+  else if l_ti.is_f64()   && r_ti.is_f64()  {return Ok(Ty::F64 );}
+  else if l_ti.is_ultr() && r_ti.is_unsigned_integer(){return Ok(r_ti.clone());}
+  else if l_ti.is_unsigned_integer() && r_ti.is_ultr(){return Ok(l_ti.clone());}
+  else if l_ti.is_iltr() && r_ti.is_signed_integer(){return Ok(r_ti.clone());}
+  else if l_ti.is_signed_integer() && r_ti.is_iltr(){return Ok(l_ti.clone());}
+  else if l_ti.is_ultr() && r_ti.is_iltr(){return Ok(r_ti.clone());}
+  else if l_ti.is_iltr() && r_ti.is_ultr(){return Ok(l_ti.clone());}
+  else if l_ti.is_fltr() && r_ti.is_floating(){return Ok(r_ti.clone());}
+  else if l_ti.is_floating() && r_ti.is_fltr(){return Ok(l_ti.clone());}
 
   Err(())
 }
 
 
 pub fn
-compile(&self, dst: Destination, l_src: Source, l_ti: TypeInfo, r_src: Source, r_ti: TypeInfo, buf: &mut Vec<Operation>)-> Result<TypeInfo,()>
+compile(&self, dst: Destination, l_src: Source, l_ti: Ty, r_src: Source, r_ti: Ty, buf: &mut Vec<Operation>)-> Result<Ty,()>
 {
     match self
     {
@@ -412,7 +447,7 @@ compile(&self, dst: Destination, l_src: Source, l_ti: TypeInfo, r_src: Source, r
             {
               buf.push(Operation::Eq(dst,l_src,r_src));
 
-              return Ok(TypeInfo::new_bool());
+              return Ok(Ty::Bool);
             }
         }
   BinaryOperator::Neq=>
@@ -421,7 +456,7 @@ compile(&self, dst: Destination, l_src: Source, l_ti: TypeInfo, r_src: Source, r
             {
               buf.push(Operation::Neq(dst,l_src,r_src));
 
-              return Ok(TypeInfo::new_bool());
+              return Ok(Ty::Bool);
             }
         }
   BinaryOperator::Lt=>
@@ -589,6 +624,55 @@ print(&self)
 
 
 
+#[derive(Clone)]
+pub enum
+AssignOperator
+{
+  Nop,
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Rem,
+  Shl,
+  Shr,
+  And,
+  Or,
+  Xor,
+
+}
+
+
+impl
+AssignOperator
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  AssignOperator::Nop=>{print!("=");},
+  AssignOperator::Add=>{print!("+=");},
+  AssignOperator::Sub=>{print!("-=");},
+  AssignOperator::Mul=>{print!("*=");},
+  AssignOperator::Div=>{print!("/=");},
+  AssignOperator::Rem=>{print!("%=");},
+  AssignOperator::Shl=>{print!("<<=");},
+  AssignOperator::Shr=>{print!(">>=");},
+  AssignOperator::And=>{print!("&=");},
+  AssignOperator::Or=>{print!("|=");},
+  AssignOperator::Xor=>{print!("^=");},
+    }
+}
+
+
+}
+
+
+
+
 #[derive(Clone,PartialEq)]
 pub struct
 Path
@@ -619,6 +703,23 @@ add(mut self, name: &str)-> Path
 
 
   self
+}
+
+
+pub fn
+push(&mut self, name: &str)
+{
+    if name.len() != 0
+    {
+      self.identifier_list.push(name.to_string());
+    }
+}
+
+
+pub fn
+pop(&mut self)-> Option<String>
+{
+  self.identifier_list.pop()
 }
 
 
@@ -717,13 +818,33 @@ get(&mut self)-> String
 
 
 
+pub fn
+collect_string(ls: &mut Vec<String>, s: &str)-> usize
+{
+    for i in 0..ls.len()
+    {
+        if &ls[i] == s
+        {
+          return i;
+        }
+    }
+
+
+  let  i = ls.len();
+
+  ls.push(s.to_string());
+
+  i
+}
+
+
+
+
 #[derive(Clone)]
 pub enum
 Expression
 {
-  None,
-
-  Identifier(Path),
+  Identifier(String),
   Boolean(bool),
   Integer(u64),
   Floating(f64),
@@ -746,7 +867,7 @@ Expression
 {
 
 
-pub fn  new_id(s: &str)-> Expression{Expression::Identifier(Path::new().add(s))}
+pub fn  new_id(s: &str)-> Expression{Expression::Identifier(s.to_string())}
 pub fn  new_bool(b: bool)-> Expression{Expression::Boolean(b)}
 pub fn  new_u64(u: u64)-> Expression{Expression::Integer(u)}
 pub fn  new_f64(f: f64)-> Expression{Expression::Floating(f)}
@@ -811,7 +932,7 @@ try_from(s: &str)-> Result<Expression,()>
 
 
 pub fn
-compile(&self, dst_name: &str, scope: &Scope, buf: &mut Vec<Operation>)-> Result<TypeInfo,()>
+compile(&self, dst_name: &str, scope: &Scope, buf: &mut Vec<Operation>)-> Result<Ty,()>
 {
   let  mut namer = Namer::new(dst_name);
 
@@ -822,7 +943,7 @@ compile(&self, dst_name: &str, scope: &Scope, buf: &mut Vec<Operation>)-> Result
 
 
 fn
-compile_sub(&self, src: &Source, scope: &Scope, buf: &mut Vec<Operation>, namer: &mut Namer)-> Result<TypeInfo,()>
+compile_sub(&self, src: &Source, scope: &Scope, buf: &mut Vec<Operation>, namer: &mut Namer)-> Result<Ty,()>
 {
   let  dst = Destination{name: src.name.clone()};
 
@@ -831,26 +952,31 @@ compile_sub(&self, src: &Source, scope: &Scope, buf: &mut Vec<Operation>, namer:
 
 
 fn
-compile_main(&self, dst: Destination, scope: &Scope, buf: &mut Vec<Operation>, namer: &mut Namer)-> Result<TypeInfo,()>
+compile_main(&self, dst: Destination, scope: &Scope, buf: &mut Vec<Operation>, namer: &mut Namer)-> Result<Ty,()>
 {
     match self
     {
-  Expression::None=>{Err(())},
-  Expression::Identifier(p)=>
+  Expression::Identifier(s)=>
         {
-          let  s = p.to_string();
+                 if s ==  "true"{  buf.push(Operation::ImmU(dst,1));  return Ok(Ty::Bool)}
+            else if s == "false"{  buf.push(Operation::ImmU(dst,0));  return Ok(Ty::Bool)}
+            else
+              if let Some(si) = scope.find(&s)
+              {
+                buf.push(Operation::ImmU(dst,0));
 
-                 if s ==  "true"{   buf.push(Operation::ImmU(dst,1));  return Ok(TypeInfo::new_bool())}
-            else if s == "false"{   buf.push(Operation::ImmU(dst,0));  return Ok(TypeInfo::new_bool())}
+                Ok(Ty::U64)
+              }
+
             else
               {
                 Err(())
               }
         },
-  Expression::Boolean(b)=>  {  buf.push(Operation::ImmU(dst,if *b{1}else{0}));  Ok(TypeInfo::new_bool())},
-  Expression::Integer(u)=>  {  buf.push(Operation::ImmU(dst,*u));  Ok(TypeInfo::new_ulit())},
-  Expression::Floating(f)=> {  buf.push(Operation::ImmF(dst,*f));  Ok(TypeInfo::new_flit())},
-  Expression::String(s)=>   {  /*buf.push(Operation::LoadS(dst,s.clone()));*/  Ok(TypeInfo::new_str_lit())},
+  Expression::Boolean(b)=>  {  buf.push(Operation::ImmU(dst,if *b{1}else{0}));  Ok(Ty::Bool)},
+  Expression::Integer(u)=>  {  buf.push(Operation::ImmU(dst,*u));  Ok(Ty::ULiteral)},
+  Expression::Floating(f)=> {  buf.push(Operation::ImmF(dst,*f));  Ok(Ty::FLiteral)},
+  Expression::String(s)=>{  /*buf.push(Operation::LoadS(dst,s.clone()));*/  Ok(Ty::StringLiteral)},
   Expression::SubExpression(e)=>
         {
           e.compile_main(dst,scope,buf,namer)
@@ -956,16 +1082,9 @@ compile_main(&self, dst: Destination, scope: &Scope, buf: &mut Vec<Operation>, n
 
 
 pub fn
-is_valid(&self)-> bool
+get_size_value(&self)-> Result<usize,()>
 {
-  if let Expression::None = self{false} else{true}
-}
-
-
-pub fn
-is_empty(&self)-> bool
-{
-  if let Expression::None = self{true} else{false}
+  Err(())
 }
 
 
@@ -974,8 +1093,7 @@ print(&self)
 {
     match self
     {
-  Expression::None=>{},
-  Expression::Identifier(p)=>{p.print();},
+  Expression::Identifier(s)=>{print!("{}",s);},
   Expression::Boolean(b)=>{print!("{}",b);},
   Expression::Integer(u)=>{print!("{}",u);},
   Expression::Floating(f)=>{print!("{}",f);},

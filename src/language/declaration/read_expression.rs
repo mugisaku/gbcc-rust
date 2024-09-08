@@ -227,41 +227,13 @@ read_call(dir: &Directory, fe: Box<Expression>)-> Result<Expression,()>
 
 
 pub fn
-read_path(dir: &Directory)-> Result<Path,()>
-{
-  let  mut cur = Cursor::new(dir);
-
-  let  mut path = Path::new();
-
-    while let Some(id) = cur.get_identifier()
-    {
-      path.identifier_list.push(id.clone());
-
-      cur.advance(2);
-    }
-
-
-    if path.identifier_list.len() != 0
-    {
-      return Ok(path);
-    }
-
-
-  Err(())
-}
-
-
-pub fn
 read_operand_core(dir: &Directory)-> Result<Expression,()>
 {
   let  mut cur = Cursor::new(dir);
 
-    if let Some(path_d) = cur.get_directory_with_name("path")
+    if let Some(s) = cur.get_identifier()
     {
-        if let Ok(path) = read_path(path_d)
-        {
-          return Ok(Expression::Identifier(path));
-        }
+      return Ok(Expression::Identifier(s.clone()));
     }
 
   else

@@ -127,23 +127,9 @@ execute_program(s: &str)
 fn
 load()
 {
-  use crate::language::declaration::{
+  use crate::language::dynamic_space::{
     Space, Function
   };
-
-  use crate::language::expression::{
-    Path, Expression, BinaryOperator,
-  };
-
-  use crate::language::statement::{
-    Statement,
-  };
-
-  use crate::language::typesystem::{
-    TypeInfo,
-  };
-
-  use crate::language::operation::Operation;
 
   let  mut sp = Space::new();
 
@@ -155,17 +141,11 @@ load()
 
       let  _ = f.read_to_string(&mut s);
 
-      sp.append_from_str(&s);
+      sp.read(&s);
 
       sp.print();
 
       print!("\n");
-
-      let  mut recmgr = language::compile::RecordManager::new();
-
-      recmgr.compile(&sp)
-
-//      recmgr.print();
     }
 }
 
@@ -173,7 +153,7 @@ load()
 fn
 type_make(s: &str)
 {
-  use crate::language::typesystem::TypeInfo;
+  use crate::language::typesystem::Ty;
 
 //    if let Ok(t) = TypeItem::make_from_string(s)
     {

@@ -22,8 +22,9 @@ use super::expression::{
 };
 
 use super::typesystem::{
-  TypeInfo,
-  FieldInfo,
+  Ty,
+  Field,
+  Enumerator,
 
 };
 
@@ -42,35 +43,31 @@ use super::statement::{
 
 
 
-pub struct
-Storage
+pub enum
+Value
 {
-  pub(crate) type_info: TypeInfo,
-
-  pub(crate) expression: Expression,
+  U64(u64),
+  I64(i64),
+  F64(f64),
+  String(Vec<u8>),
 
 }
 
 
 impl
-Storage
+Value
 {
 
 
 pub fn
 print(&self)
 {
-  self.type_info.print();
-
-    if let Expression::None = &self.expression
+    match self
     {
-    }
-
-  else
-    {
-      print!(" = ");
-
-      self.expression.print();
+  Self::U64(v)=>{print!("{}",v)}
+  Self::I64(v)=>{print!("{}",v)}
+  Self::F64(v)=>{print!("{}",v)}
+  Self::String(_)=>{print!("[...]")}
     }
 }
 
@@ -81,11 +78,57 @@ print(&self)
 
 
 pub struct
+Variable
+{
+  pub(crate) ty: Ty,
+
+  pub(crate) expression_opt: Option<Expression>,
+  pub(crate)      value_opt: Option<Value>,
+
+}
+
+
+impl
+Variable
+{
+
+
+pub fn
+print(&self)
+{
+  self.ty.print();
+
+    if let Some(e) = &self.expression_opt
+    {
+      print!(" = ");
+
+      e.print();
+    }
+}
+
+
+}
+
+
+
+
+pub struct
+Signature
+{
+  pub(crate) return_ty: Ty,
+  pub(crate) parameter_list: Vec<Ty>,
+
+}
+
+
+pub struct
 Function
 {
-  pub(crate) parameter_space: Space,
+  pub(crate) parameter_list: Vec<(String,Ty)>,
 
-  pub(crate) return_type_info: TypeInfo,
+  pub(crate) return_ty: Ty,
+
+  pub(crate) signature_opt: Option<Signature>,
 
   pub(crate) statement_list: Vec<Statement>,
 
@@ -101,12 +144,23 @@ pub fn
 new()-> Function
 {
   Function{
-    parameter_space: Space{declaration_list: Vec::new()},
+    parameter_list: Vec::new(),
 
-    return_type_info: TypeInfo::new_void(),
+    return_ty: Ty::Void,
+
+    signature_opt: None,
 
     statement_list: Vec::new(),
   }
+}
+
+
+pub fn
+set_parameter_list(mut self, ls: Vec<(String,Ty)>)-> Function
+{
+  self.parameter_list = ls;
+
+  self
 }
 
 
@@ -129,84 +183,11 @@ add_statement(mut self, stmt: Statement)-> Function
 
 
 pub fn
-add_parameter(mut self, name: &str, ti: TypeInfo)-> Function
+set_return_ty(mut self, ty: Ty)-> Function
 {
-  let  decl = Declaration::new(name.to_string(),Component::Type(ti));
-
-  self.parameter_space.declaration_list.push(decl);
+  self.return_ty = ty;
 
   self
-}
-
-
-pub fn
-set_parameter_space(mut self, ls: Vec<Declaration>)-> Function
-{
-  self.parameter_space = Space{declaration_list: ls};
-
-  self
-}
-
-
-pub fn
-set_return_type_info(mut self, ti: TypeInfo)-> Function
-{
-  self.return_type_info = ti;
-
-  self
-}
-
-
-pub fn
-get_reference_type_info(&self)-> TypeInfo
-{
-  let  mut ls: Vec<TypeInfo> = Vec::new();
-
-    for p in &self.parameter_space.declaration_list
-    {
-        if let Component::Type(ti) = &p.component
-        {
-          ls.push(ti.clone());
-        }
-    }
-
-
-  TypeInfo::new_function_reference(ls,self.return_type_info.clone())
-}
-
-
-pub fn
-find_parameter(&self, name: &str)-> Option<&Declaration>
-{
-    for para in &self.parameter_space.declaration_list
-    {
-        if para.name == name
-        {
-          return Some(para);
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-find_declaration(&self, name: &str)-> Option<&Declaration>
-{
-    for stmt in &self.statement_list
-    {
-        if let Statement::Declaration(decl) = stmt
-        {
-            if decl.name == name
-            {
-              return Some(decl);
-            }
-        }
-    }
-
-
-  None
 }
 
 
@@ -221,15 +202,18 @@ Component
   Dummy,
 
   Fn(Function),
-  Var(Storage),
-  Static(Storage),
-  Const(Storage),
+
+  Var(Variable),
+  Static(Variable),
+  Const(Variable),
+
   Space(Space),
-  Struct(Space),
-  Union(Space),
-  Enum(Space),
-  Enumerator(Expression),
-  Type(TypeInfo),
+
+  Struct(Vec<Field>),
+  Union(Vec<Field>),
+  Enum(Vec<Enumerator>),
+
+  Type(Ty),
 
 }
 
@@ -259,60 +243,6 @@ new(name: String, com: Component)-> Self
 
 
 pub fn
-get_storage_mut(&mut self)-> Option<&mut Storage>
-{
-    match &mut self.component
-    {
-  Component::Var(st)=>{Some(st)}
-  Component::Static(st)=>{Some(st)}
-  Component::Const(st)=>{Some(st)}
-  _=>{None}
-    }
-}
-
-
-pub fn
-get_storage(&self)-> Option<&Storage>
-{
-    match &self.component
-    {
-  Component::Var(st)=>{Some(st)}
-  Component::Static(st)=>{Some(st)}
-  Component::Const(st)=>{Some(st)}
-  _=>{None}
-    }
-}
-
-
-pub fn
-get_space_mut(&mut self)-> Option<&mut Space>
-{
-    match &mut self.component
-    {
-  Component::Space(sp)=> {Some(sp)}
-  Component::Struct(sp)=>{Some(sp)}
-  Component::Union(sp)=> {Some(sp)}
-  Component::Enum(sp)=>  {Some(sp)}
-  _=>{None}
-    }
-}
-
-
-pub fn
-get_space(&self)-> Option<&Space>
-{
-    match &self.component
-    {
-  Component::Space(sp)=> {Some(sp)}
-  Component::Struct(sp)=>{Some(sp)}
-  Component::Union(sp)=> {Some(sp)}
-  Component::Enum(sp)=>  {Some(sp)}
-  _=>{None}
-    }
-}
-
-
-pub fn
 print(&self)
 {
     match &self.component
@@ -328,15 +258,11 @@ print(&self)
         {
           print!("fn\n{}(",&self.name);
 
-            for p in &f.parameter_space.declaration_list
+            for (p_name,p_ty) in &f.parameter_list
             {
-              print!("{}: ",&p.name);
+              print!("{}: ",&p_name);
 
-                if let Component::Type(ti) = &p.component
-                {
-                  ti.print();
-                }
-
+              p_ty.print();
 
               print!(", ");
             }
@@ -344,7 +270,7 @@ print(&self)
 
           print!(")-> ");
 
-          f.return_type_info.print();
+          f.return_ty.print();
 
           print!("\n{{\n");
 
@@ -370,33 +296,50 @@ print(&self)
 
           s.print();
         },
-  Component::Struct(sp)=>
+  Component::Struct(ls)=>
         {
-          print!("{}: ",&self.name);
+          print!("struct {}{{",&self.name);
+          print!("}}");
         },
-  Component::Union(sp)=>
+  Component::Union(ls)=>
         {
-          print!("{}: ",&self.name);
+          print!("union {}{{",&self.name);
+          print!("}}");
         },
-  Component::Enum(sp)=>
+  Component::Enum(ls)=>
         {
-          print!("{}: ",&self.name);
+          print!("enum {}{{",&self.name);
+          print!("}}");
         },
-  Component::Enumerator(e)=>
-        {
-          print!("{} = ",&self.name);
-
-          e.print();
-        },
-  Component::Type(ti)=>
+  Component::Type(ty)=>
         {
           print!("{}: ",&self.name);
 
-          ti.print();
+          ty.print();
         },
     }
 }
 
+
+}
+
+
+
+
+pub struct
+Symbol
+{
+  pub(crate) complete_flag: bool,
+
+  pub(crate) prefix_path: Path,
+
+  pub(crate) declaration_ptr: *mut Declaration,
+
+  pub(crate) index: usize,
+
+  pub(crate) offset: usize,
+
+  pub(crate) dependence_list: Vec<usize>,
 
 }
 
@@ -527,6 +470,163 @@ append_from_str(&mut self, s: &str)
 
 
   println!("make_from_string error: parse is failed");
+}
+
+
+fn
+make_symbol_table_internal(&mut self, prefix: &mut Path, table: &mut Vec<Symbol>)
+{
+    for decl in &mut self.declaration_list
+    {
+        if let Component::Space(sp) = &mut decl.component
+        {
+          prefix.push(&decl.name);
+
+          sp.make_symbol_table_internal(prefix,table);
+
+          let  _ = prefix.pop();
+        }
+
+      else
+        {
+          let  index = table.len();
+
+          let  sym = Symbol{
+            complete_flag: false,
+            prefix_path: prefix.clone(),
+            declaration_ptr: decl as *mut Declaration,
+            index,
+            offset: 0,
+            dependence_list: Vec::new(),
+          };
+
+          table.push(sym);
+        }
+    }
+}
+
+
+fn
+process_function(table: &Vec<Symbol>, f: &mut Function, mod_flag_ref: &mut bool, comp_flag_ref: &mut bool)
+{
+    if let None = &mut f.signature_opt
+    {
+    }
+
+
+  panic!();
+}
+
+
+fn
+process_variable(table: &Vec<Symbol>, var: &mut Variable, mod_flag_ref: &mut bool, comp_flag_ref: &mut bool)
+{
+}
+
+
+fn
+process_symbol(table: &Vec<Symbol>, sym: &mut Symbol)-> bool
+{
+  let  mut mod_flag = false;
+  let  comp_flag_ref = &mut sym.complete_flag;
+
+  let  decl = unsafe{&mut *sym.declaration_ptr};
+
+    match &mut decl.component
+    {
+  Component::Fn(f)=>
+        {
+          Self::process_function(table,f,&mut mod_flag,comp_flag_ref);
+        },
+  Component::Var(v)=>
+        {
+          Self::process_variable(table,v,&mut mod_flag,comp_flag_ref);
+        },
+  Component::Static(v)=>
+        {
+          Self::process_variable(table,v,&mut mod_flag,comp_flag_ref);
+        },
+  Component::Const(v)=>
+        {
+          Self::process_variable(table,v,&mut mod_flag,comp_flag_ref);
+        },
+  Component::Struct(ls)=>
+        {
+        },
+  Component::Union(ls)=>
+        {
+        },
+  Component::Enum(ls)=>
+        {
+        },
+  Component::Type(ty)=>
+        {
+        },
+  _=>{}
+    }
+
+
+  mod_flag
+}
+
+
+fn
+process_symbol_table(table: &mut Vec<Symbol>)-> Option<()>
+{
+  let  mut flag: usize = 0;
+
+  let  mut tmp_sym = Symbol{
+    complete_flag: false,
+    prefix_path: Path::new(),
+    declaration_ptr: std::ptr::null_mut(),
+    index: 0,
+    offset: 0,
+    dependence_list: Vec::new(),
+  };
+
+
+    for i in 0..table.len()
+    {
+        if !table[i].complete_flag
+        {
+          std::mem::swap(&mut tmp_sym,&mut table[i]);
+
+            if Self::process_symbol(table,&mut tmp_sym)
+            {
+              flag |= 1;
+            }
+
+
+          std::mem::swap(&mut tmp_sym,&mut table[i]);
+        }
+    }
+
+
+  if flag != 0{Some(())} else{None}
+}
+
+
+pub fn
+check_dependency(table: &mut Vec<Symbol>)
+{
+}
+
+
+pub fn
+make_symbol_table(&mut self)-> Vec<Symbol>
+{
+  let  mut prefix = Path::new();
+  let  mut table: Vec<Symbol> = Vec::new();
+
+  self.make_symbol_table_internal(&mut prefix,&mut table);
+  Self::check_dependency(&mut table);
+
+//    while let Some(()) = Self::process_symbol_table(&mut table)
+    {
+    }
+
+
+  table
 }
 
 
