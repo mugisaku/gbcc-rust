@@ -10,6 +10,7 @@ pub mod dynamic_space;
 pub mod dynamic_machine;
 pub mod dynamic_dictionary;
 pub mod dynamic_read;
+pub mod dynamic_value;
 
 
 use crate::language::{

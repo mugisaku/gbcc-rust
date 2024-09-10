@@ -29,34 +29,11 @@ use super::dynamic_read::{
 };
 
 
+use super::dynamic_value::{
+  Value,
+  Element,
 
-
-#[derive(Clone)]
-pub struct
-Element
-{
-  pub(crate) name: String,
-  pub(crate) heap_reference: usize,
-
-}
-
-
-impl
-Element
-{
-
-
-pub fn
-new(name: &str, r: usize)-> Self
-{
-  Self{
-    name: name.to_string(),
-    heap_reference: r,
-  }
-}
-
-
-}
+};
 
 
 
@@ -115,10 +92,20 @@ Const
 
 
 pub struct
+Var
+{
+  pub(crate) name: String,
+  pub(crate) expression_opt: Option<Expression>,
+  pub(crate) value: Value,
+
+}
+
+
+pub struct
 Space
 {
   pub(crate) const_list: Vec<Const>,
-  pub(crate)   let_list: Vec<(String,Option<Expression>,Value)>,
+  pub(crate)   let_list: Vec<Var>,
   pub(crate)    fn_list: Vec<(String,Function,Vec<Operation>)>,
 
 }
@@ -165,7 +152,7 @@ read(&mut self, s: &str)
                     }
               Declaration::Let(name,e_opt)=>
                     {
-                      self.let_list.push((name,e_opt,Value::Null));
+                      self.let_list.push(Var{name, expression_opt: e_opt, value: Value::Null});
                     }
               Declaration::Const(name,e)=>
                     {
@@ -339,7 +326,7 @@ calculate(e: &Expression, const_list: &Vec<Const>)-> Result<Value,()>
 
 
 pub fn
-calculate_const_values(&mut self)
+calculate_const_values(const_list: &mut Vec<Const>)
 {
   let  mut tmp: Vec<Const> = Vec::new();
   let  mut  ok: Vec<Const> = Vec::new();
@@ -347,7 +334,7 @@ calculate_const_values(&mut self)
 
   let  mut last_err_n = 0;
 
-  std::mem::swap(&mut self.const_list,&mut tmp);
+  std::mem::swap(const_list,&mut tmp);
 
     while tmp.len() != 0
     {
@@ -387,7 +374,28 @@ calculate_const_values(&mut self)
     }
 
 
-  std::mem::swap(&mut self.const_list,&mut ok);
+  std::mem::swap(const_list,&mut ok);
+}
+
+
+pub fn
+calculate_let_values(let_list: &mut Vec<Var>, const_list: &Vec<Const>)
+{
+    for var in let_list
+    {
+        if let Some(e) = &var.expression_opt
+        {
+            if let Ok(v) = Self::calculate(e,const_list)
+            {
+              var.value = v;
+            }
+
+          else
+            {
+              panic!();
+            }
+        }
+    }
 }
 
 
@@ -438,11 +446,11 @@ create_symbol_table(&self)-> Vec<Symbol>
     }
 
 
-    for (name,_,_) in &self.let_list
+    for v in &self.let_list
     {
       let  i = symtbl.len();
 
-      symtbl.push(Symbol::new(name,i));
+      symtbl.push(Symbol::new(&v.name,i));
     }
 
 
@@ -469,15 +477,8 @@ compile(&mut self)-> Result<Vec<Symbol>,()>
     }
 
 
-    for c in &self.const_list
-    {
-    }
-
-
-    for (name,_,_) in &self.let_list
-    {
-    }
-
+  Self::calculate_const_values(&mut self.const_list);
+  Self::calculate_let_values(&mut self.let_list,&self.const_list);
 
     for (name,_,_) in &self.fn_list
     {
@@ -491,11 +492,11 @@ compile(&mut self)-> Result<Vec<Symbol>,()>
 pub fn
 print(&self)
 {
-    for (name,e_opt,_) in &self.let_list
+    for v in &self.let_list
     {
-      print!("let  {}",name);
+      print!("let  {}",&v.name);
 
-        if let Some(e) = e_opt
+        if let Some(e) = &v.expression_opt
         {
           print!(": ");
 

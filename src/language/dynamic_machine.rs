@@ -8,12 +8,17 @@ use super::expression::{
 
 
 use super::dynamic_space::{
-  Element,
-  Value,
   Space,
   Statement,
   Block,
   Function,
+
+};
+
+
+use super::dynamic_value::{
+  Element,
+  Value,
 
 };
 
