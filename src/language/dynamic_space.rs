@@ -1,8 +1,5 @@
 
 
-use std::collections::LinkedList;
-
-
 use super::expression::{
   Expression,
   UnaryOperator,
@@ -120,7 +117,7 @@ Const
 pub struct
 Space
 {
-  pub(crate) const_list: LinkedList<Const>,
+  pub(crate) const_list: Vec<Const>,
   pub(crate)   let_list: Vec<(String,Option<Expression>,Value)>,
   pub(crate)    fn_list: Vec<(String,Function,Vec<Operation>)>,
 
@@ -136,7 +133,7 @@ pub fn
 new()-> Self
 {
   Self{
-    const_list: LinkedList::new(),
+    const_list: Vec::new(),
       let_list: Vec::new(),
        fn_list: Vec::new(),
   }
@@ -172,7 +169,7 @@ read(&mut self, s: &str)
                     }
               Declaration::Const(name,e)=>
                     {
-                      self.const_list.push_back(Const{name, expression: e, value: Value::Null});
+                      self.const_list.push(Const{name, expression: e, value: Value::Null});
                     }
                }
             }
@@ -223,9 +220,120 @@ find_const_value(&self, name: &str)-> Option<&Value>
 }
 
 
-pub fn
-calculate(e: &Expression, const_list: &LinkedList<Const>)-> Result<Value,()>
+fn
+find_const(const_list: &Vec<Const>, name: &str)-> Option<Value>
 {
+    for c in const_list
+    {
+        if c.name == name
+        {
+          return Some(c.value.clone());
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+calculate_unary(o: &UnaryOperator, v: &Value, const_list: &Vec<Const>)-> Value
+{
+    match o
+    {
+  UnaryOperator::Neg=>{Value::neg(v)},
+  UnaryOperator::Not=>{Value::not(v)},
+  UnaryOperator::LogicalNot=>{Value::logical_not(v)},
+  _=>{Value::Undefined},
+    }
+}
+
+
+pub fn
+calculate_binary(o: &BinaryOperator, lv: &Value, rv: &Value, const_list: &Vec<Const>)-> Value
+{
+    match o
+    {
+  BinaryOperator::Add=>{Value::add(lv,rv)},
+  BinaryOperator::Sub=>{Value::sub(lv,rv)},
+  BinaryOperator::Mul=>{Value::mul(lv,rv)},
+  BinaryOperator::Div=>{Value::div(lv,rv)},
+  BinaryOperator::Rem=>{Value::rem(lv,rv)},
+  BinaryOperator::Shl=>{Value::shl(lv,rv)},
+  BinaryOperator::Shr=>{Value::shr(lv,rv)},
+  BinaryOperator::And=>{Value::and(lv,rv)},
+  BinaryOperator::Or=>{Value::or(lv,rv)},
+  BinaryOperator::Xor=>{Value::xor(lv,rv)},
+  BinaryOperator::Eq=>{Value::eq(lv,rv)},
+  BinaryOperator::Neq=>{Value::neq(lv,rv)},
+  BinaryOperator::Lt=>{Value::lt(lv,rv)},
+  BinaryOperator::Lteq=>{Value::lteq(lv,rv)},
+  BinaryOperator::Gt=>{Value::gt(lv,rv)},
+  BinaryOperator::Gteq=>{Value::gteq(lv,rv)},
+  BinaryOperator::LogicalAnd=>{Value::logical_and(lv,rv)},
+  BinaryOperator::LogicalOr=>{Value::logical_or(lv,rv)},
+    }
+}
+
+
+pub fn
+calculate(e: &Expression, const_list: &Vec<Const>)-> Result<Value,()>
+{
+    match e
+    {
+  Expression::Identifier(s)=>
+        {
+               if s == "true"{return Ok(Value::Boolean(true));}
+          else if s == "false"{return Ok(Value::Boolean(false));}
+          else if s == "null"{return Ok(Value::Null);}
+          else if s == "undefined"{return Ok(Value::Undefined);}
+          else
+            if let Some(v) = Self::find_const(const_list,s)
+            {
+              return Ok(v);
+            }
+        },
+  Expression::Boolean(b)=>{return Ok(Value::Boolean(*b));},
+  Expression::Integer(u)=>{return Ok(Value::Integer(*u as i64));},
+  Expression::Floating(f)=>{return Ok(Value::Floating(*f));},
+  Expression::String(s)=>{return Ok(Value::String(s.clone()));},
+  Expression::SubExpression(sube)=>
+        {
+          return Self::calculate(sube,const_list);
+        },
+  Expression::Unary(o,e)=>
+        {
+            if let Ok(v) = Self::calculate(e,const_list)
+            {
+              return Ok(Self::calculate_unary(o,&v,const_list));
+            }
+        },
+  Expression::Call(f,args)=>
+        {
+          panic!();
+        },
+  Expression::Subscript(target,index)=>
+        {
+          panic!();
+        },
+  Expression::Access(target,name)=>
+        {
+          panic!();
+        },
+  Expression::Binary(o,l,r)=>
+        {
+            if let Ok(lv) = Self::calculate(l,const_list)
+            {
+                if let Ok(rv) = Self::calculate(r,const_list)
+                {
+                  return Ok(Self::calculate_binary(o,&lv,&rv,const_list));
+                }
+            }
+        },
+  _=>{}
+    }
+
+
   Err(())
 }
 
@@ -233,18 +341,28 @@ calculate(e: &Expression, const_list: &LinkedList<Const>)-> Result<Value,()>
 pub fn
 calculate_const_values(&mut self)
 {
-  let  mut tmp: LinkedList<Const> = LinkedList::new();
-  let  mut  ok: LinkedList<Const> = LinkedList::new();
-  let  mut err: LinkedList<Const> = LinkedList::new();
+  let  mut tmp: Vec<Const> = Vec::new();
+  let  mut  ok: Vec<Const> = Vec::new();
+  let  mut err: Vec<Const> = Vec::new();
+
+  let  mut last_err_n = 0;
 
   std::mem::swap(&mut self.const_list,&mut tmp);
 
     while tmp.len() != 0
     {
-        while let Some(c) = tmp.pop_back()
+        while let Some(mut c) = tmp.pop()
         {
             if let Ok(v) = Self::calculate(&c.expression,&ok)
             {
+              c.value = v;
+
+              ok.push(c);
+            }
+
+          else
+            {
+              err.push(c);
             }
         }
 
@@ -254,6 +372,16 @@ calculate_const_values(&mut self)
           break;
         }
 
+
+      let  err_n = err.len();
+
+        if last_err_n == err_n
+        {
+          panic!();
+        }
+
+
+      last_err_n = err_n;
 
       std::mem::swap(&mut err,&mut tmp);
     }
@@ -583,124 +711,6 @@ Function
 {
   pub(crate) parameter_list: Vec<String>,
   pub(crate) block: Block,
-
-}
-
-
-
-
-#[derive(Clone)]
-pub enum
-Value
-{
-  Null,
-  Undefined,
-  Boolean(bool),
-  Integer(i64),
-  Floating(f64),
-  String(String),
-
-  HeapReference(usize),
-  StackReference(usize),
-  ProgramReference(usize),
-
-  Mutable(Box<Value>),
-
-  Table(Vec<Element>),
-
-  BasePointer(usize),
-  ProgramPointer(*const Vec<Operation>),
-  ProgramCounter(usize),
-  ArgumentCounter(usize),
-
-}
-
-
-impl
-Value
-{
-
-
-pub fn
-to_bool(&self)-> bool
-{
-    match self
-    {
-  Value::Boolean(b)=>{return *b;}
-  Value::Integer(i)=>{return *i != 0;}
-  Value::Floating(f)=>{return *f != 0.0;}
-  Value::Mutable(v)=>{return v.to_bool();}
-  _=>{}
-    }
-
-
-  false
-}
-
-
-pub fn
-to_int(&self)-> i64
-{
-    match self
-    {
-  Value::Boolean(b)=>{return if *b{1} else{0};}
-  Value::Integer(i)=>{return *i;}
-  Value::Floating(f)=>{return *f as i64;}
-  Value::Mutable(v)=>{return v.to_int();}
-  _=>{}
-    }
-
-
-  0
-}
-
-
-pub fn
-to_float(&self)-> f64
-{
-    match self
-    {
-  Value::Integer(i)=>{return *i as f64;}
-  Value::Floating(f)=>{return *f;}
-  Value::Mutable(v)=>{return v.to_float();}
-  _=>{}
-    }
-
-
-  0.0
-}
-
-
-pub fn
-to_string(&self)-> String
-{
-    match self
-    {
-  Value::Boolean(b)=>{return if *b{"true".to_string()} else{"false".to_string()};}
-  Value::Integer(i)=>{return format!("{}",*i);}
-  Value::Floating(f)=>{return format!("{}",*f);}
-  Value::String(s)=>{return s.clone();}
-  Value::Mutable(v)=>{return v.to_string();}
-  _=>{}
-    }
-
-
-  "".to_string()
-}
-
-
-pub fn
-to_program_reference(&self)-> usize
-{
-    if let Value::ProgramReference(i) = self
-    {
-      return *i;
-    }
-
-
-  0
-}
-
 
 }
 
