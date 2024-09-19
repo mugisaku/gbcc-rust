@@ -4,6 +4,8 @@ use super::expression::{
   Expression,
   BinaryOperator,
   UnaryOperator,
+  AssignOperator,
+
 };
 
 
@@ -12,6 +14,7 @@ use super::dynamic_space::{
   Statement,
   Block,
   Function,
+  Symbol,
 
 };
 
@@ -25,35 +28,14 @@ use super::dynamic_value::{
 
 
 
-#[derive(Clone)]
-pub enum
-UnaryOperation
-{
-  Neg,
-  Not,
-  LogicalNot,
-
-}
-
-
-#[derive(Clone)]
-pub enum
-BinaryOperation
-{
-  Add, Sub, Mul, Div, Rem,
-  Shl, Shr, And, Or, Xor,
-
-  LogicalAnd, LogicalOr,
-
-  Eq, Neq, Lt, Lteq, Gt, Gteq,
-
-}
-
-
 pub enum
 Operation
 {
   None,
+
+  Print(String),
+
+  AllocateLoc(usize),
 
   LoadN,
   LoadU,
@@ -61,18 +43,85 @@ Operation
   LoadI(i64),
   LoadF(f64),
   LoadS(String),
-  LoadGlo(usize),
-  LoadLoc(usize),
-  LoadArg(usize),
-  StoreGlo(usize),
-  StoreLoc(usize),
-  StoreArg(usize),
+  LoadGloRef(usize),
+  LoadLocRef(usize),
+  LoadArgRef(usize),
   Dump,
 
   Cal, Ret, Jmp(usize), Brz(usize), Brnz(usize),
 
-  Unary(  UnaryOperation),
-  Binary(BinaryOperation),
+  Unary(  UnaryOperator),
+  Binary(BinaryOperator),
+  Assign(AssignOperator),
+
+}
+
+
+impl
+Operation
+{
+
+
+pub fn
+is_control(&self)-> bool
+{
+    match self
+    {
+  Operation::Cal
+ |Operation::Ret
+ |Operation::Jmp(_)
+ |Operation::Brz(_)
+ |Operation::Brnz(_)=>{true}
+  _=>{false}
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Operation::None=>{print!("");},
+
+  Operation::Print(s)=>{print!("print \"{}\"",s);},
+
+  Operation::AllocateLoc(n)=>{print!("allocate l({})",*n);},
+
+  Operation::LoadN=>{print!("ld null");},
+  Operation::LoadU=>{print!("ld undefined");},
+  Operation::LoadB(b)=>{print!("ld {}",*b);},
+  Operation::LoadI(i)=>{print!("ld {}",*i);},
+  Operation::LoadF(f)=>{print!("ld {}",*f);},
+  Operation::LoadS(s)=>{print!("ld \"{}\"",s);},
+  Operation::LoadGloRef(i)=>{print!("ld g({})",*i);},
+  Operation::LoadLocRef(i)=>{print!("ld l({})",*i);},
+  Operation::LoadArgRef(i)=>{print!("ld a({})",*i);},
+  Operation::Dump=>{print!("dmp");},
+
+  Operation::Cal=>{print!("cal");},
+  Operation::Ret=>{print!("ret");},
+  Operation::Jmp(i)=>{print!("jmp {}",*i);},
+  Operation::Brz(i)=>{print!("brz {}",*i);},
+  Operation::Brnz(i)=>{print!("brnz {}",*i);},
+
+  Operation::Unary(o)=>{o.print_mnemonic();},
+  Operation::Binary(o)=>{o.print_mnemonic();},
+  Operation::Assign(o)=>
+        {
+          print!("Assign(");
+
+            if let Some(bo) = o.get_relational_operator()
+            {
+              bo.print_mnemonic();
+            }
+
+
+          print!(")");
+        },
+    }
+}
+
 
 }
 
@@ -80,26 +129,17 @@ Operation
 
 
 pub struct
-Machine
+Memory
 {
-  pub(crate) null_value: Value,
-
   pub(crate)  heap: Vec<Value>,
-  pub(crate) stack: Vec<Value>,
-
   pub(crate) freed_list: Vec<usize>,
-
-  pub(crate) function_list_ptr: *const Vec<(String,Function)>,
-  pub(crate) operation_list_ptr: *const Vec<Operation>,
-
-  pub(crate) pc: usize,
-  pub(crate) bp: usize,
+  pub(crate) stack: Vec<Value>,
 
 }
 
 
 impl
-Machine
+Memory
 {
 
 
@@ -107,15 +147,26 @@ pub fn
 new()-> Self
 {
   Self{
-    null_value: Value::Null,
      heap: Vec::new(),
-    stack: Vec::new(),
     freed_list: Vec::new(),
-     function_list_ptr: std::ptr::null(),
-    operation_list_ptr: std::ptr::null(),
-    pc: 0,
-    bp: 0,
+    stack: Vec::new(),
   }
+}
+
+
+pub fn
+setup(&mut self, symtbl: &Vec<Symbol>)
+{
+  self.heap.clear();  
+  self.freed_list.clear();
+  self.stack.resize(symtbl.len(),Value::Null);
+
+    for sym in symtbl
+    {
+      let  v = &mut self.stack[sym.index];
+
+      *v = sym.value.clone();
+    }
 }
 
 
@@ -147,6 +198,15 @@ deallocate(&mut self, i: usize)
 
 
 pub fn
+extend_stack(&mut self, n: usize)
+{
+  let  new_len = self.stack.len()+n;
+
+  self.stack.resize(new_len*3,Value::Null);
+}
+
+
+pub fn
 push(&mut self, v: Value)
 {
   self.stack.push(v);
@@ -162,60 +222,36 @@ pop(&mut self)-> Value
     }
 
 
-  Value::Null
+  panic!();
 }
 
 
 pub fn
-get_heap_value(&self, i: usize)-> &Value
+top(&self)-> &Value
 {
-  &self.heap[i]
+  self.stack.last().unwrap()
 }
 
 
 pub fn
-get_heap_value_mut(&mut self, i: usize)-> &Value
+top_mut(&mut self)-> &mut Value
 {
-  &mut self.heap[i]
+  self.stack.last_mut().unwrap()
 }
 
 
-pub fn
-get_stack_value(&self, i: usize)-> &Value
-{
-  &self.stack[i]
-}
-
-
-pub fn
-get_stack_value_mut(&mut self, i: usize)-> &Value
-{
-  &mut self.stack[i]
-}
-
-
-pub fn
-store(&mut self, i: usize)
-{
-    if let Some(v) = self.stack.pop()
-    {
-      self.stack[i] = v;
-    }
-}
-
-
-pub fn
-dereference<'a>(v: &'a Value, heap: &'a Vec<Value>, stack: &'a Vec<Value>)-> &'a Value
+fn
+dereference_value<'a>(&'a self, v: &'a Value)-> &'a Value
 {
     if let Value::HeapReference(i) = v
     {
-      &heap[*i]
+      self.dereference_value(&self.heap[*i])
     }
 
   else
     if let Value::StackReference(i) = v
     {
-      &stack[*i]
+      self.dereference_value(&self.stack[*i])
     }
 
   else
@@ -226,59 +262,206 @@ dereference<'a>(v: &'a Value, heap: &'a Vec<Value>, stack: &'a Vec<Value>)-> &'a
 
 
 pub fn
-cal(&mut self)
+dereference_top(&self)-> &Value
 {
-  self.push(Value::ArgumentCounter(0));
-  self.push(Value::ProgramPointer(self.operation_list_ptr));
-  self.push(Value::ProgramCounter(self.pc));
-  self.push(Value::BasePointer(self.bp));
+    if let Some(v) = self.stack.last()
+    {
+      return self.dereference_value(v);
+    }
+
+
+  panic!();
 }
 
 
 pub fn
-ret(&mut self)
+dereference_two_of_top(&self)-> (&Value,&Value)
 {
+  let  i = self.stack.len();
+
+    if i >= 2
+    {
+      return (self.dereference_value(unsafe{&*self.stack.as_ptr().add(i-2)}),
+              self.dereference_value(unsafe{&*self.stack.as_ptr().add(i-1)}));
+    }
+
+
+  panic!();
+}
+
+
+fn
+dereference_value_mut_ptr(heap_ptr: *mut Value, stack_ptr: *mut Value, ptr: *mut Value)-> *mut Value
+{
+    if let Value::HeapReference(i) = unsafe{&*ptr}
+    {
+      Self::dereference_value_mut_ptr(heap_ptr,stack_ptr,unsafe{heap_ptr.add(*i)})
+    }
+
+  else
+    if let Value::StackReference(i) = unsafe{&*ptr}
+    {
+      Self::dereference_value_mut_ptr(heap_ptr,stack_ptr,unsafe{stack_ptr.add(*i)})
+    }
+
+  else
+    {
+      ptr
+    }
+}
+
+
+pub fn
+dereference_top_mut(&mut self)-> &mut Value
+{
+  let   heap_ptr =  self.heap.as_mut_ptr();
+  let  stack_ptr = self.stack.as_mut_ptr();
+
+  let  ptr = Self::dereference_value_mut_ptr(heap_ptr,stack_ptr,unsafe{stack_ptr.add(self.stack.len()-1)});
+
+  unsafe{&mut *ptr}
+}
+
+
+}
+
+
+
+
+pub enum
+StepResult
+{
+  Ok,
+  Err,
+  Hlt,
+  Fin(Value),
+
+}
+
+
+pub struct
+Machine
+{
+  pub(crate) memory: Memory,
+
+  pub(crate) operation_list_ptr: *const Vec<Operation>,
+
+  pub(crate) pc: usize,
+  pub(crate) bp: usize,
+
+  pub(crate) call_counter: usize,
+
+}
+
+
+impl
+Machine
+{
+
+
+pub fn
+new()-> Self
+{
+  Self{
+    memory: Memory::new(),
+    operation_list_ptr: std::ptr::null(),
+    pc: 0,
+    bp: 0,
+    call_counter: 0,
+  }
+}
+
+
+pub fn
+setup(&mut self, symtbl: &Vec<Symbol>)
+{
+  self.pc = 0;
+  self.bp = 0;
+  self.call_counter = 0;
+
+  self.memory.setup(symtbl);
+
+    for sym in symtbl
+    {
+        if &sym.name == "main"
+        {
+            if let Value::ProgramPointer(ptr) = &sym.value
+            {
+              self.operation_list_ptr = *ptr;
+            }
+
+
+          break;
+        }
+    }
+}
+
+
+pub fn
+cal(&mut self)
+{
+  self.memory.push(Value::ArgumentCounter(0));
+  self.memory.push(Value::ProgramPointer(self.operation_list_ptr));
+  self.memory.push(Value::ProgramCounter(self.pc));
+  self.memory.push(Value::BasePointer(self.bp));
+}
+
+
+pub fn
+ret(&mut self)-> StepResult
+{
+    if self.call_counter == 0
+    {
+      self.operation_list_ptr = std::ptr::null();
+
+      return StepResult::Hlt;
+    }
+
+
   let      bp = self.bp;
   let  mut sp =      bp;
 
-    if let Value::ArgumentCounter(n) = self.stack[bp]
+    if let Value::ArgumentCounter(n) = self.memory.stack[bp]
     {
       sp -= n;
     }
 
 
-    if let Value::ProgramPointer(ptr) = self.stack[bp+1]
+    if let Value::ProgramPointer(ptr) = self.memory.stack[bp+1]
     {
       self.operation_list_ptr = ptr;
     }
 
 
-    if let Value::ProgramCounter(c) = self.stack[bp+2]
+    if let Value::ProgramCounter(c) = self.memory.stack[bp+2]
     {
       self.pc = c;
     }
 
 
-    if let Value::BasePointer(p) = self.stack[bp+3]
+    if let Value::BasePointer(p) = self.memory.stack[bp+3]
     {
       self.bp = p;
     }
 
 
-    while self.stack.len() >= sp
-    {
-      let  _ = self.stack.pop();
-    }
+  self.memory.stack.truncate(sp);
+
+  self.call_counter -= 1;
+
+  StepResult::Ok
 }
 
 
 pub fn
 brz(&mut self, i: usize)
 {
-  let  v = self.pop();
+  let  v = self.memory.pop();
 
     if v.to_int() == 0
     {
+      println!("pc {} -> {}",self.pc-1,i);
+
       self.pc = i;
     }
 }
@@ -287,101 +470,150 @@ brz(&mut self, i: usize)
 pub fn
 brnz(&mut self, i: usize)
 {
-  let  v = self.pop();
+  let  v = self.memory.pop();
 
     if v.to_int() != 0
     {
+      println!("pc {} -> {}",self.pc-1,i);
+
       self.pc = i;
     }
 }
 
 
 pub fn
-operate_unary(&mut self, uo: UnaryOperation)
+operate_unary(&mut self, uo: &UnaryOperator)
 {
-  let  v = self.pop();
+  let  v = self.memory.pop();
 
   let  new_v = match uo
     {
-  UnaryOperation::Neg=>       {Value::neg(&v)}
-  UnaryOperation::Not=>       {Value::not(&v)}
-  UnaryOperation::LogicalNot=>{Value::logical_not(&v)}
+  UnaryOperator::Neg=>       {Value::neg(&v)}
+  UnaryOperator::Not=>       {Value::not(&v)}
+  UnaryOperator::LogicalNot=>{Value::logical_not(&v)}
+  _=>{Value::Undefined}
     };
 
 
-  self.stack.push(new_v);
+  self.memory.push(new_v);
 }
 
 
-pub fn
-operate_binary(&mut self, bo: BinaryOperation)
+fn
+operate_binary_internal(&mut self, bo: &BinaryOperator)-> Value
 {
-  let  rv_tmp = self.pop();
-  let  lv_tmp = self.pop();
+  let  (lv,rv) = self.memory.dereference_two_of_top();
 
-  let  rv = Self::dereference(&rv_tmp,&self.heap,&self.stack);
-  let  lv = Self::dereference(&lv_tmp,&self.heap,&self.stack);
-
-  let  new_v = match bo
+    match bo
     {
-  BinaryOperation::Add=>       {Value::add(lv,rv)}
-  BinaryOperation::Sub=>       {Value::sub(lv,rv)}
-  BinaryOperation::Mul=>       {Value::mul(lv,rv)}
-  BinaryOperation::Div=>       {Value::div(lv,rv)}
-  BinaryOperation::Rem=>       {Value::rem(lv,rv)}
-  BinaryOperation::Shl=>       {Value::shl(lv,rv)}
-  BinaryOperation::Shr=>       {Value::shr(lv,rv)}
-  BinaryOperation::And=>       {Value::and(lv,rv)}
-  BinaryOperation::Or=>        {Value::or(lv,rv)}
-  BinaryOperation::Xor=>       {Value::xor(lv,rv)}
-  BinaryOperation::LogicalAnd=>{Value::logical_and(lv,rv)}
-  BinaryOperation::LogicalOr=> {Value::logical_or(lv,rv)}
-  BinaryOperation::Eq=>        {Value::eq(lv,rv)}
-  BinaryOperation::Neq=>       {Value::neq(lv,rv)}
-  BinaryOperation::Lt=>        {Value::lt(lv,rv)}
-  BinaryOperation::Lteq=>      {Value::lteq(lv,rv)}
-  BinaryOperation::Gt=>        {Value::gt(lv,rv)}
-  BinaryOperation::Gteq=>      {Value::gteq(lv,rv)}
-    };
-
-
-  self.stack.push(new_v);
+  BinaryOperator::Add=>       {Value::add(lv,rv)}
+  BinaryOperator::Sub=>       {Value::sub(lv,rv)}
+  BinaryOperator::Mul=>       {Value::mul(lv,rv)}
+  BinaryOperator::Div=>       {Value::div(lv,rv)}
+  BinaryOperator::Rem=>       {Value::rem(lv,rv)}
+  BinaryOperator::Shl=>       {Value::shl(lv,rv)}
+  BinaryOperator::Shr=>       {Value::shr(lv,rv)}
+  BinaryOperator::And=>       {Value::and(lv,rv)}
+  BinaryOperator::Or=>        {Value::or(lv,rv)}
+  BinaryOperator::Xor=>       {Value::xor(lv,rv)}
+  BinaryOperator::LogicalAnd=>{Value::logical_and(lv,rv)}
+  BinaryOperator::LogicalOr=> {Value::logical_or(lv,rv)}
+  BinaryOperator::Eq=>        {Value::eq(lv,rv)}
+  BinaryOperator::Neq=>       {Value::neq(lv,rv)}
+  BinaryOperator::Lt=>        {Value::lt(lv,rv)}
+  BinaryOperator::Lteq=>      {Value::lteq(lv,rv)}
+  BinaryOperator::Gt=>        {Value::gt(lv,rv)}
+  BinaryOperator::Gteq=>      {Value::gteq(lv,rv)}
+  _=>{Value::Undefined}
+    }
 }
 
 
 pub fn
-step(&mut self)
+operate_binary(&mut self, bo: &BinaryOperator)
 {
-  let  pc = self.pc;
+  let  v = self.operate_binary_internal(bo);
 
-  self.pc += 1;
+  let  _ = self.memory.pop();
+
+  *self.memory.top_mut() = v;
+}
+
+
+pub fn
+operate_assign(&mut self, ao: &AssignOperator)
+{
+  let  v =  if let Some(bo) = ao.get_relational_operator(){
+      let  v = self.operate_binary_internal(&bo);
+
+      let  _ = self.memory.pop();
+
+      v
+    }
+
+  else
+    {
+      self.memory.pop()
+    };
+
+
+  *self.memory.dereference_top_mut() = v;
+}
+
+
+pub fn
+step(&mut self)-> StepResult
+{
+    if self.operation_list_ptr == std::ptr::null()
+    {
+      return StepResult::Hlt;
+    }
+
+
+  let  pc = self.pc;
 
   let  operation_list = unsafe{&*self.operation_list_ptr};
 
-    match &operation_list[pc]
+    if pc >= operation_list.len()
+    {
+      return self.ret();
+    }
+
+
+  self.pc += 1;
+
+    match unsafe{operation_list.get_unchecked(pc)}
     {
   Operation::None=>{},
-  Operation::LoadN=>{self.push(Value::Null);},
-  Operation::LoadU=>{self.push(Value::Undefined);},
-  Operation::LoadB(b)=>{self.push(Value::Boolean(*b));},
-  Operation::LoadI(i)=>{self.push(Value::Integer(*i));},
-  Operation::LoadF(f)=>{self.push(Value::Floating(*f));},
-  Operation::LoadS(s)=>{self.push(Value::String(s.clone()));},
-  Operation::LoadGlo(i)=>{self.push(Value::StackReference(          *i));},
-  Operation::LoadLoc(i)=>{self.push(Value::StackReference(self.bp+4+*i));},
-  Operation::LoadArg(i)=>{self.push(Value::StackReference(self.bp  -*i));},
-  Operation::StoreGlo(i)=>{self.store(          *i);},
-  Operation::StoreLoc(i)=>{self.store(self.bp+4+*i);},
-  Operation::StoreArg(i)=>{self.store(self.bp  -*i);},
-  Operation::Dump=>{let  _ = self.stack.pop();},
+  Operation::Print(s)=>{println!("{}",s);},
+  Operation::AllocateLoc(n)=>{self.memory.extend_stack(*n);},
+  Operation::LoadN=>{self.memory.push(Value::Null);},
+  Operation::LoadU=>{self.memory.push(Value::Undefined);},
+  Operation::LoadB(b)=>{self.memory.push(Value::Boolean(*b));},
+  Operation::LoadI(i)=>{self.memory.push(Value::Integer(*i));},
+  Operation::LoadF(f)=>{self.memory.push(Value::Floating(*f));},
+  Operation::LoadS(s)=>{self.memory.push(Value::String(s.clone()));},
+  Operation::LoadGloRef(i)=>{self.memory.push(Value::StackReference(          *i));},
+  Operation::LoadLocRef(i)=>{self.memory.push(Value::StackReference(self.bp+4+*i));},
+  Operation::LoadArgRef(i)=>{self.memory.push(Value::StackReference(self.bp  -*i));},
+  Operation::Dump=>{let  _ = self.memory.pop();},
   Operation::Cal=>{self.cal();},
-  Operation::Ret=>{self.ret();},
-  Operation::Jmp(i)=>{self.pc = *i;},
+  Operation::Ret=>{return self.ret();},
+  Operation::Jmp(i)=>
+        {
+          println!("pc {} -> {}",self.pc-1,*i);
+
+          self.pc = *i;
+        },
   Operation::Brz(i)=>{self.brz(*i);},
   Operation::Brnz(i)=>{self.brnz(*i);},
-  Operation::Unary(uo)=> {self.operate_unary(uo.clone());}
-  Operation::Binary(bo)=>{self.operate_binary(bo.clone());}
+  Operation::Unary(uo)=> {self.operate_unary(uo);}
+  Operation::Binary(bo)=>{self.operate_binary(bo);}
+  Operation::Assign(ao)=>{self.operate_assign(ao);}
     }
+
+
+  StepResult::Ok
 }
 
 

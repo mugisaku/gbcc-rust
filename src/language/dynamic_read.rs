@@ -74,10 +74,8 @@ read_fn(dir: &Directory)-> Result<(String,Function),()>
 
                 if let Some(stmts_d) = cur.seek_directory_with_name("statement_list")
                 {
-                    if let Ok(statement_list) = read_statement_list(stmts_d)
+                    if let Ok(block) = read_block(stmts_d)
                     {
-                      let  block = Block{statement_list};
-
                       let  f = Function{parameter_list, block};
 
                       return Ok((name,f));
@@ -257,6 +255,8 @@ read_if(dir: &Directory)-> Result<Statement,()>
 
   let  mut cond_blk_ls: Vec<(Expression,Block)> = Vec::new();
 
+  let  mut else_blk_opt: Option<Block> = None;
+
   cur.advance(1);
 
     while let Some(expr_d) = cur.get_directory_with_name("expression")
@@ -267,52 +267,50 @@ read_if(dir: &Directory)-> Result<Statement,()>
 
             if let Some(ls_d) = cur.get_directory_with_name("statement_list")
             {
-                if let Ok(statement_list) = read_statement_list(ls_d)
+                if let Ok(blk) = read_block(ls_d)
                 {
-                  cond_blk_ls.push((condition,Block{statement_list}));
-
                   cur.advance(1);
 
-                    if cur.test_keyword("else")
-                    {
-                      cur.advance(1);
-
-                        if cur.test_keyword("if")
-                        {
-                          cur.advance(1);
-
-                          continue;
-                        }
-
-                      else
-                        if let Some(ls_d) = cur.get_directory_with_name("statement_list")
-                        {
-                            if let Ok(statement_list) = read_statement_list(ls_d)
-                            {
-                              return Ok(Statement::If(cond_blk_ls,Some(Block{statement_list})));
-                            }
-                        }
-                    }
+                  cond_blk_ls.push((condition,blk));
+                }
+            }
 
 
-                  return Ok(Statement::If(cond_blk_ls,None));
+            if cur.test_keyword("else")
+            {
+              cur.advance(1);
+
+                if cur.test_keyword("if")
+                {
+                  cur.advance(1);
                 }
 
               else
+                if let Some(else_d) = cur.get_directory_with_name("statement_list")
                 {
-                  break;
+                    if let Ok(else_blk) = read_block(else_d)
+                    {
+                      else_blk_opt = Some(else_blk);
+
+                      break;
+                    }
+
+                  else
+                    {
+                      return Err(());
+                    }
                 }
             }
         }
 
       else
         {
-          break;
+          return Err(());
         }
     }
 
 
-  Err(())
+  Ok(Statement::If(cond_blk_ls,else_blk_opt))
 }
 
 
@@ -331,9 +329,9 @@ read_while(dir: &Directory)-> Result<Statement,()>
 
             if let Some(ls_d) = cur.get_directory_with_name("statement_list")
             {
-                if let Ok(statement_list) = read_statement_list(ls_d)
+                if let Ok(blk) = read_block(ls_d)
                 {
-                  return Ok(Statement::While(condition,Block{statement_list}));
+                  return Ok(Statement::While(condition,blk));
                 }
             }
         }
@@ -353,9 +351,9 @@ read_loop(dir: &Directory)-> Result<Statement,()>
 
     if let Some(ls_d) = cur.get_directory_with_name("statement_list")
     {
-        if let Ok(statement_list) = read_statement_list(ls_d)
+        if let Ok(blk) = read_block(ls_d)
         {
-          return Ok(Statement::Loop(Block{statement_list}));
+          return Ok(Statement::Loop(blk));
         }
     }
 
@@ -381,11 +379,28 @@ read_for(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_statement_list(dir: &Directory)-> Result<Vec<Statement>,()>
+read_print(dir: &Directory)-> Result<String,()>
 {
   let  mut cur = Cursor::new(dir);
 
-  let  mut stmts: Vec<Statement> = Vec::new();
+  cur.advance(1);
+
+    if let Some(s) = cur.get_string()
+    {
+      return Ok(s.clone());
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+read_block(dir: &Directory)-> Result<Block,()>
+{
+  let  mut cur = Cursor::new(dir);
+
+  let  mut statement_list: Vec<Statement> = Vec::new();
 
   cur.advance(1);
 
@@ -393,7 +408,7 @@ read_statement_list(dir: &Directory)-> Result<Vec<Statement>,()>
     {
         if let Ok(stmt) = read_statement(d)
         {
-          stmts.push(stmt);
+          statement_list.push(stmt);
         }
 
 
@@ -401,7 +416,7 @@ read_statement_list(dir: &Directory)-> Result<Vec<Statement>,()>
     }
 
 
-  Ok(stmts)
+  Ok(Block{statement_list})
 }
 
 
@@ -425,9 +440,9 @@ read_statement(dir: &Directory)-> Result<Statement,()>
 
         if d_name == "statement_list"
         {
-            if let Ok(statement_list) = read_statement_list(d)
+            if let Ok(blk) = read_block(d)
             {
-              return Ok(Statement::Block(Block{statement_list}));
+              return Ok(Statement::Block(blk));
             }
         }
 
@@ -482,6 +497,15 @@ read_statement(dir: &Directory)-> Result<Statement,()>
             if let Ok((name,e_opt)) = read_variable(d)
             {
               return Ok(Statement::Const(name,e_opt));
+            }
+        }
+
+      else
+        if d_name == "print"
+        {
+            if let Ok(s) = read_print(d)
+            {
+              return Ok(Statement::Print(s));
             }
         }
 

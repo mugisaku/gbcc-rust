@@ -277,6 +277,22 @@ get_identifier(&self)-> Option<&String>
 
 
 pub fn
+get_string(&self)-> Option<&String>
+{
+    if let Some(o) = self.get_object()
+    {
+        if let ObjectData::String(s) = &o.data
+        {
+          return Some(s);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
 get_directory(&self)-> Option<&Directory>
 {
     if let Some(o) = self.get_object()

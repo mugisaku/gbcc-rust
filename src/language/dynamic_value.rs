@@ -287,35 +287,85 @@ rem(lv: &Value, rv: &Value)-> Value
 pub fn
 shl(lv: &Value, rv: &Value)-> Value
 {
-  Value::Null
+    if let Value::Integer(li) = *lv
+    {
+      let  ri = rv.to_int();
+
+      Value::Integer(li<<ri)
+    }
+
+  else
+    {
+      Value::Undefined
+    }
 }
 
 
 pub fn
 shr(lv: &Value, rv: &Value)-> Value
 {
-  Value::Null
+    if let Value::Integer(li) = *lv
+    {
+      let  ri = rv.to_int();
+
+      Value::Integer(li>>ri)
+    }
+
+  else
+    {
+      Value::Undefined
+    }
 }
 
 
 pub fn
 and(lv: &Value, rv: &Value)-> Value
 {
-  Value::Null
+    if let Value::Integer(li) = *lv
+    {
+      let  ri = rv.to_int();
+
+      Value::Integer(li&ri)
+    }
+
+  else
+    {
+      Value::Undefined
+    }
 }
 
 
 pub fn
 or(lv: &Value, rv: &Value)-> Value
 {
-  Value::Null
+    if let Value::Integer(li) = *lv
+    {
+      let  ri = rv.to_int();
+
+      Value::Integer(li|ri)
+    }
+
+  else
+    {
+      Value::Undefined
+    }
 }
 
 
 pub fn
 xor(lv: &Value, rv: &Value)-> Value
 {
-  Value::Null
+    if let Value::Integer(li) = *lv
+    {
+      let  ri = rv.to_int();
+
+      Value::Integer(li^ri)
+    }
+
+  else
+    {
+      Value::Undefined
+    }
 }
 
 

@@ -131,6 +131,11 @@ load()
     Space, Function
   };
 
+  use crate::language::dynamic_machine::{
+    Machine,
+    StepResult,
+  };
+
   let  mut sp = Space::new();
 
   use std::io::Read;
@@ -145,7 +150,24 @@ load()
 
       sp.print();
 
+      print!("\n--\n");
+
+      let  symtbl = sp.compile();
+
+      sp.print_operations();
+
       print!("\n");
+
+      let  mut m = Machine::new();
+
+      m.setup(&symtbl);
+
+        while let StepResult::Ok = m.step()
+        {
+        }
+
+
+      println!("finished");
     }
 }
 

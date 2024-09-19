@@ -168,6 +168,19 @@ print(&self)
 }
 
 
+pub fn
+print_mnemonic(&self)
+{
+    match self
+    {
+  UnaryOperator::Neg=>{print!("neg");},
+  UnaryOperator::Not=>{print!("not");},
+  UnaryOperator::LogicalNot=>{print!("logical_not");},
+  UnaryOperator::Deref=>{print!("deref");},
+    }
+}
+
+
 }
 
 
@@ -619,6 +632,33 @@ print(&self)
 }
 
 
+pub fn
+print_mnemonic(&self)
+{
+    match self
+    {
+  BinaryOperator::Add=>{print!("add");},
+  BinaryOperator::Sub=>{print!("sub");},
+  BinaryOperator::Mul=>{print!("mul");},
+  BinaryOperator::Div=>{print!("div");},
+  BinaryOperator::Rem=>{print!("rem");},
+  BinaryOperator::Shl=>{print!("shl");},
+  BinaryOperator::Shr=>{print!("shr");},
+  BinaryOperator::And=>{print!("and");},
+  BinaryOperator::Or=>{print!("or");},
+  BinaryOperator::Xor=>{print!("xor");},
+  BinaryOperator::Eq=>{print!("eq");},
+  BinaryOperator::Neq=>{print!("neq");},
+  BinaryOperator::Lt=>{print!("lt");},
+  BinaryOperator::Lteq=>{print!("lteq");},
+  BinaryOperator::Gt=>{print!("gt");},
+  BinaryOperator::Gteq=>{print!("gteq");},
+  BinaryOperator::LogicalAnd=>{print!("logical_and");},
+  BinaryOperator::LogicalOr=>{print!("logical_or");},
+    }
+}
+
+
 }
 
 
@@ -664,6 +704,26 @@ print(&self)
   AssignOperator::And=>{print!("&=");},
   AssignOperator::Or=>{print!("|=");},
   AssignOperator::Xor=>{print!("^=");},
+    }
+}
+
+
+pub fn
+get_relational_operator(&self)-> Option<BinaryOperator>
+{
+    match self
+    {
+  AssignOperator::Nop=>{None},
+  AssignOperator::Add=>{Some(BinaryOperator::Add)},
+  AssignOperator::Sub=>{Some(BinaryOperator::Sub)},
+  AssignOperator::Mul=>{Some(BinaryOperator::Mul)},
+  AssignOperator::Div=>{Some(BinaryOperator::Div)},
+  AssignOperator::Rem=>{Some(BinaryOperator::Rem)},
+  AssignOperator::Shl=>{Some(BinaryOperator::Shl)},
+  AssignOperator::Shr=>{Some(BinaryOperator::Shr)},
+  AssignOperator::And=>{Some(BinaryOperator::And)},
+  AssignOperator::Or=>{Some(BinaryOperator::Or)},
+  AssignOperator::Xor=>{Some(BinaryOperator::Xor)},
     }
 }
 

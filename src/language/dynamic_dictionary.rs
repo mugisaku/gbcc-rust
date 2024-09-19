@@ -76,6 +76,7 @@ statement: ";"
   | return
   | let
   | const
+  | print
   | expression_or_assign
   ;
 
@@ -85,7 +86,7 @@ continue: 'continue;
 return  : 'return -> [expression];
 
 
-if: 'if -> expression & statement_list & [{'else & 'if & expression & statement_list} & ['else & statement_list]];
+if: 'if -> expression & statement_list & [{'else & 'if & expression & statement_list}] & ['else & statement_list];
 
 statement_list: "{" & [{statement}] & "}";
 
@@ -99,6 +100,7 @@ parameter_list: "(" & [.Identifier & [{"," & .Identifier}]] & ")";
 fn   : 'fn    -> .Identifier & parameter_list & statement_list;
 let  : 'let   -> .Identifier & [":" & expression];
 const: 'const -> .Identifier & ":" & expression;
+print: 'print -> .String;
 
 declaration: fn | let | const;
 
