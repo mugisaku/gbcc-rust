@@ -161,11 +161,7 @@ load()
       let  mut m = Machine::new();
 
       m.setup(&symtbl);
-
-        while let StepResult::Ok = m.step()
-        {
-        }
-
+      m.run(Some(10000));
 
       println!("finished");
     }

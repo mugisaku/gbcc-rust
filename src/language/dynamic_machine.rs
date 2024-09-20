@@ -33,7 +33,10 @@ Operation
 {
   None,
 
-  Print(String),
+  PrintS(String),
+  PrintGlo(usize),
+  PrintLoc(usize),
+  PrintArg(usize),
 
   AllocateLoc(usize),
 
@@ -84,7 +87,10 @@ print(&self)
     {
   Operation::None=>{print!("");},
 
-  Operation::Print(s)=>{print!("print \"{}\"",s);},
+  Operation::PrintS(s)=>{print!("print \"{}\"",s);},
+  Operation::PrintGlo(i)=>{print!("print {}",*i);},
+  Operation::PrintLoc(i)=>{print!("print {}",*i);},
+  Operation::PrintArg(i)=>{print!("print {}",*i);},
 
   Operation::AllocateLoc(n)=>{print!("allocate l({})",*n);},
 
@@ -155,11 +161,13 @@ new()-> Self
 
 
 pub fn
-setup(&mut self, symtbl: &Vec<Symbol>)
+setup(&mut self, symtbl: &Vec<Symbol>)-> usize
 {
+  let  sz = symtbl.len();
+
   self.heap.clear();  
   self.freed_list.clear();
-  self.stack.resize(symtbl.len(),Value::Null);
+  self.stack.resize(sz,Value::Null);
 
     for sym in symtbl
     {
@@ -167,6 +175,11 @@ setup(&mut self, symtbl: &Vec<Symbol>)
 
       *v = sym.value.clone();
     }
+
+
+  println!("{} symbols is allocated",sz);
+
+  sz
 }
 
 
@@ -202,7 +215,9 @@ extend_stack(&mut self, n: usize)
 {
   let  new_len = self.stack.len()+n;
 
-  self.stack.resize(new_len*3,Value::Null);
+  println!("stack size: {} -> {}",self.stack.len(),new_len);
+
+  self.stack.resize(new_len,Value::Null);
 }
 
 
@@ -323,9 +338,33 @@ dereference_top_mut(&mut self)-> &mut Value
 }
 
 
+pub fn
+print_value(&self, v: &Value)
+{
+    if let Value::HeapReference(i) = v
+    {
+      self.print_value(&self.heap[*i])
+    }
+
+  else
+    if let Value::StackReference(i) = v
+    {
+      self.print_value(&self.stack[*i])
+    }
+
+  else
+    {
+      v.print();
+    }
 }
 
 
+}
+
+
+
+
+const SYSTEM_RESERVED_STACK_SIZE: usize = 4;
 
 
 pub enum
@@ -351,6 +390,8 @@ Machine
 
   pub(crate) call_counter: usize,
 
+  pub(crate) debug_flag: bool,
+
 }
 
 
@@ -368,19 +409,14 @@ new()-> Self
     pc: 0,
     bp: 0,
     call_counter: 0,
+    debug_flag: true,
   }
 }
 
 
 pub fn
-setup(&mut self, symtbl: &Vec<Symbol>)
+ready_main(&mut self, symtbl: &Vec<Symbol>)
 {
-  self.pc = 0;
-  self.bp = 0;
-  self.call_counter = 0;
-
-  self.memory.setup(symtbl);
-
     for sym in symtbl
     {
         if &sym.name == "main"
@@ -388,12 +424,28 @@ setup(&mut self, symtbl: &Vec<Symbol>)
             if let Value::ProgramPointer(ptr) = &sym.value
             {
               self.operation_list_ptr = *ptr;
+
+              self.memory.extend_stack(SYSTEM_RESERVED_STACK_SIZE);
+
+              return;
             }
-
-
-          break;
         }
     }
+
+
+  panic!();
+}
+
+
+pub fn
+setup(&mut self, symtbl: &Vec<Symbol>)
+{
+  self.pc           = 0;
+  self.call_counter = 0;
+
+  self.bp = self.memory.setup(symtbl);
+
+  self.ready_main(symtbl);
 }
 
 
@@ -454,13 +506,24 @@ ret(&mut self)-> StepResult
 
 
 pub fn
+print_pc_change(&self, new_pc: usize)
+{
+  println!("pc {} -> {}",self.pc-1,new_pc);
+}
+
+
+pub fn
 brz(&mut self, i: usize)
 {
   let  v = self.memory.pop();
 
     if v.to_int() == 0
     {
-      println!("pc {} -> {}",self.pc-1,i);
+        if self.debug_flag
+        {
+          self.print_pc_change(i);
+        }
+
 
       self.pc = i;
     }
@@ -474,7 +537,11 @@ brnz(&mut self, i: usize)
 
     if v.to_int() != 0
     {
-      println!("pc {} -> {}",self.pc-1,i);
+        if self.debug_flag
+        {
+          self.print_pc_change(i);
+        }
+
 
       self.pc = i;
     }
@@ -585,7 +652,37 @@ step(&mut self)-> StepResult
     match unsafe{operation_list.get_unchecked(pc)}
     {
   Operation::None=>{},
-  Operation::Print(s)=>{println!("{}",s);},
+  Operation::PrintS(s)=>{println!("[machine print] {}",s);},
+  Operation::PrintGlo(i)=>
+        {
+          let  v = Value::StackReference(*i);
+
+          println!("[machine print] ");
+
+          self.memory.print_value(&v);
+
+          println!("");
+        },
+  Operation::PrintLoc(i)=>
+        {
+          let  v = Value::StackReference(self.bp+SYSTEM_RESERVED_STACK_SIZE+*i);
+
+          println!("[machine print] ");
+
+          self.memory.print_value(&v);
+
+          println!("");
+        },
+  Operation::PrintArg(i)=>
+        {
+          let  v = Value::StackReference(self.bp-*i);
+
+          println!("[machine print] ");
+
+          self.memory.print_value(&v);
+
+          println!("");
+        },
   Operation::AllocateLoc(n)=>{self.memory.extend_stack(*n);},
   Operation::LoadN=>{self.memory.push(Value::Null);},
   Operation::LoadU=>{self.memory.push(Value::Undefined);},
@@ -593,15 +690,19 @@ step(&mut self)-> StepResult
   Operation::LoadI(i)=>{self.memory.push(Value::Integer(*i));},
   Operation::LoadF(f)=>{self.memory.push(Value::Floating(*f));},
   Operation::LoadS(s)=>{self.memory.push(Value::String(s.clone()));},
-  Operation::LoadGloRef(i)=>{self.memory.push(Value::StackReference(          *i));},
-  Operation::LoadLocRef(i)=>{self.memory.push(Value::StackReference(self.bp+4+*i));},
-  Operation::LoadArgRef(i)=>{self.memory.push(Value::StackReference(self.bp  -*i));},
+  Operation::LoadGloRef(i)=>{self.memory.push(Value::StackReference(                                   *i));},
+  Operation::LoadLocRef(i)=>{self.memory.push(Value::StackReference(self.bp+SYSTEM_RESERVED_STACK_SIZE+*i));},
+  Operation::LoadArgRef(i)=>{self.memory.push(Value::StackReference(self.bp                           -*i));},
   Operation::Dump=>{let  _ = self.memory.pop();},
   Operation::Cal=>{self.cal();},
   Operation::Ret=>{return self.ret();},
   Operation::Jmp(i)=>
         {
-          println!("pc {} -> {}",self.pc-1,*i);
+            if self.debug_flag
+            {
+              self.print_pc_change(*i);
+            }
+
 
           self.pc = *i;
         },
@@ -614,6 +715,34 @@ step(&mut self)-> StepResult
 
 
   StepResult::Ok
+}
+
+
+pub fn
+run(&mut self, limit_opt: Option<usize>)
+{
+    if let Some(mut limit) = limit_opt
+    {
+        if limit != 0
+        {
+            while let StepResult::Ok = self.step()
+            {
+              limit -= 1;
+
+                if limit == 0
+                {
+                  break;
+                }
+            }
+        }
+    }
+
+  else
+    {
+        while let StepResult::Ok = self.step()
+        {
+        }
+    }
 }
 
 

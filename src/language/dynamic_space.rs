@@ -602,7 +602,8 @@ Statement
   Return(Option<Expression>),
   Break,
   Continue,
-  Print(String),
+  PrintS(String),
+  PrintV(String),
 
 }
 
@@ -716,7 +717,8 @@ print(&self)
         }
   Statement::Break=>{print!("break");}
   Statement::Continue=>{print!("continue");}
-  Statement::Print(s)=>{print!("print \"{}\"",s);}
+  Statement::PrintS(s)=>{print!("print \"{}\"",s);}
+  Statement::PrintV(s)=>{print!("print {}",s);}
     }
 }
 
@@ -809,6 +811,14 @@ new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
         if let Statement::Let(name,_) = stmt
         {
           variable_list.push((false,name.clone(),next_index));
+
+          next_index += 1;
+        }
+
+      else
+        if let Statement::Const(name,_) = stmt
+        {
+          variable_list.push((true,name.clone(),next_index));
 
           next_index += 1;
         }
@@ -1297,6 +1307,8 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
 
           self.process_block(blk,Some(bf_ref),Some(&cbf));
 
+          self.push_jmp(cbf.get_label("_Start"));
+
           self.push_position(cbf.get_label("_End"));
         }
   Statement::Loop(blk)=>
@@ -1306,6 +1318,8 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
           self.push_position(cbf.get_label("_Start"));
 
           self.process_block(blk,Some(bf_ref),Some(&cbf));
+
+          self.push_jmp(cbf.get_label("_Start"));
 
           self.push_position(cbf.get_label("_End"));
         }
@@ -1347,9 +1361,37 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
               panic!();
             }
         }
-  Statement::Print(s)=>
+  Statement::PrintS(s)=>
         {
-          self.operation_list.push(Operation::Print(s.clone()));
+          self.operation_list.push(Operation::PrintS(s.clone()));
+        }
+  Statement::PrintV(s)=>
+        {
+            if let Some(i) = bf_ref.find(s)
+            {
+              self.operation_list.push(Operation::PrintLoc(i));
+            }
+
+          else
+            if let Some(i) = self.find_parameter(s)
+            {
+              self.operation_list.push(Operation::PrintArg(i));
+            }
+
+          else
+            if let Some(i) = self.find_global(s)
+            {
+              self.operation_list.push(Operation::PrintGlo(i));
+            }
+
+          else
+            {
+              println!("process_statement error: {} not found",s);
+
+              bf_ref.print();
+
+              panic!();
+            }
         }
     }
 }

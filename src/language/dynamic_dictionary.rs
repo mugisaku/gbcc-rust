@@ -76,7 +76,8 @@ statement: ";"
   | return
   | let
   | const
-  | print
+  | print_s
+  | print_v
   | expression_or_assign
   ;
 
@@ -100,7 +101,8 @@ parameter_list: "(" & [.Identifier & [{"," & .Identifier}]] & ")";
 fn   : 'fn    -> .Identifier & parameter_list & statement_list;
 let  : 'let   -> .Identifier & [":" & expression];
 const: 'const -> .Identifier & ":" & expression;
-print: 'print -> .String;
+print_s: 'print & .String;
+print_v: 'print & .Identifier;
 
 declaration: fn | let | const;
 

@@ -379,13 +379,30 @@ read_for(dir: &Directory)-> Result<Statement,()>
 
 
 pub fn
-read_print(dir: &Directory)-> Result<String,()>
+read_print_s(dir: &Directory)-> Result<String,()>
 {
   let  mut cur = Cursor::new(dir);
 
   cur.advance(1);
 
     if let Some(s) = cur.get_string()
+    {
+      return Ok(s.clone());
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+read_print_v(dir: &Directory)-> Result<String,()>
+{
+  let  mut cur = Cursor::new(dir);
+
+  cur.advance(1);
+
+    if let Some(s) = cur.get_identifier()
     {
       return Ok(s.clone());
     }
@@ -501,11 +518,20 @@ read_statement(dir: &Directory)-> Result<Statement,()>
         }
 
       else
-        if d_name == "print"
+        if d_name == "print_s"
         {
-            if let Ok(s) = read_print(d)
+            if let Ok(s) = read_print_s(d)
             {
-              return Ok(Statement::Print(s));
+              return Ok(Statement::PrintS(s));
+            }
+        }
+
+      else
+        if d_name == "print_v"
+        {
+            if let Ok(s) = read_print_v(d)
+            {
+              return Ok(Statement::PrintV(s));
             }
         }
 

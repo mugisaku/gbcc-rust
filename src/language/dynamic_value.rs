@@ -598,6 +598,34 @@ gteq(lv: &Value, rv: &Value)-> Value
 }
 
 
+pub fn
+print(&self)
+{
+    match self
+    {
+  Value::Null=>{print!("NULL");}
+  Value::Undefined=>{print!("UNDEFINED");}
+  Value::Boolean(b)=>{print!("Bool({})",*b);}
+  Value::Integer(i)=>{print!("Int({})",*i);}
+  Value::Floating(f)=>{print!("Float({})",*f);}
+  Value::String(s)=>{print!("String\"{}\"",s);}
+
+  Value::HeapReference(i)=>{print!("Heap({})",*i);}
+  Value::StackReference(i)=>{print!("Stack({})",*i);}
+  Value::ProgramReference(i)=>{print!("Program({})",*i);}
+
+  Value::Mutable(v)=>{  print!("Mut ");  v.print();}
+
+  Value::Table(ls)=>{print!("table");}
+
+  Value::BasePointer(v)=>{print!("bp({})",*v);}
+  Value::ProgramPointer(ptr)=>{print!("pp({})",*ptr as usize);}
+  Value::ProgramCounter(v)=>{print!("pc({})",*v);}
+  Value::ArgumentCounter(v)=>{print!("ac({})",*v);}
+    }
+}
+
+
 }
 
 
