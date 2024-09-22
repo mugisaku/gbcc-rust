@@ -1089,9 +1089,11 @@ push_position(&mut self, name: String)
 pub fn
 find_parameter(&self, name: &str)-> Option<usize>
 {
-    for i in 0..self.parameter_list_ref.len()
+  let  l = self.parameter_list_ref.len();
+
+    for i in 0..l
     {
-        if &self.parameter_list_ref[i] == name
+        if &self.parameter_list_ref[l-1-i] == name
         {
           return Some(i);
         }
@@ -1174,6 +1176,15 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
         },
   Expression::Call(f,args)=>
         {
+          self.process_expression(f,bf_ref);
+
+            for a in args.iter().rev()
+            {
+              self.process_expression(a,bf_ref);
+            }
+
+
+          self.operation_list.push(Operation::Cal(args.len()));
         },
   Expression::Subscript(target,index)=>
         {
@@ -1332,10 +1343,14 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
             if let Some(e) = e_opt
             {
               self.process_expression(e,bf_ref);
+
+              self.operation_list.push(Operation::Ret);
             }
 
-
-          self.operation_list.push(Operation::Ret);
+          else
+            {
+              self.operation_list.push(Operation::RetN);
+            }
         }
   Statement::Break=>
         {

@@ -610,9 +610,9 @@ print(&self)
   Value::Floating(f)=>{print!("Float({})",*f);}
   Value::String(s)=>{print!("String\"{}\"",s);}
 
-  Value::HeapReference(i)=>{print!("Heap({})",*i);}
-  Value::StackReference(i)=>{print!("Stack({})",*i);}
-  Value::ProgramReference(i)=>{print!("Program({})",*i);}
+  Value::HeapReference(i)=>{print!("HeapRef({})",*i);}
+  Value::StackReference(i)=>{print!("StackRef({})",*i);}
+  Value::ProgramReference(i)=>{print!("ProgramRef({})",*i);}
 
   Value::Mutable(v)=>{  print!("Mut ");  v.print();}
 

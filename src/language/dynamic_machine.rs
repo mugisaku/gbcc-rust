@@ -51,7 +51,7 @@ Operation
   LoadArgRef(usize),
   Dump,
 
-  Cal, Ret, Jmp(usize), Brz(usize), Brnz(usize),
+  Cal(usize), Ret, RetN, Jmp(usize), Brz(usize), Brnz(usize),
 
   Unary(  UnaryOperator),
   Binary(BinaryOperator),
@@ -70,7 +70,7 @@ is_control(&self)-> bool
 {
     match self
     {
-  Operation::Cal
+  Operation::Cal(_)
  |Operation::Ret
  |Operation::Jmp(_)
  |Operation::Brz(_)
@@ -105,8 +105,9 @@ print(&self)
   Operation::LoadArgRef(i)=>{print!("ld a({})",*i);},
   Operation::Dump=>{print!("dmp");},
 
-  Operation::Cal=>{print!("cal");},
+  Operation::Cal(n)=>{print!("cal {}",n);},
   Operation::Ret=>{print!("ret");},
+  Operation::RetN=>{print!("retn");},
   Operation::Jmp(i)=>{print!("jmp {}",*i);},
   Operation::Brz(i)=>{print!("brz {}",*i);},
   Operation::Brnz(i)=>{print!("brnz {}",*i);},
@@ -222,6 +223,13 @@ extend_stack(&mut self, n: usize)
 
 
 pub fn
+get_stack_size(&self)-> usize
+{
+  self.stack.len()
+}
+
+
+pub fn
 push(&mut self, v: Value)
 {
   self.stack.push(v);
@@ -252,6 +260,23 @@ pub fn
 top_mut(&mut self)-> &mut Value
 {
   self.stack.last_mut().unwrap()
+}
+
+
+pub fn
+get_program_pointer(&self, n: usize)-> Option<*const Vec<Operation>>
+{
+  let  l = self.stack.len();
+
+  let  v = &self.stack[l-1-n];
+
+    if let Value::ProgramPointer(pp) = self.dereference_value(v)
+    {
+      return Some(*pp);
+    }
+
+
+  None
 }
 
 
@@ -450,17 +475,40 @@ setup(&mut self, symtbl: &Vec<Symbol>)
 
 
 pub fn
-cal(&mut self)
+cal(&mut self, ac: usize)
 {
-  self.memory.push(Value::ArgumentCounter(0));
+  let  old_bp = self.bp                               ;
+                self.bp = self.memory.get_stack_size();
+
+    if self.debug_flag
+    {
+      println!("bp: {} -> {}",old_bp,self.bp);
+    }
+
+
+  let  pp = self.memory.get_program_pointer(ac).unwrap();
+
   self.memory.push(Value::ProgramPointer(self.operation_list_ptr));
+
+  self.operation_list_ptr = pp;
+
+  self.memory.push(Value::ArgumentCounter(ac));
   self.memory.push(Value::ProgramCounter(self.pc));
-  self.memory.push(Value::BasePointer(self.bp));
+  self.memory.push(Value::BasePointer(old_bp));
+
+  self.pc = 0;
+
+  self.call_counter += 1;
+
+    if self.debug_flag
+    {
+      println!("called");
+    }
 }
 
 
 pub fn
-ret(&mut self)-> StepResult
+ret(&mut self, v: Value)-> StepResult
 {
     if self.call_counter == 0
     {
@@ -473,15 +521,25 @@ ret(&mut self)-> StepResult
   let      bp = self.bp;
   let  mut sp =      bp;
 
-    if let Value::ArgumentCounter(n) = self.memory.stack[bp]
+    if let Value::ProgramPointer(ptr) = self.memory.stack[bp]
+    {
+      self.operation_list_ptr = ptr;
+    }
+
+  else
+    {
+      panic!();
+    }
+
+
+    if let Value::ArgumentCounter(n) = self.memory.stack[bp+1]
     {
       sp -= n;
     }
 
-
-    if let Value::ProgramPointer(ptr) = self.memory.stack[bp+1]
+  else
     {
-      self.operation_list_ptr = ptr;
+      panic!();
     }
 
 
@@ -490,16 +548,40 @@ ret(&mut self)-> StepResult
       self.pc = c;
     }
 
+  else
+    {
+      panic!();
+    }
+
 
     if let Value::BasePointer(p) = self.memory.stack[bp+3]
     {
+        if self.debug_flag
+        {
+          println!("bp: {} -> {}",self.bp,p);
+        }
+
+
       self.bp = p;
+    }
+
+  else
+    {
+      panic!();
     }
 
 
   self.memory.stack.truncate(sp);
 
+  *self.memory.top_mut() = v;
+
   self.call_counter -= 1;
+
+    if self.debug_flag
+    {
+      println!("returned");
+    }
+
 
   StepResult::Ok
 }
@@ -508,7 +590,7 @@ ret(&mut self)-> StepResult
 pub fn
 print_pc_change(&self, new_pc: usize)
 {
-  println!("pc {} -> {}",self.pc-1,new_pc);
+  println!("pc: {} -> {}",self.pc-1,new_pc);
 }
 
 
@@ -643,7 +725,7 @@ step(&mut self)-> StepResult
 
     if pc >= operation_list.len()
     {
-      return self.ret();
+      return self.ret(Value::Null);
     }
 
 
@@ -657,7 +739,7 @@ step(&mut self)-> StepResult
         {
           let  v = Value::StackReference(*i);
 
-          println!("[machine print] ");
+          print!("[machine print] ");
 
           self.memory.print_value(&v);
 
@@ -667,7 +749,7 @@ step(&mut self)-> StepResult
         {
           let  v = Value::StackReference(self.bp+SYSTEM_RESERVED_STACK_SIZE+*i);
 
-          println!("[machine print] ");
+          print!("[machine print] ");
 
           self.memory.print_value(&v);
 
@@ -675,9 +757,9 @@ step(&mut self)-> StepResult
         },
   Operation::PrintArg(i)=>
         {
-          let  v = Value::StackReference(self.bp-*i);
+          let  v = Value::StackReference(self.bp-1-*i);
 
-          println!("[machine print] ");
+          print!("[machine print] ");
 
           self.memory.print_value(&v);
 
@@ -692,10 +774,11 @@ step(&mut self)-> StepResult
   Operation::LoadS(s)=>{self.memory.push(Value::String(s.clone()));},
   Operation::LoadGloRef(i)=>{self.memory.push(Value::StackReference(                                   *i));},
   Operation::LoadLocRef(i)=>{self.memory.push(Value::StackReference(self.bp+SYSTEM_RESERVED_STACK_SIZE+*i));},
-  Operation::LoadArgRef(i)=>{self.memory.push(Value::StackReference(self.bp                           -*i));},
+  Operation::LoadArgRef(i)=>{self.memory.push(Value::StackReference(self.bp                         -1-*i));},
   Operation::Dump=>{let  _ = self.memory.pop();},
-  Operation::Cal=>{self.cal();},
-  Operation::Ret=>{return self.ret();},
+  Operation::Cal(n)=>{self.cal(*n);},
+  Operation::Ret=>{  let  v = self.memory.pop();  return self.ret(v);},
+  Operation::RetN=>{return self.ret(Value::Null);},
   Operation::Jmp(i)=>
         {
             if self.debug_flag
