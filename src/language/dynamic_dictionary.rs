@@ -93,7 +93,7 @@ statement_list: "{" & [{statement}] & "}";
 
 loop : 'loop -> statement_list;
 while: 'while -> expression & statement_list;
-for  : 'for;
+for  : 'for -> .Identifier & 'in -> expression & statement_list;
 
 
 parameter_list: "(" & [.Identifier & [{"," & .Identifier}]] & ")";

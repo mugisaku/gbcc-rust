@@ -597,6 +597,7 @@ Statement
   Expression(Expression,Option<(AssignOperator,Expression)>),
   If(Vec<(Expression,Block)>,Option<Block>),
   While(Expression,Block),
+  For(String,Expression,Block),
   Loop(Block),
   Block(Block),
   Return(Option<Expression>),
@@ -685,6 +686,14 @@ print(&self)
 
               blk.print();
             }
+        }
+  Statement::For(name,e,blk)=>
+        {
+          print!("for {} in ",name);
+
+          e.print();
+
+          blk.print();
         }
   Statement::While(e,blk)=>
         {
@@ -1093,9 +1102,11 @@ find_parameter(&self, name: &str)-> Option<usize>
 
     for i in 0..l
     {
-        if &self.parameter_list_ref[l-1-i] == name
+      let  ii = l-1-i;
+
+        if &self.parameter_list_ref[ii] == name
         {
-          return Some(i);
+          return Some(ii);
         }
     }
 
@@ -1305,6 +1316,22 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
 
 
           self.push_position(format!("{}_End",&base_name));
+        }
+  Statement::For(name,e,blk)=>
+        {
+          let  cbf = ControlBlockFrame::new("For",cbf_ref_opt);
+
+          self.push_position(cbf.get_label("_Start"));
+
+          self.process_expression(e,bf_ref);
+
+          self.push_brnz(cbf.get_label("_End"));
+
+          self.process_block(blk,Some(bf_ref),Some(&cbf));
+
+          self.push_jmp(cbf.get_label("_Start"));
+
+          self.push_position(cbf.get_label("_End"));
         }
   Statement::While(e,blk)=>
         {
