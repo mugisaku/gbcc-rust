@@ -792,9 +792,56 @@ Function
 
 
 pub struct
+VariableInfo
+{
+  pub(crate)       name: String,
+  pub(crate) visibility: bool,
+  pub(crate)      index: usize,
+
+}
+
+
+impl
+VariableInfo
+{
+
+
+pub fn
+new(name: &str, index: usize)-> Self
+{
+  Self{
+    visibility: false,
+    name: name.to_string(),
+    index,
+  }
+}
+
+
+pub fn
+show(&mut self)
+{
+  self.visibility = true;
+}
+
+
+pub fn
+print(&self)
+{
+  let  s = if self.visibility{"+"} else{"-"};
+
+  print!("{}{}({})",s,&self.name,self.index);
+}
+
+
+}
+
+
+
+
+pub struct
 BlockFrame<'a>
 {
-  pub(crate) variable_list: Vec<(bool,String,usize)>,
+  pub(crate) variable_info_list: Vec<VariableInfo>,
   pub(crate) next_index: usize,
   pub(crate) parent_ref_opt: Option<&'a Self>,
 
@@ -813,13 +860,15 @@ new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
     parent_ref.next_index
   } else{0};
 
-  let  mut variable_list: Vec<(bool,String,usize)> = Vec::new();
+  let  mut variable_info_list: Vec<VariableInfo> = Vec::new();
 
     for stmt in &blk.statement_list
     {
         if let Statement::Let(name,_) = stmt
         {
-          variable_list.push((false,name.clone(),next_index));
+          let  vi = VariableInfo::new(name,next_index);
+
+          variable_info_list.push(vi);
 
           next_index += 1;
         }
@@ -827,7 +876,9 @@ new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
       else
         if let Statement::Const(name,_) = stmt
         {
-          variable_list.push((true,name.clone(),next_index));
+          let  vi = VariableInfo::new(name,next_index);
+
+          variable_info_list.push(vi);
 
           next_index += 1;
         }
@@ -835,7 +886,7 @@ new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
 
 
   Self{
-    variable_list,
+    variable_info_list,
     next_index,
     parent_ref_opt,
   }
@@ -843,38 +894,20 @@ new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
 
 
 pub fn
-show(&mut self, name: &str)-> Option<usize>
+find_visible(&self, name: &str)-> Option<&VariableInfo>
 {
-    for (v_visibility,v_name,v_index) in &mut self.variable_list
+    for vi in &self.variable_info_list
     {
-        if v_name == name
+        if vi.visibility && (&vi.name == name)
         {
-          *v_visibility = true;
-
-          return Some(*v_index);
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-find(&self, name: &str)-> Option<usize>
-{
-    for (v_visibility,v_name,v_index) in &self.variable_list
-    {
-        if *v_visibility && (v_name == name)
-        {
-          return Some(*v_index);
+          return Some(vi);
         }
     }
 
 
     if let Some(parent_ref) = self.parent_ref_opt
     {
-      return parent_ref.find(name);
+      return parent_ref.find_visible(name);
     }
 
 
@@ -883,13 +916,47 @@ find(&self, name: &str)-> Option<usize>
 
 
 pub fn
+find_invisible_index(&self, name: &str)-> Option<usize>
+{
+    for vi in &self.variable_info_list
+    {
+        if !vi.visibility && (&vi.name == name)
+        {
+          return Some(vi.index);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+show(&mut self, name: &str)
+{
+    for vi in &mut self.variable_info_list
+    {
+        if &vi.name == name
+        {
+          vi.show();
+
+          return;
+        }
+    }
+
+
+  panic!();
+}
+
+
+pub fn
 print(&self)
 {
-    for (v_visibility,v_name,v_index) in &self.variable_list
+    for vi in &self.variable_info_list
     {
-      let  s = if *v_visibility{"+"} else{"-"};
+      vi.print();
 
-      println!("{}{}({})",&s,v_name,v_index);
+      print!("^\n");
     }
 
 
@@ -1145,9 +1212,9 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
           else if s ==      "null"{self.operation_list.push(Operation::LoadN);}
           else if s == "undefined"{self.operation_list.push(Operation::LoadU);}
           else
-            if let Some(i) = bf_ref.find(&s)
+            if let Some(vi) = bf_ref.find_visible(&s)
             {
-              self.operation_list.push(Operation::LoadLocRef(i));
+              self.operation_list.push(Operation::LoadLocRef(vi.index));
             }
 
           else
@@ -1239,7 +1306,7 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
   Statement::Empty=>{}
   Statement::Let(name,e_opt)=>
         {
-            if let Some(i) = bf_ref.show(name)
+            if let Some(i) = bf_ref.find_invisible_index(name)
             {
                 if let Some(e) = e_opt
                 {
@@ -1249,21 +1316,13 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
 
                   self.operation_list.push(Operation::Assign(AssignOperator::Nop));
                 }
+
+
+              bf_ref.show(name);
             }
         }
   Statement::Const(name,e_opt)=>
         {
-            if let Some(i) = bf_ref.show(name)
-            {
-                if let Some(e) = e_opt
-                {
-                  self.operation_list.push(Operation::LoadLocRef(i));
-
-                  self.process_expression(e,bf_ref);
-
-                  self.operation_list.push(Operation::Assign(AssignOperator::Nop));
-                }
-            }
         }
   Statement::Expression(e,ass_opt)=>
         {
@@ -1409,9 +1468,9 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         }
   Statement::PrintV(s)=>
         {
-            if let Some(i) = bf_ref.find(s)
+            if let Some(vi) = bf_ref.find_visible(s)
             {
-              self.operation_list.push(Operation::PrintLoc(i));
+              self.operation_list.push(Operation::PrintLoc(vi.index));
             }
 
           else
