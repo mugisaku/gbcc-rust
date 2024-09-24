@@ -838,6 +838,10 @@ print(&self)
 
 
 
+const FOR_CUR_NAME: &'static str = "*ForCur";
+const FOR_END_NAME: &'static str = "*ForEnd";
+
+
 pub struct
 BlockFrame<'a>
 {
@@ -854,6 +858,17 @@ BlockFrame<'a>
 
 
 pub fn
+add(ls: &mut Vec<VariableInfo>, name: &str, i: &mut usize)
+{
+  let  vi = VariableInfo::new(name,*i);
+
+  ls.push(vi);
+
+  *i += 1;
+}
+
+
+pub fn
 new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
 {
   let  mut next_index: usize = if let Some(parent_ref) = parent_ref_opt{
@@ -866,21 +881,21 @@ new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
     {
         if let Statement::Let(name,_) = stmt
         {
-          let  vi = VariableInfo::new(name,next_index);
-
-          variable_info_list.push(vi);
-
-          next_index += 1;
+          Self::add(&mut variable_info_list,name,&mut next_index);
         }
 
       else
         if let Statement::Const(name,_) = stmt
         {
-          let  vi = VariableInfo::new(name,next_index);
+          Self::add(&mut variable_info_list,name,&mut next_index);
+        }
 
-          variable_info_list.push(vi);
-
-          next_index += 1;
+      else
+        if let Statement::For(name,_,_) = stmt
+        {
+          Self::add(&mut variable_info_list,        name,&mut next_index);
+          Self::add(&mut variable_info_list,FOR_CUR_NAME,&mut next_index);
+          Self::add(&mut variable_info_list,FOR_END_NAME,&mut next_index);
         }
     }
 
@@ -1378,7 +1393,10 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         }
   Statement::For(name,e,blk)=>
         {
+/*
           let  cbf = ControlBlockFrame::new("For",cbf_ref_opt);
+
+          self.operation_list.push(Operation::LoadLocRef(0));
 
           self.push_position(cbf.get_label("_Start"));
 
@@ -1391,6 +1409,7 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
           self.push_jmp(cbf.get_label("_Start"));
 
           self.push_position(cbf.get_label("_End"));
+*/
         }
   Statement::While(e,blk)=>
         {

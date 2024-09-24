@@ -369,8 +369,27 @@ read_for(dir: &Directory)-> Result<Statement,()>
 
   cur.advance(1);
 
-    if let Some(expr_d) = cur.get_directory_with_name("expression")
+    if let Some(s) = cur.get_identifier()
     {
+      let  name = s.clone();
+
+      cur.advance(2);
+
+        if let Some(expr_d) = cur.get_directory_with_name("expression")
+        {
+            if let Ok(expr) = read_expression(expr_d)
+            {
+              cur.advance(1);
+
+                if let Some(blk_d) = cur.get_directory_with_name("statement_list")
+                {
+                    if let Ok(blk) = read_block(blk_d)
+                    {
+                      return Ok(Statement::For(name,expr,blk));
+                    }
+                }
+            }
+        }
     }
 
 
@@ -467,6 +486,12 @@ read_statement(dir: &Directory)-> Result<Statement,()>
         if d_name == "if"
         {
           return read_if(d);
+        }
+
+      else
+        if d_name == "for"
+        {
+          return read_for(d);
         }
 
       else
