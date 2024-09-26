@@ -794,9 +794,8 @@ Function
 pub struct
 VariableInfo
 {
-  pub(crate)       name: String,
-  pub(crate) visibility: bool,
-  pub(crate)      index: usize,
+  pub(crate)  name: String,
+  pub(crate) index: usize,
 
 }
 
@@ -810,7 +809,6 @@ pub fn
 new(name: &str, index: usize)-> Self
 {
   Self{
-    visibility: false,
     name: name.to_string(),
     index,
   }
@@ -818,18 +816,9 @@ new(name: &str, index: usize)-> Self
 
 
 pub fn
-show(&mut self)
-{
-  self.visibility = true;
-}
-
-
-pub fn
 print(&self)
 {
-  let  s = if self.visibility{"+"} else{"-"};
-
-  print!("{}{}({})",s,&self.name,self.index);
+  print!("{}({})",&self.name,self.index);
 }
 
 
@@ -838,7 +827,6 @@ print(&self)
 
 
 
-const FOR_CUR_NAME: &'static str = "*ForCur";
 const FOR_END_NAME: &'static str = "*ForEnd";
 
 
@@ -858,50 +846,14 @@ BlockFrame<'a>
 
 
 pub fn
-add(ls: &mut Vec<VariableInfo>, name: &str, i: &mut usize)
-{
-  let  vi = VariableInfo::new(name,*i);
-
-  ls.push(vi);
-
-  *i += 1;
-}
-
-
-pub fn
-new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
+new(parent_ref_opt: Option<&'a Self>)-> Self
 {
   let  mut next_index: usize = if let Some(parent_ref) = parent_ref_opt{
     parent_ref.next_index
   } else{0};
 
-  let  mut variable_info_list: Vec<VariableInfo> = Vec::new();
-
-    for stmt in &blk.statement_list
-    {
-        if let Statement::Let(name,_) = stmt
-        {
-          Self::add(&mut variable_info_list,name,&mut next_index);
-        }
-
-      else
-        if let Statement::Const(name,_) = stmt
-        {
-          Self::add(&mut variable_info_list,name,&mut next_index);
-        }
-
-      else
-        if let Statement::For(name,_,_) = stmt
-        {
-          Self::add(&mut variable_info_list,        name,&mut next_index);
-          Self::add(&mut variable_info_list,FOR_CUR_NAME,&mut next_index);
-          Self::add(&mut variable_info_list,FOR_END_NAME,&mut next_index);
-        }
-    }
-
-
   Self{
-    variable_info_list,
+    variable_info_list: Vec::new(),
     next_index,
     parent_ref_opt,
   }
@@ -909,11 +861,11 @@ new(blk: &Block, parent_ref_opt: Option<&'a Self>)-> Self
 
 
 pub fn
-find_visible(&self, name: &str)-> Option<&VariableInfo>
+find(&self, name: &str)-> Option<&VariableInfo>
 {
     for vi in &self.variable_info_list
     {
-        if vi.visibility && (&vi.name == name)
+        if &vi.name == name
         {
           return Some(vi);
         }
@@ -922,7 +874,7 @@ find_visible(&self, name: &str)-> Option<&VariableInfo>
 
     if let Some(parent_ref) = self.parent_ref_opt
     {
-      return parent_ref.find_visible(name);
+      return parent_ref.find(name);
     }
 
 
@@ -931,11 +883,11 @@ find_visible(&self, name: &str)-> Option<&VariableInfo>
 
 
 pub fn
-find_invisible_index(&self, name: &str)-> Option<usize>
+find_index(&self, name: &str)-> Option<usize>
 {
     for vi in &self.variable_info_list
     {
-        if !vi.visibility && (&vi.name == name)
+        if &vi.name == name
         {
           return Some(vi.index);
         }
@@ -947,20 +899,13 @@ find_invisible_index(&self, name: &str)-> Option<usize>
 
 
 pub fn
-show(&mut self, name: &str)
+add(&mut self, name: &str)
 {
-    for vi in &mut self.variable_info_list
-    {
-        if &vi.name == name
-        {
-          vi.show();
+  let  vi = VariableInfo::new(name,self.next_index);
 
-          return;
-        }
-    }
+  self.variable_info_list.push(vi);
 
-
-  panic!();
+  self.next_index += 1;
 }
 
 
@@ -988,42 +933,48 @@ print(&self)
 
 
 pub struct
-ControlBlockFrame<'a>
+ControlBlockFrame
 {
-  pub(crate) name: String,
-  pub(crate) id: usize,
-  pub(crate) parent_ref_opt: Option<&'a Self>,
+  pub(crate) base_name: String,
 
 }
 
 
-impl<'a>
-ControlBlockFrame<'a>
+impl
+ControlBlockFrame
 {
 
 
 pub fn
-new(base_name: &str, parent_ref_opt: Option<&'a Self>)-> Self
+new(id_ref: &mut usize)-> Self
 {
-  let  id = if let Some(parent_ref) = parent_ref_opt{
-    parent_ref.id+1
-  } else{0};
-
-
-  let  name = format!("{}_{}",base_name,id);
+  let  id = *id_ref     ;
+            *id_ref += 1;
 
   Self{
-    name,
-    id,
-    parent_ref_opt,
+    base_name: format!("{}",id),
   }
 }
 
 
 pub fn
-get_label(&self, suffix: &str)-> String
+get_start_label(&self)-> String
 {
-  format!("{}{}",&self.name,suffix)
+  format!("{}_Start",&self.base_name)
+}
+
+
+pub fn
+get_restart_label(&self)-> String
+{
+  format!("{}_Restart",&self.base_name)
+}
+
+
+pub fn
+get_end_label(&self)-> String
+{
+  format!("{}_End",&self.base_name)
 }
 
 
@@ -1051,7 +1002,8 @@ CompileContext<'a,'b>
 
   pub(crate) operation_list: Vec<Operation>,
 
-  pub(crate) if_id: usize,
+  pub(crate) ctrl_id: usize,
+  pub(crate)   if_id: usize,
   pub(crate) index_max: usize,
 
   pub(crate) position_request_list: Vec<Position>,
@@ -1072,6 +1024,7 @@ start(f_ref: &'b Function, symbol_table_ref: &'a Vec<Symbol>)-> Vec<Operation>
     symbol_table_ref,
     parameter_list_ref: &f_ref.parameter_list,
     operation_list: Vec::new(),
+    ctrl_id: 0,
     if_id: 0,
     index_max: 0,
     position_request_list: Vec::new(),
@@ -1227,7 +1180,7 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
           else if s ==      "null"{self.operation_list.push(Operation::LoadN);}
           else if s == "undefined"{self.operation_list.push(Operation::LoadU);}
           else
-            if let Some(vi) = bf_ref.find_visible(&s)
+            if let Some(vi) = bf_ref.find(&s)
             {
               self.operation_list.push(Operation::LoadLocRef(vi.index));
             }
@@ -1302,13 +1255,142 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
 pub fn
 process_block(&mut self, blk: &Block, parent_bf_ref_opt: Option<&BlockFrame>, cbf_ref_opt: Option<&ControlBlockFrame>)
 {
-  let  mut bf = BlockFrame::new(blk,parent_bf_ref_opt);
-
-  self.index_max = std::cmp::max(self.index_max,bf.next_index);
+  let  mut bf = BlockFrame::new(parent_bf_ref_opt);
 
     for stmt in &blk.statement_list
     {
       self.process_statement(stmt,&mut bf,cbf_ref_opt);
+    }
+
+
+  self.index_max = std::cmp::max(self.index_max,bf.next_index);
+}
+
+
+pub fn
+process_if(&mut self, ls: &Vec<(Expression,Block)>, blk_opt: &Option<Block>, bf_ref: &mut BlockFrame, cbf_ref_opt: Option<&ControlBlockFrame>)
+{
+  let  base_name = format!("If{}",self.if_id);
+
+  self.if_id += 1;
+
+    for i in 0..ls.len()
+    {
+      let  (e,blk) = &ls[i];
+
+      self.process_expression(e,bf_ref);
+
+      self.push_brnz(format!("{}_{}",&base_name,i));
+    }
+
+
+    if let Some(blk) = blk_opt
+    {
+      self.process_block(blk,Some(bf_ref),cbf_ref_opt);
+    }
+
+
+  self.push_jmp(format!("{}_End",&base_name));
+
+    for i in 0..ls.len()
+    {
+      let  (e,blk) = &ls[i];
+
+      self.push_position(format!("{}_{}",&base_name,i));
+
+      self.process_block(blk,Some(bf_ref),cbf_ref_opt);
+
+      self.push_jmp(format!("{}_End",&base_name));
+    }
+
+
+  self.push_position(format!("{}_End",&base_name));
+}
+
+
+pub fn
+process_for(&mut self, name: &str, e: &Expression, blk: &Block, bf_ref: &mut BlockFrame, cbf_ref_opt: Option<&ControlBlockFrame>)
+{
+  let  mut bf = BlockFrame::new(Some(bf_ref));
+
+  let  cbf = ControlBlockFrame::new(&mut self.ctrl_id);
+
+  let  cur_i = bf.next_index;
+  let  end_i = cur_i+1;
+
+  self.operation_list.push(Operation::LoadLocRef(cur_i));
+
+  self.operation_list.push(Operation::LoadI(0));
+
+  self.operation_list.push(Operation::Assign(AssignOperator::Nop));
+
+  self.operation_list.push(Operation::Dump);
+
+
+  self.operation_list.push(Operation::LoadLocRef(end_i));
+
+  self.process_expression(e,&mut bf);
+
+  self.operation_list.push(Operation::Assign(AssignOperator::Nop));
+
+
+  bf.add(        name);
+  bf.add(FOR_END_NAME);
+
+  self.operation_list.push(Operation::LoadI(0));
+  self.operation_list.push(Operation::Binary(BinaryOperator::Gt));
+
+  self.push_brz(cbf.get_end_label());
+
+  self.push_position(cbf.get_start_label());
+
+  self.process_block(blk,Some(&bf),Some(&cbf));
+
+  self.push_position(cbf.get_restart_label());
+
+  self.operation_list.push(Operation::LoadLocRef(cur_i));
+  self.operation_list.push(Operation::LoadI(1));
+  self.operation_list.push(Operation::Assign(AssignOperator::Add));
+
+  self.operation_list.push(Operation::LoadLocRef(end_i));
+  self.operation_list.push(Operation::Binary(BinaryOperator::Lt));
+
+  self.push_brnz(cbf.get_start_label());
+
+  self.push_position(cbf.get_end_label());
+
+
+  self.index_max = std::cmp::max(self.index_max,bf.next_index);
+}
+
+
+pub fn
+process_print_v(&mut self, s: &str, bf_ref: &mut BlockFrame, cbf_ref_opt: Option<&ControlBlockFrame>)
+{
+    if let Some(vi) = bf_ref.find(s)
+    {
+      self.operation_list.push(Operation::PrintLoc(vi.index));
+    }
+
+  else
+    if let Some(i) = self.find_parameter(s)
+    {
+      self.operation_list.push(Operation::PrintArg(i));
+    }
+
+  else
+    if let Some(i) = self.find_global(s)
+    {
+      self.operation_list.push(Operation::PrintGlo(i));
+    }
+
+  else
+    {
+      println!("process_statement error: {} not found",s);
+
+      bf_ref.print();
+
+      panic!();
     }
 }
 
@@ -1321,20 +1403,17 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
   Statement::Empty=>{}
   Statement::Let(name,e_opt)=>
         {
-            if let Some(i) = bf_ref.find_invisible_index(name)
+            if let Some(e) = e_opt
             {
-                if let Some(e) = e_opt
-                {
-                  self.operation_list.push(Operation::LoadLocRef(i));
+              self.operation_list.push(Operation::LoadLocRef(bf_ref.next_index));
 
-                  self.process_expression(e,bf_ref);
+              self.process_expression(e,bf_ref);
 
-                  self.operation_list.push(Operation::Assign(AssignOperator::Nop));
-                }
-
-
-              bf_ref.show(name);
+              self.operation_list.push(Operation::Assign(AssignOperator::Nop));
             }
+
+
+          bf_ref.add(name);
         }
   Statement::Const(name,e_opt)=>
         {
@@ -1355,89 +1434,43 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         }
   Statement::If(ls,blk_opt)=>
         {
-          let  base_name = format!("If{}",self.if_id);
-
-          self.if_id += 1;
-
-            for i in 0..ls.len()
-            {
-              let  (e,blk) = &ls[i];
-
-              self.process_expression(e,bf_ref);
-
-              self.push_brnz(format!("{}_{}",&base_name,i));
-            }
-
-
-            if let Some(blk) = blk_opt
-            {
-              self.process_block(blk,Some(bf_ref),cbf_ref_opt);
-            }
-
-
-          self.push_jmp(format!("{}_End",&base_name));
-
-            for i in 0..ls.len()
-            {
-              let  (e,blk) = &ls[i];
-
-              self.push_position(format!("{}_{}",&base_name,i));
-
-              self.process_block(blk,Some(bf_ref),cbf_ref_opt);
-
-              self.push_jmp(format!("{}_End",&base_name));
-            }
-
-
-          self.push_position(format!("{}_End",&base_name));
+          self.process_if(ls,blk_opt,bf_ref,cbf_ref_opt);
         }
   Statement::For(name,e,blk)=>
         {
-/*
-          let  cbf = ControlBlockFrame::new("For",cbf_ref_opt);
-
-          self.operation_list.push(Operation::LoadLocRef(0));
-
-          self.push_position(cbf.get_label("_Start"));
-
-          self.process_expression(e,bf_ref);
-
-          self.push_brnz(cbf.get_label("_End"));
-
-          self.process_block(blk,Some(bf_ref),Some(&cbf));
-
-          self.push_jmp(cbf.get_label("_Start"));
-
-          self.push_position(cbf.get_label("_End"));
-*/
+          self.process_for(name,e,blk,bf_ref,cbf_ref_opt);
         }
   Statement::While(e,blk)=>
         {
-          let  cbf = ControlBlockFrame::new("While",cbf_ref_opt);
+          let  cbf = ControlBlockFrame::new(&mut self.ctrl_id);
 
-          self.push_position(cbf.get_label("_Start"));
+          self.push_jmp(cbf.get_restart_label());
+
+          self.push_position(cbf.get_start_label());
+
+          self.process_block(blk,Some(bf_ref),Some(&cbf));
+
+          self.push_position(cbf.get_restart_label());
 
           self.process_expression(e,bf_ref);
 
-          self.push_brz(cbf.get_label("_End"));
+          self.push_brnz(cbf.get_start_label());
 
-          self.process_block(blk,Some(bf_ref),Some(&cbf));
-
-          self.push_jmp(cbf.get_label("_Start"));
-
-          self.push_position(cbf.get_label("_End"));
+          self.push_position(cbf.get_end_label());
         }
   Statement::Loop(blk)=>
         {
-          let  cbf = ControlBlockFrame::new("Loop",cbf_ref_opt);
+          let  cbf = ControlBlockFrame::new(&mut self.ctrl_id);
 
-          self.push_position(cbf.get_label("_Start"));
+          self.push_position(cbf.get_start_label());
 
           self.process_block(blk,Some(bf_ref),Some(&cbf));
 
-          self.push_jmp(cbf.get_label("_Start"));
+          self.push_position(cbf.get_restart_label());
 
-          self.push_position(cbf.get_label("_End"));
+          self.push_jmp(cbf.get_start_label());
+
+          self.push_position(cbf.get_end_label());
         }
   Statement::Block(blk)=>
         {
@@ -1461,7 +1494,7 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         {
             if let Some(cbf_ref) = cbf_ref_opt
             {
-              self.push_jmp(cbf_ref.get_label("_End"));
+              self.push_jmp(cbf_ref.get_end_label());
             }
 
           else
@@ -1473,7 +1506,7 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         {
             if let Some(cbf_ref) = cbf_ref_opt
             {
-              self.push_jmp(cbf_ref.get_label("_Start"));
+              self.push_jmp(cbf_ref.get_start_label());
             }
 
           else
@@ -1487,31 +1520,7 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         }
   Statement::PrintV(s)=>
         {
-            if let Some(vi) = bf_ref.find_visible(s)
-            {
-              self.operation_list.push(Operation::PrintLoc(vi.index));
-            }
-
-          else
-            if let Some(i) = self.find_parameter(s)
-            {
-              self.operation_list.push(Operation::PrintArg(i));
-            }
-
-          else
-            if let Some(i) = self.find_global(s)
-            {
-              self.operation_list.push(Operation::PrintGlo(i));
-            }
-
-          else
-            {
-              println!("process_statement error: {} not found",s);
-
-              bf_ref.print();
-
-              panic!();
-            }
+          self.process_print_v(s,bf_ref,cbf_ref_opt);
         }
     }
 }
