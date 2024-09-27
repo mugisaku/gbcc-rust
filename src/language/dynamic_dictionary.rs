@@ -8,9 +8,9 @@ r##"
 #dynamic
 
 
-element: .Identifier & ":" & expression;
+table_element: .Identifier & ":" & expression;
 
-table: "{" & [element & {"," & element}] & "}";
+table: "[" & [table_element & {"," & table_element}] & "]";
 
 operand_core: .Identifier | .Integer | .Floating | .Character | .String | table | ("(" & expression & ")");
 

@@ -13,6 +13,7 @@ use crate::language::expression::{
   BinaryOperator,
   AssignOperator,
   Expression,
+  TableElement,
 
 };
 
@@ -28,6 +29,7 @@ use crate::language::dynamic_space::{
 
 use crate::language::dynamic_value::{
   Value,
+  Element,
 
 };
 
@@ -786,6 +788,60 @@ read_call(dir: &Directory, fe: Box<Expression>)-> Result<Expression,()>
 
 
 pub fn
+read_table_element(dir: &Directory)-> Result<TableElement,()>
+{
+  let  mut cur = Cursor::new(dir);
+
+    if let Some(id) = cur.get_identifier()
+    {
+      let  s = id.clone();
+
+      cur.advance(2);
+
+        if let Some(e_dir) = cur.get_directory_with_name("expression")
+        {
+            if let Ok(e) = read_expression(e_dir)
+            {
+              return Ok(TableElement::new(s,e));
+            }
+        }
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+read_table(dir: &Directory)-> Result<Vec<TableElement>,()>
+{
+  let  mut cur = Cursor::new(dir);
+
+  let  mut ls: Vec<TableElement> = Vec::new();
+
+  cur.advance(1);
+
+    while let Some(te_dir) = cur.get_directory_with_name("table_element")
+    {
+        if let Ok(te) = read_table_element(te_dir)
+        {
+          cur.advance(2);
+
+          ls.push(te);
+        }
+
+      else
+        {
+          return Err(());
+        }
+    }
+
+
+  Ok(ls)
+}
+
+
+pub fn
 read_operand_core(dir: &Directory)-> Result<Expression,()>
 {
   let  mut cur = Cursor::new(dir);
@@ -793,6 +849,15 @@ read_operand_core(dir: &Directory)-> Result<Expression,()>
     if let Some(id) = cur.get_identifier()
     {
       return Ok(Expression::Identifier(id.clone()));
+    }
+
+  else
+    if let Some(t_dir) = cur.get_directory_with_name("table")
+    {
+        if let Ok(ls) = read_table(t_dir)
+        {
+          return Ok(Expression::Table(ls));
+        }
     }
 
   else

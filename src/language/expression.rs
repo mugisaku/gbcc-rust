@@ -901,6 +901,45 @@ collect_string(ls: &mut Vec<String>, s: &str)-> usize
 
 
 #[derive(Clone)]
+pub struct
+TableElement
+{
+  pub(crate)       name: String,
+  pub(crate) expression: Expression,
+
+}
+
+
+impl
+TableElement
+{
+
+
+pub fn
+new(name: String, expression: Expression)-> Self
+{
+  Self{
+          name,
+    expression,
+  }
+}
+
+
+pub fn
+print(&self)
+{
+  print!("{}: ",&self.name);
+
+  self.expression.print();
+}
+
+
+}
+
+
+
+
+#[derive(Clone)]
 pub enum
 Expression
 {
@@ -909,6 +948,8 @@ Expression
   Integer(u64),
   Floating(f64),
   String(String),
+
+  Table(Vec<TableElement>),
 
   SubExpression(Box<Expression>),
 
@@ -1137,6 +1178,7 @@ compile_main(&self, dst: Destination, scope: &Scope, buf: &mut Vec<Operation>, n
 
           return Err(());
         },
+  _=>{Err(())}
     }
 }
 
@@ -1158,6 +1200,20 @@ print(&self)
   Expression::Integer(u)=>{print!("{}",u);},
   Expression::Floating(f)=>{print!("{}",f);},
   Expression::String(s)=>{print!("\"{}\"",s);},
+  Expression::Table(ls)=>
+        {
+          print!("[");
+
+            for e in ls
+            {
+              e.print();
+
+              print!(", ");
+            }
+
+
+          print!("]");
+        },
   Expression::SubExpression(e)=>
         {
           print!("(");

@@ -12,8 +12,8 @@ use super::dynamic_machine::{
 pub struct
 Element
 {
-  pub(crate) name: String,
-  pub(crate) heap_reference: usize,
+  pub(crate)  name: String,
+  pub(crate) value: Value,
 
 }
 
@@ -24,12 +24,21 @@ Element
 
 
 pub fn
-new(name: &str, r: usize)-> Self
+new(name: &str, value: Value)-> Self
 {
   Self{
-    name: name.to_string(),
-    heap_reference: r,
+     name: name.to_string(),
+    value,
   }
+}
+
+
+pub fn
+print(&self)
+{
+  print!("{}: ",&self.name);
+
+  self.value.print();
 }
 
 
@@ -608,7 +617,7 @@ print(&self)
   Value::Boolean(b)=>{print!("Bool({})",*b);}
   Value::Integer(i)=>{print!("Int({})",*i);}
   Value::Floating(f)=>{print!("Float({})",*f);}
-  Value::String(s)=>{print!("String\"{}\"",s);}
+  Value::String(s)=>{print!("String(\"{}\")",s);}
 
   Value::HeapReference(i)=>{print!("HeapRef({})",*i);}
   Value::StackReference(i)=>{print!("StackRef({})",*i);}
@@ -616,8 +625,20 @@ print(&self)
 
   Value::Mutable(v)=>{  print!("Mut ");  v.print();}
 
-  Value::Table(ls)=>{print!("table");}
+  Value::Table(ls)=>
+        {
+          print!("[");
 
+            for e in ls
+            {
+              e.print();
+
+              print!(",");
+            }
+
+
+          print!("]");
+        }
   Value::BasePointer(v)=>{print!("bp({})",*v);}
   Value::ProgramPointer(ptr)=>{print!("pp({})",*ptr as usize);}
   Value::ProgramCounter(v)=>{print!("pc({})",*v);}

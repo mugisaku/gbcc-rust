@@ -1,6 +1,7 @@
 
 
 use super::expression::{
+  TableElement,
   Expression,
   UnaryOperator,
   BinaryOperator,
@@ -105,9 +106,10 @@ Var
 pub struct
 Space
 {
-  pub(crate) const_list: Vec<Const>,
-  pub(crate)   let_list: Vec<Var>,
-  pub(crate)    fn_list: Vec<(String,Function,Vec<Operation>)>,
+  pub(crate) symbol_list: Vec<Symbol>,
+  pub(crate)  const_list: Vec<Const>,
+  pub(crate)    let_list: Vec<Var>,
+  pub(crate)     fn_list: Vec<(String,Function,Vec<Operation>)>,
 
 }
 
@@ -121,9 +123,10 @@ pub fn
 new()-> Self
 {
   Self{
-    const_list: Vec::new(),
-      let_list: Vec::new(),
-       fn_list: Vec::new(),
+    symbol_list: Vec::new(),
+     const_list: Vec::new(),
+       let_list: Vec::new(),
+        fn_list: Vec::new(),
   }
 }
 
@@ -265,6 +268,29 @@ calculate_binary(o: &BinaryOperator, lv: &Value, rv: &Value, const_list: &Vec<Co
 
 
 pub fn
+to_element_list(src: &Vec<TableElement>, const_list: &Vec<Const>)-> Vec<Element>
+{
+  let  mut dst: Vec<Element> = Vec::new();
+
+    for te in src
+    {
+        if let Ok(v) = Space::calculate(&te.expression,const_list)
+        {
+          dst.push(Element::new(&te.name,v));
+        }
+
+      else
+        {
+          panic!();
+        }
+    }
+
+
+  dst
+}
+
+
+pub fn
 calculate(e: &Expression, const_list: &Vec<Const>)-> Result<Value,()>
 {
     match e
@@ -285,6 +311,10 @@ calculate(e: &Expression, const_list: &Vec<Const>)-> Result<Value,()>
   Expression::Integer(u)=>{return Ok(Value::Integer(*u as i64));},
   Expression::Floating(f)=>{return Ok(Value::Floating(*f));},
   Expression::String(s)=>{return Ok(Value::String(s.clone()));},
+  Expression::Table(ls)=>
+        {
+          return Ok(Value::Table(Self::to_element_list(ls,const_list)));
+        },
   Expression::SubExpression(sube)=>
         {
           return Self::calculate(sube,const_list);
@@ -465,7 +495,7 @@ create_symbol_table(&self)-> Vec<Symbol>
 
 
 pub fn
-compile(&mut self)-> Vec<Symbol>
+compile(&mut self)
 {
   let  mut symtbl = self.create_symbol_table();
 
@@ -476,7 +506,7 @@ compile(&mut self)-> Vec<Symbol>
 
     for (name,f,op_ls) in &mut self.fn_list
     {
-      *op_ls = CompileContext::start(f,&symtbl);
+      *op_ls = CompileContext::start(f,&symtbl,&self.const_list);
 
         for sym in &mut symtbl
         {
@@ -490,7 +520,7 @@ compile(&mut self)-> Vec<Symbol>
     }
 
 
-  symtbl
+  self.symbol_list = symtbl;
 }
 
 
@@ -997,7 +1027,8 @@ Position
 pub struct
 CompileContext<'a,'b>
 {
-  pub(crate)   symbol_table_ref: &'a Vec<Symbol>,
+  pub(crate)   symbol_list_ref: &'a Vec<Symbol>,
+  pub(crate)    const_list_ref: &'a Vec<Const>,
   pub(crate) parameter_list_ref: &'b Vec<String>,
 
   pub(crate) operation_list: Vec<Operation>,
@@ -1018,10 +1049,11 @@ CompileContext<'a,'b>
 
 
 pub fn
-start(f_ref: &'b Function, symbol_table_ref: &'a Vec<Symbol>)-> Vec<Operation>
+start(f_ref: &'b Function, symbol_list_ref: &'a Vec<Symbol>, const_list_ref: &'a Vec<Const>)-> Vec<Operation>
 {
   let  mut ctx = Self{
-    symbol_table_ref,
+    symbol_list_ref,
+     const_list_ref,
     parameter_list_ref: &f_ref.parameter_list,
     operation_list: Vec::new(),
     ctrl_id: 0,
@@ -1153,7 +1185,7 @@ find_parameter(&self, name: &str)-> Option<usize>
 pub fn
 find_global(&self, name: &str)-> Option<usize>
 {
-    for sym in self.symbol_table_ref
+    for sym in self.symbol_list_ref
     {
         if &sym.name == name
         {
@@ -1210,6 +1242,12 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
   Expression::Integer(u) =>{self.operation_list.push(Operation::LoadI(*u as i64));},
   Expression::Floating(f)=>{self.operation_list.push(Operation::LoadF(*f));},
   Expression::String(s)  =>{self.operation_list.push(Operation::LoadS(s.clone()));},
+  Expression::Table(ls)=>
+        {
+          let  e_ls = Space::to_element_list(ls,self.const_list_ref);
+
+          self.operation_list.push(Operation::LoadT(e_ls));
+        },
   Expression::SubExpression(e)=>
         {
           self.process_expression(e,bf_ref);

@@ -152,7 +152,7 @@ load()
 
       print!("\n--\n");
 
-      let  symtbl = sp.compile();
+      sp.compile();
 
       sp.print_operations();
 
@@ -160,7 +160,7 @@ load()
 
       let  mut m = Machine::new();
 
-      m.setup(&symtbl);
+      m.setup(&sp.symbol_list);
       m.run(Some(10000));
 
       println!("finished");
