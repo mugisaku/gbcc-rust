@@ -138,17 +138,16 @@ print(&self)
 
 
 pub struct
-Memory
+HeapDevice
 {
-  pub(crate)  heap: Vec<Value>,
+  pub(crate) core: Vec<Value>,
   pub(crate) freed_list: Vec<usize>,
-  pub(crate) stack: Vec<Value>,
 
 }
 
 
 impl
-Memory
+HeapDevice
 {
 
 
@@ -156,33 +155,9 @@ pub fn
 new()-> Self
 {
   Self{
-     heap: Vec::new(),
+          core: Vec::new(),
     freed_list: Vec::new(),
-    stack: Vec::new(),
   }
-}
-
-
-pub fn
-setup(&mut self, symtbl: &Vec<Symbol>)-> usize
-{
-  let  sz = symtbl.len();
-
-  self.heap.clear();  
-  self.freed_list.clear();
-  self.stack.resize(sz,Value::Null);
-
-    for sym in symtbl
-    {
-      let  v = &mut self.stack[sym.index];
-
-      *v = sym.value.clone();
-    }
-
-
-  println!("{} symbols is allocated",sz);
-
-  sz
 }
 
 
@@ -195,9 +170,9 @@ allocate(&mut self)-> usize
     }
 
 
-  let  i = self.stack.len();
+  let  i = self.core.len();
 
-  self.stack.push(Value::Null);
+  self.core.push(Value::Null);
 
   i
 }
@@ -206,7 +181,7 @@ allocate(&mut self)-> usize
 pub fn
 deallocate(&mut self, i: usize)
 {
-    if i < self.stack.len()
+    if i < self.core.len()
     {
       self.freed_list.push(i);
     }
@@ -214,34 +189,103 @@ deallocate(&mut self, i: usize)
 
 
 pub fn
-extend_stack(&mut self, n: usize)
+get_ref(&self, i: usize)-> &Value
 {
-  let  new_len = self.stack.len()+n;
+  &self.core[i]
+}
 
-  println!("stack size: {} -> {}",self.stack.len(),new_len);
 
-  self.stack.resize(new_len,Value::Null);
+}
+
+
+
+
+pub struct
+StackDevice
+{
+  pub(crate) core: Vec<Value>,
+
+}
+
+
+impl
+StackDevice
+{
+
+
+pub fn
+new()-> Self
+{
+  Self{
+    core: Vec::new(),
+  }
 }
 
 
 pub fn
-get_stack_size(&self)-> usize
+install(&mut self, symtbl: &Vec<Symbol>)-> usize
 {
-  self.stack.len()
+  let  sz = symtbl.len();
+
+  self.core.resize(sz,Value::Null);
+
+    for sym in symtbl
+    {
+      let  v = &mut self.core[sym.index];
+
+      *v = sym.value.clone();
+    }
+
+
+  println!("{} symbols is allocated",sz);
+
+  sz
+}
+
+
+pub fn
+extend(&mut self, n: usize)
+{
+  let  new_len = self.core.len()+n;
+
+  println!("stack size: {} -> {}",self.core.len(),new_len);
+
+  self.core.resize(new_len,Value::Null);
+}
+
+
+pub fn
+get_size(&self)-> usize
+{
+  self.core.len()
+}
+
+
+pub fn
+get_ref(&self, i: usize)-> &Value
+{
+  &self.core[i]
+}
+
+
+pub fn
+get_ptr(&self, i: usize)-> *const Value
+{
+  unsafe{self.core.as_ptr().add(i)}
 }
 
 
 pub fn
 push(&mut self, v: Value)
 {
-  self.stack.push(v);
+  self.core.push(v);
 }
 
 
 pub fn
 pop(&mut self)-> Value
 {
-    if let Some(v) = self.stack.pop()
+    if let Some(v) = self.core.pop()
     {
       return v;
     }
@@ -254,23 +298,117 @@ pop(&mut self)-> Value
 pub fn
 top(&self)-> &Value
 {
-  self.stack.last().unwrap()
+  self.core.last().unwrap()
 }
 
 
 pub fn
 top_mut(&mut self)-> &mut Value
 {
-  self.stack.last_mut().unwrap()
+  self.core.last_mut().unwrap()
 }
+
+
+}
+
+
+
+
+const SYSTEM_RESERVED_STACK_SIZE: usize = 4;
+
+
+pub enum
+StepResult
+{
+  Ok,
+  Err,
+  Hlt,
+  Fin(Value),
+
+}
+
+
+pub struct
+Machine
+{
+  pub(crate)  heap:  HeapDevice,
+  pub(crate) stack: StackDevice,
+
+  pub(crate) operation_list_ptr: *const Vec<Operation>,
+
+  pub(crate) pc: usize,
+  pub(crate) bp: usize,
+
+  pub(crate) call_counter: usize,
+
+  pub(crate) debug_flag: bool,
+
+}
+
+
+impl
+Machine
+{
+
+
+pub fn
+new()-> Self
+{
+  Self{
+     heap:  HeapDevice::new(),
+    stack: StackDevice::new(),
+    operation_list_ptr: std::ptr::null(),
+    pc: 0,
+    bp: 0,
+    call_counter: 0,
+    debug_flag: true,
+  }
+}
+
+
+pub fn
+ready_main(&mut self, symtbl: &Vec<Symbol>)
+{
+    for sym in symtbl
+    {
+        if &sym.name == "main"
+        {
+            if let Value::ProgramPointer(ptr) = &sym.value
+            {
+              self.operation_list_ptr = *ptr;
+
+              self.stack.extend(SYSTEM_RESERVED_STACK_SIZE);
+
+              return;
+            }
+        }
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+setup(&mut self, symtbl: &Vec<Symbol>)
+{
+  self.pc           = 0;
+  self.call_counter = 0;
+
+  self.bp = self.stack.install(symtbl);
+
+  self.ready_main(symtbl);
+}
+
+
 
 
 pub fn
 get_program_pointer(&self, n: usize)-> Option<*const Vec<Operation>>
 {
-  let  l = self.stack.len();
+  let  l = self.stack.get_size();
 
-  let  v = &self.stack[l-1-n];
+  let  v = &self.stack.get_ref(l-1-n);
 
     if let Value::ProgramPointer(pp) = self.dereference_value(v)
     {
@@ -287,13 +425,13 @@ dereference_value<'a>(&'a self, v: &'a Value)-> &'a Value
 {
     if let Value::HeapReference(i) = v
     {
-      self.dereference_value(&self.heap[*i])
+      self.dereference_value(self.heap.get_ref(*i))
     }
 
   else
     if let Value::StackReference(i) = v
     {
-      self.dereference_value(&self.stack[*i])
+      self.dereference_value(self.stack.get_ref(*i))
     }
 
   else
@@ -306,25 +444,19 @@ dereference_value<'a>(&'a self, v: &'a Value)-> &'a Value
 pub fn
 dereference_top(&self)-> &Value
 {
-    if let Some(v) = self.stack.last()
-    {
-      return self.dereference_value(v);
-    }
-
-
-  panic!();
+  self.stack.top()
 }
 
 
 pub fn
 dereference_two_of_top(&self)-> (&Value,&Value)
 {
-  let  i = self.stack.len();
+  let  i = self.stack.get_size();
 
     if i >= 2
     {
-      return (self.dereference_value(unsafe{&*self.stack.as_ptr().add(i-2)}),
-              self.dereference_value(unsafe{&*self.stack.as_ptr().add(i-1)}));
+      return (self.dereference_value(unsafe{&*self.stack.get_ptr(i-2)}),
+              self.dereference_value(unsafe{&*self.stack.get_ptr(i-1)}));
     }
 
 
@@ -356,10 +488,10 @@ dereference_value_mut_ptr(heap_ptr: *mut Value, stack_ptr: *mut Value, ptr: *mut
 pub fn
 dereference_top_mut(&mut self)-> &mut Value
 {
-  let   heap_ptr =  self.heap.as_mut_ptr();
-  let  stack_ptr = self.stack.as_mut_ptr();
+  let   heap_ptr =  self.heap.core.as_mut_ptr();
+  let  stack_ptr = self.stack.core.as_mut_ptr();
 
-  let  ptr = Self::dereference_value_mut_ptr(heap_ptr,stack_ptr,unsafe{stack_ptr.add(self.stack.len()-1)});
+  let  ptr = Self::dereference_value_mut_ptr(heap_ptr,stack_ptr,unsafe{stack_ptr.add(self.stack.get_size()-1)});
 
   unsafe{&mut *ptr}
 }
@@ -370,13 +502,13 @@ print_value(&self, v: &Value)
 {
     if let Value::HeapReference(i) = v
     {
-      self.print_value(&self.heap[*i])
+      self.print_value(self.heap.get_ref(*i))
     }
 
   else
     if let Value::StackReference(i) = v
     {
-      self.print_value(&self.stack[*i])
+      self.print_value(self.stack.get_ref(*i))
     }
 
   else
@@ -386,101 +518,11 @@ print_value(&self, v: &Value)
 }
 
 
-}
-
-
-
-
-const SYSTEM_RESERVED_STACK_SIZE: usize = 4;
-
-
-pub enum
-StepResult
-{
-  Ok,
-  Err,
-  Hlt,
-  Fin(Value),
-
-}
-
-
-pub struct
-Machine
-{
-  pub(crate) memory: Memory,
-
-  pub(crate) operation_list_ptr: *const Vec<Operation>,
-
-  pub(crate) pc: usize,
-  pub(crate) bp: usize,
-
-  pub(crate) call_counter: usize,
-
-  pub(crate) debug_flag: bool,
-
-}
-
-
-impl
-Machine
-{
-
-
-pub fn
-new()-> Self
-{
-  Self{
-    memory: Memory::new(),
-    operation_list_ptr: std::ptr::null(),
-    pc: 0,
-    bp: 0,
-    call_counter: 0,
-    debug_flag: true,
-  }
-}
-
-
-pub fn
-ready_main(&mut self, symtbl: &Vec<Symbol>)
-{
-    for sym in symtbl
-    {
-        if &sym.name == "main"
-        {
-            if let Value::ProgramPointer(ptr) = &sym.value
-            {
-              self.operation_list_ptr = *ptr;
-
-              self.memory.extend_stack(SYSTEM_RESERVED_STACK_SIZE);
-
-              return;
-            }
-        }
-    }
-
-
-  panic!();
-}
-
-
-pub fn
-setup(&mut self, symtbl: &Vec<Symbol>)
-{
-  self.pc           = 0;
-  self.call_counter = 0;
-
-  self.bp = self.memory.setup(symtbl);
-
-  self.ready_main(symtbl);
-}
-
-
 pub fn
 cal(&mut self, ac: usize)
 {
-  let  old_bp = self.bp                               ;
-                self.bp = self.memory.get_stack_size();
+  let  old_bp = self.bp                        ;
+                self.bp = self.stack.get_size();
 
     if self.debug_flag
     {
@@ -488,15 +530,15 @@ cal(&mut self, ac: usize)
     }
 
 
-  let  pp = self.memory.get_program_pointer(ac).unwrap();
+  let  pp = self.get_program_pointer(ac).unwrap();
 
-  self.memory.push(Value::ProgramPointer(self.operation_list_ptr));
+  self.stack.push(Value::ProgramPointer(self.operation_list_ptr));
 
   self.operation_list_ptr = pp;
 
-  self.memory.push(Value::ArgumentCounter(ac));
-  self.memory.push(Value::ProgramCounter(self.pc));
-  self.memory.push(Value::BasePointer(old_bp));
+  self.stack.push(Value::ArgumentCounter(ac));
+  self.stack.push(Value::ProgramCounter(self.pc));
+  self.stack.push(Value::BasePointer(old_bp));
 
   self.pc = 0;
 
@@ -523,9 +565,9 @@ ret(&mut self, v: Value)-> StepResult
   let      bp = self.bp;
   let  mut sp =      bp;
 
-    if let Value::ProgramPointer(ptr) = self.memory.stack[bp]
+    if let Value::ProgramPointer(ptr) = self.stack.get_ref(bp)
     {
-      self.operation_list_ptr = ptr;
+      self.operation_list_ptr = *ptr;
     }
 
   else
@@ -534,7 +576,7 @@ ret(&mut self, v: Value)-> StepResult
     }
 
 
-    if let Value::ArgumentCounter(n) = self.memory.stack[bp+1]
+    if let Value::ArgumentCounter(n) = self.stack.get_ref(bp+1)
     {
       sp -= n;
     }
@@ -545,9 +587,9 @@ ret(&mut self, v: Value)-> StepResult
     }
 
 
-    if let Value::ProgramCounter(c) = self.memory.stack[bp+2]
+    if let Value::ProgramCounter(c) = self.stack.get_ref(bp+2)
     {
-      self.pc = c;
+      self.pc = *c;
     }
 
   else
@@ -556,15 +598,15 @@ ret(&mut self, v: Value)-> StepResult
     }
 
 
-    if let Value::BasePointer(p) = self.memory.stack[bp+3]
+    if let Value::BasePointer(p) = self.stack.get_ref(bp+3)
     {
         if self.debug_flag
         {
-          println!("bp: {} -> {}",self.bp,p);
+          println!("bp: {} -> {}",self.bp,*p);
         }
 
 
-      self.bp = p;
+      self.bp = *p;
     }
 
   else
@@ -573,9 +615,9 @@ ret(&mut self, v: Value)-> StepResult
     }
 
 
-  self.memory.stack.truncate(sp);
+  self.stack.core.truncate(sp);
 
-  *self.memory.top_mut() = v;
+  *self.stack.top_mut() = v;
 
   self.call_counter -= 1;
 
@@ -599,7 +641,7 @@ print_pc_change(&self, new_pc: usize)
 pub fn
 brz(&mut self, i: usize)
 {
-  let  v = self.memory.pop();
+  let  v = self.stack.pop();
 
     if v.to_int() == 0
     {
@@ -617,7 +659,7 @@ brz(&mut self, i: usize)
 pub fn
 brnz(&mut self, i: usize)
 {
-  let  v = self.memory.pop();
+  let  v = self.stack.pop();
 
     if v.to_int() != 0
     {
@@ -635,7 +677,7 @@ brnz(&mut self, i: usize)
 pub fn
 operate_unary(&mut self, uo: &UnaryOperator)
 {
-  let  v = self.memory.pop();
+  let  v = self.stack.pop();
 
   let  new_v = match uo
     {
@@ -646,14 +688,14 @@ operate_unary(&mut self, uo: &UnaryOperator)
     };
 
 
-  self.memory.push(new_v);
+  self.stack.push(new_v);
 }
 
 
 fn
 operate_binary_internal(&mut self, bo: &BinaryOperator)-> Value
 {
-  let  (lv,rv) = self.memory.dereference_two_of_top();
+  let  (lv,rv) = self.dereference_two_of_top();
 
     match bo
     {
@@ -685,9 +727,9 @@ operate_binary(&mut self, bo: &BinaryOperator)
 {
   let  v = self.operate_binary_internal(bo);
 
-  let  _ = self.memory.pop();
+  let  _ = self.stack.pop();
 
-  *self.memory.top_mut() = v;
+  *self.stack.top_mut() = v;
 }
 
 
@@ -697,18 +739,18 @@ operate_assign(&mut self, ao: &AssignOperator)
   let  v =  if let Some(bo) = ao.get_relational_operator(){
       let  v = self.operate_binary_internal(&bo);
 
-      let  _ = self.memory.pop();
+      let  _ = self.stack.pop();
 
       v
     }
 
   else
     {
-      self.memory.pop()
+      self.stack.pop()
     };
 
 
-  *self.memory.dereference_top_mut() = v;
+  *self.dereference_top_mut() = v;
 }
 
 
@@ -743,7 +785,7 @@ step(&mut self)-> StepResult
 
           print!("[machine print] ");
 
-          self.memory.print_value(&v);
+          self.print_value(&v);
 
           println!("");
         },
@@ -753,7 +795,7 @@ step(&mut self)-> StepResult
 
           print!("[machine print] ");
 
-          self.memory.print_value(&v);
+          self.print_value(&v);
 
           println!("");
         },
@@ -763,24 +805,24 @@ step(&mut self)-> StepResult
 
           print!("[machine print] ");
 
-          self.memory.print_value(&v);
+          self.print_value(&v);
 
           println!("");
         },
-  Operation::AllocateLoc(n)=>{self.memory.extend_stack(*n);},
-  Operation::LoadN=>{self.memory.push(Value::Null);},
-  Operation::LoadU=>{self.memory.push(Value::Undefined);},
-  Operation::LoadB(b)=>{self.memory.push(Value::Boolean(*b));},
-  Operation::LoadI(i)=>{self.memory.push(Value::Integer(*i));},
-  Operation::LoadF(f)=>{self.memory.push(Value::Floating(*f));},
-  Operation::LoadS(s)=>{self.memory.push(Value::String(s.clone()));},
-  Operation::LoadT(ls)=>{self.memory.push(Value::Table(ls.clone()));},
-  Operation::LoadGloRef(i)=>{self.memory.push(Value::StackReference(                                   *i));},
-  Operation::LoadLocRef(i)=>{self.memory.push(Value::StackReference(self.bp+SYSTEM_RESERVED_STACK_SIZE+*i));},
-  Operation::LoadArgRef(i)=>{self.memory.push(Value::StackReference(self.bp                         -1-*i));},
-  Operation::Dump=>{let  _ = self.memory.pop();},
+  Operation::AllocateLoc(n)=>{self.stack.extend(*n);},
+  Operation::LoadN=>{self.stack.push(Value::Null);},
+  Operation::LoadU=>{self.stack.push(Value::Undefined);},
+  Operation::LoadB(b)=>{self.stack.push(Value::Boolean(*b));},
+  Operation::LoadI(i)=>{self.stack.push(Value::Integer(*i));},
+  Operation::LoadF(f)=>{self.stack.push(Value::Floating(*f));},
+  Operation::LoadS(s)=>{self.stack.push(Value::String(s.clone()));},
+  Operation::LoadT(ls)=>{self.stack.push(Value::Table(ls.clone()));},
+  Operation::LoadGloRef(i)=>{self.stack.push(Value::StackReference(                                   *i));},
+  Operation::LoadLocRef(i)=>{self.stack.push(Value::StackReference(self.bp+SYSTEM_RESERVED_STACK_SIZE+*i));},
+  Operation::LoadArgRef(i)=>{self.stack.push(Value::StackReference(self.bp                         -1-*i));},
+  Operation::Dump=>{let  _ = self.stack.pop();},
   Operation::Cal(n)=>{self.cal(*n);},
-  Operation::Ret=>{  let  v = self.memory.pop();  return self.ret(v);},
+  Operation::Ret=>{  let  v = self.stack.pop();  return self.ret(v);},
   Operation::RetN=>{return self.ret(Value::Null);},
   Operation::Jmp(i)=>
         {
