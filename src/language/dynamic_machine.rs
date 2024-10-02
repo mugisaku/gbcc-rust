@@ -753,6 +753,23 @@ print_pc_change(&self, new_pc: usize)
 pub fn
 subscript(&mut self)
 {
+  let  (l,r) = self.stack.dereference_two_of_top(&mut self.heap);
+
+    if let Value::Table(ls) = l
+    {
+      let  i = r.to_int() as usize;
+
+      let  e = ls[i].clone();
+
+      self.stack.pop();
+
+      *self.stack.top_mut() = e.value;
+    }
+
+  else
+    {
+      panic!();
+    }
 }
 
 
