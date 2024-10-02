@@ -1272,10 +1272,16 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
         },
   Expression::Subscript(target,index)=>
         {
+          self.process_expression(target,bf_ref);
+          self.process_expression( index,bf_ref);
+
+          self.operation_list.push(Operation::Subscript);
         },
   Expression::Access(target,name)=>
         {
           self.process_expression(target,bf_ref);
+
+          self.operation_list.push(Operation::Access(name.clone()));
         },
   Expression::Binary(o,l,r)=>
         {

@@ -2,6 +2,9 @@
 
 use super::dynamic_machine::{
   Operation,
+  StackDevice,
+  HeapDevice,
+  dereference_value,
 
 };
 
@@ -643,6 +646,34 @@ print(&self)
   Value::ProgramPointer(ptr)=>{print!("pp({})",*ptr as usize);}
   Value::ProgramCounter(v)=>{print!("pc({})",*v);}
   Value::ArgumentCounter(v)=>{print!("ac({})",*v);}
+    }
+}
+
+
+pub fn
+print_with_memory(&self, stk: &StackDevice, hea: &HeapDevice)
+{
+    match self
+    {
+  Value::HeapReference(i) =>{  self.print();  print!("->");  dereference_value(self,stk,hea).print_with_memory(stk,hea);}
+  Value::StackReference(i)=>{  self.print();  print!("->");  dereference_value(self,stk,hea).print_with_memory(stk,hea);}
+  Value::Table(ls)=>
+        {
+          print!("[");
+
+            for e in ls
+            {
+              print!("{}: ",&e.name);
+
+              e.value.print_with_memory(stk,hea);
+
+              print!(",");
+            }
+
+
+          print!("]");
+        }
+  _=>{self.print();}
     }
 }
 

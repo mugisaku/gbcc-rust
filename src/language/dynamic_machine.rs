@@ -52,6 +52,8 @@ Operation
   LoadArgRef(usize),
   Dump,
 
+  Subscript, Access(String),
+
   Cal(usize), Ret, RetN, Jmp(usize), Brz(usize), Brnz(usize),
 
   Unary(  UnaryOperator),
@@ -105,7 +107,10 @@ print(&self)
   Operation::LoadGloRef(i)=>{print!("ld g({})",*i);},
   Operation::LoadLocRef(i)=>{print!("ld l({})",*i);},
   Operation::LoadArgRef(i)=>{print!("ld a({})",*i);},
-  Operation::Dump=>{print!("dmp");},
+  Operation::Dump=>{print!("dump");},
+
+  Operation::Subscript=>{print!("subsc");},
+  Operation::Access(name)=>{print!("accs {}",name);},
 
   Operation::Cal(n)=>{print!("cal {}",n);},
   Operation::Ret=>{print!("ret");},
@@ -137,6 +142,50 @@ print(&self)
 
 
 
+pub fn
+dereference_value<'a>(v: &'a Value, stk: &'a StackDevice, hea: &'a HeapDevice)-> &'a Value
+{
+    if let Value::HeapReference(i) = v
+    {
+      dereference_value(hea.get_ref(*i),stk,hea)
+    }
+
+  else
+    if let Value::StackReference(i) = v
+    {
+      dereference_value(stk.get_ref(*i),stk,hea)
+    }
+
+  else
+    {
+      v
+    }
+}
+
+
+pub fn
+dereference_value_mut_ptr<'a>(v: *mut Value, stk: &'a mut StackDevice, hea: &'a mut HeapDevice)-> *mut Value
+{
+    if let Value::HeapReference(i) = unsafe{&*v}
+    {
+      dereference_value_mut_ptr(hea.get_mut_ptr(*i),stk,hea)
+    }
+
+  else
+    if let Value::StackReference(i) = unsafe{&*v}
+    {
+      dereference_value_mut_ptr(stk.get_mut_ptr(*i),stk,hea)
+    }
+
+  else
+    {
+      v
+    }
+}
+
+
+
+
 pub struct
 HeapDevice
 {
@@ -162,6 +211,14 @@ new()-> Self
 
 
 pub fn
+clear(&mut self)
+{
+  self.core.clear();
+  self.freed_list.clear();
+}
+
+
+pub fn
 allocate(&mut self)-> usize
 {
     if let Some(i) = self.freed_list.pop()
@@ -179,11 +236,66 @@ allocate(&mut self)-> usize
 
 
 pub fn
+insert_value(&mut self, mut target: Value)-> Option<Value>
+{
+    if let Value::HeapReference(_) = target
+    {
+      return None;
+    }
+
+
+    if let Value::Table(ls) = &mut target
+    {
+        for e in ls
+        {
+          let  mut tmp = Value::Null;
+
+          std::mem::swap(&mut tmp,&mut e.value);
+
+          e.value = self.insert_value(tmp).unwrap();
+        }
+    }
+
+
+  let  i = self.allocate();
+
+  self.core[i] = target;
+
+  Some(Value::HeapReference(i))
+}
+
+
+pub fn
+cleanup_by_value(&mut self, v: Value)
+{
+    if let Value::HeapReference(i) = v
+    {
+      self.deallocate(i);
+    }
+
+  else
+    if let Value::Table(ls) = v
+    {
+        for e in ls
+        {
+          self.cleanup_by_value(e.value);
+        }
+    }
+}
+
+
+pub fn
 deallocate(&mut self, i: usize)
 {
     if i < self.core.len()
     {
+      let  mut tmp = Value::Null;
+
+      std::mem::swap(&mut tmp,&mut self.core[i]);
+
       self.freed_list.push(i);
+
+      self.cleanup_by_value(tmp);
     }
 }
 
@@ -192,6 +304,20 @@ pub fn
 get_ref(&self, i: usize)-> &Value
 {
   &self.core[i]
+}
+
+
+pub fn
+get_mut_ref(&mut self, i: usize)-> &mut Value
+{
+  &mut self.core[i]
+}
+
+
+pub fn
+get_mut_ptr(&mut self, i: usize)-> *mut Value
+{
+  unsafe{self.core.as_mut_ptr().add(i)}
 }
 
 
@@ -223,7 +349,7 @@ new()-> Self
 
 
 pub fn
-install(&mut self, symtbl: &Vec<Symbol>)-> usize
+install(&mut self, hea: &mut HeapDevice, symtbl: &Vec<Symbol>)-> usize
 {
   let  sz = symtbl.len();
 
@@ -231,9 +357,19 @@ install(&mut self, symtbl: &Vec<Symbol>)-> usize
 
     for sym in symtbl
     {
-      let  v = &mut self.core[sym.index];
+      let  dst = &mut self.core[sym.index];
 
-      *v = sym.value.clone();
+      let  src = sym.value.clone();
+
+        if let Value::Table(_) = src
+        {
+          *dst = hea.insert_value(src).unwrap();
+        }
+
+      else
+        {
+          *dst = src;
+        }
     }
 
 
@@ -269,9 +405,16 @@ get_ref(&self, i: usize)-> &Value
 
 
 pub fn
-get_ptr(&self, i: usize)-> *const Value
+get_mut_ref(&mut self, i: usize)-> &mut Value
 {
-  unsafe{self.core.as_ptr().add(i)}
+  &mut self.core[i]
+}
+
+
+pub fn
+get_mut_ptr(&mut self, i: usize)-> *mut Value
+{
+  unsafe{self.core.as_mut_ptr().add(i)}
 }
 
 
@@ -279,6 +422,13 @@ pub fn
 push(&mut self, v: Value)
 {
   self.core.push(v);
+}
+
+
+pub fn
+push_table(&mut self, ls: Vec<Element>, hea: &mut HeapDevice)
+{
+  self.core.push(hea.insert_value(Value::Table(ls)).unwrap());
 }
 
 
@@ -306,6 +456,64 @@ pub fn
 top_mut(&mut self)-> &mut Value
 {
   self.core.last_mut().unwrap()
+}
+
+
+
+
+pub fn
+dereference_top<'a>(&'a self, hea: &'a HeapDevice)-> &'a Value
+{
+  dereference_value(self.top(),self,hea)
+}
+
+
+pub fn
+dereference_two_of_top<'a>(&'a self, hea: &'a HeapDevice)-> (&'a Value,&'a Value)
+{
+  let  i = self.core.len();
+
+    if i >= 2
+    {
+      let  l_ref = unsafe{self.core.get_unchecked(i-2)};
+      let  r_ref = unsafe{self.core.get_unchecked(i-1)};
+
+      return (dereference_value(l_ref,self,hea),
+              dereference_value(r_ref,self,hea));
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+dereference_top_mut<'a>(&'a mut self, hea: &'a mut HeapDevice)-> &'a mut Value
+{
+  let  ptr = dereference_value_mut_ptr(self.top_mut() as *mut Value,self,hea);
+
+  unsafe{&mut *ptr}
+}
+
+
+pub fn
+dereference_two_of_top_mut<'a>(&'a mut self, hea: &'a mut HeapDevice)-> (&'a mut Value,&'a mut Value)
+{
+  let  i = self.core.len();
+
+    if i >= 2
+    {
+      let  l_ptr = unsafe{self.core.as_mut_ptr().add(i-2)};
+      let  r_ptr = unsafe{self.core.as_mut_ptr().add(i-1)};
+
+      let  l_ref = unsafe{&mut *dereference_value_mut_ptr(l_ptr,self,hea)};
+      let  r_ref = unsafe{&mut *dereference_value_mut_ptr(r_ptr,self,hea)};
+
+      return (l_ref,r_ref);
+    }
+
+
+  panic!();
 }
 
 
@@ -395,7 +603,9 @@ setup(&mut self, symtbl: &Vec<Symbol>)
   self.pc           = 0;
   self.call_counter = 0;
 
-  self.bp = self.stack.install(symtbl);
+  self.heap.clear();
+
+  self.bp = self.stack.install(&mut self.heap,symtbl);
 
   self.ready_main(symtbl);
 }
@@ -404,117 +614,19 @@ setup(&mut self, symtbl: &Vec<Symbol>)
 
 
 pub fn
-get_program_pointer(&self, n: usize)-> Option<*const Vec<Operation>>
+get_program_pointer_for_cal(&self, n: usize)-> Option<*const Vec<Operation>>
 {
   let  l = self.stack.get_size();
 
   let  v = &self.stack.get_ref(l-1-n);
 
-    if let Value::ProgramPointer(pp) = self.dereference_value(v)
+    if let Value::ProgramPointer(pp) = dereference_value(v,&self.stack,&self.heap)
     {
       return Some(*pp);
     }
 
 
   None
-}
-
-
-fn
-dereference_value<'a>(&'a self, v: &'a Value)-> &'a Value
-{
-    if let Value::HeapReference(i) = v
-    {
-      self.dereference_value(self.heap.get_ref(*i))
-    }
-
-  else
-    if let Value::StackReference(i) = v
-    {
-      self.dereference_value(self.stack.get_ref(*i))
-    }
-
-  else
-    {
-      v
-    }
-}
-
-
-pub fn
-dereference_top(&self)-> &Value
-{
-  self.stack.top()
-}
-
-
-pub fn
-dereference_two_of_top(&self)-> (&Value,&Value)
-{
-  let  i = self.stack.get_size();
-
-    if i >= 2
-    {
-      return (self.dereference_value(unsafe{&*self.stack.get_ptr(i-2)}),
-              self.dereference_value(unsafe{&*self.stack.get_ptr(i-1)}));
-    }
-
-
-  panic!();
-}
-
-
-fn
-dereference_value_mut_ptr(heap_ptr: *mut Value, stack_ptr: *mut Value, ptr: *mut Value)-> *mut Value
-{
-    if let Value::HeapReference(i) = unsafe{&*ptr}
-    {
-      Self::dereference_value_mut_ptr(heap_ptr,stack_ptr,unsafe{heap_ptr.add(*i)})
-    }
-
-  else
-    if let Value::StackReference(i) = unsafe{&*ptr}
-    {
-      Self::dereference_value_mut_ptr(heap_ptr,stack_ptr,unsafe{stack_ptr.add(*i)})
-    }
-
-  else
-    {
-      ptr
-    }
-}
-
-
-pub fn
-dereference_top_mut(&mut self)-> &mut Value
-{
-  let   heap_ptr =  self.heap.core.as_mut_ptr();
-  let  stack_ptr = self.stack.core.as_mut_ptr();
-
-  let  ptr = Self::dereference_value_mut_ptr(heap_ptr,stack_ptr,unsafe{stack_ptr.add(self.stack.get_size()-1)});
-
-  unsafe{&mut *ptr}
-}
-
-
-pub fn
-print_value(&self, v: &Value)
-{
-    if let Value::HeapReference(i) = v
-    {
-      self.print_value(self.heap.get_ref(*i))
-    }
-
-  else
-    if let Value::StackReference(i) = v
-    {
-      self.print_value(self.stack.get_ref(*i))
-    }
-
-  else
-    {
-      v.print();
-    }
 }
 
 
@@ -530,7 +642,7 @@ cal(&mut self, ac: usize)
     }
 
 
-  let  pp = self.get_program_pointer(ac).unwrap();
+  let  pp = self.get_program_pointer_for_cal(ac).unwrap();
 
   self.stack.push(Value::ProgramPointer(self.operation_list_ptr));
 
@@ -639,6 +751,47 @@ print_pc_change(&self, new_pc: usize)
 
 
 pub fn
+subscript(&mut self)
+{
+}
+
+
+pub fn
+copy_value_in_table(ls: &Vec<Element>, name: &str)-> Value
+{
+    for e in ls
+    {
+        if &e.name == name
+        {
+          return e.value.clone();
+        }
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+access(&mut self, name: &str)
+{
+  let  v = self.stack.dereference_top(&mut self.heap);
+
+    if let Value::Table(ls) = v
+    {
+      let  v = Self::copy_value_in_table(ls,name);
+
+      *self.stack.top_mut() = v;
+    }
+
+  else
+    {
+      panic!();
+    }
+}
+
+
+pub fn
 brz(&mut self, i: usize)
 {
   let  v = self.stack.pop();
@@ -695,7 +848,7 @@ operate_unary(&mut self, uo: &UnaryOperator)
 fn
 operate_binary_internal(&mut self, bo: &BinaryOperator)-> Value
 {
-  let  (lv,rv) = self.dereference_two_of_top();
+  let  (lv,rv) = self.stack.dereference_two_of_top(&mut self.heap);
 
     match bo
     {
@@ -750,7 +903,7 @@ operate_assign(&mut self, ao: &AssignOperator)
     };
 
 
-  *self.dereference_top_mut() = v;
+  *self.stack.dereference_top_mut(&mut self.heap) = v;
 }
 
 
@@ -785,7 +938,7 @@ step(&mut self)-> StepResult
 
           print!("[machine print] ");
 
-          self.print_value(&v);
+          v.print_with_memory(&self.stack,&self.heap);
 
           println!("");
         },
@@ -795,7 +948,7 @@ step(&mut self)-> StepResult
 
           print!("[machine print] ");
 
-          self.print_value(&v);
+          v.print_with_memory(&self.stack,&self.heap);
 
           println!("");
         },
@@ -805,7 +958,7 @@ step(&mut self)-> StepResult
 
           print!("[machine print] ");
 
-          self.print_value(&v);
+          v.print_with_memory(&self.stack,&self.heap);
 
           println!("");
         },
@@ -816,11 +969,13 @@ step(&mut self)-> StepResult
   Operation::LoadI(i)=>{self.stack.push(Value::Integer(*i));},
   Operation::LoadF(f)=>{self.stack.push(Value::Floating(*f));},
   Operation::LoadS(s)=>{self.stack.push(Value::String(s.clone()));},
-  Operation::LoadT(ls)=>{self.stack.push(Value::Table(ls.clone()));},
+  Operation::LoadT(ls)=>{self.stack.push_table(ls.clone(),&mut self.heap);},
   Operation::LoadGloRef(i)=>{self.stack.push(Value::StackReference(                                   *i));},
   Operation::LoadLocRef(i)=>{self.stack.push(Value::StackReference(self.bp+SYSTEM_RESERVED_STACK_SIZE+*i));},
   Operation::LoadArgRef(i)=>{self.stack.push(Value::StackReference(self.bp                         -1-*i));},
   Operation::Dump=>{let  _ = self.stack.pop();},
+  Operation::Subscript=>{self.subscript();},
+  Operation::Access(name)=>{self.access(name);},
   Operation::Cal(n)=>{self.cal(*n);},
   Operation::Ret=>{  let  v = self.stack.pop();  return self.ret(v);},
   Operation::RetN=>{return self.ret(Value::Null);},
