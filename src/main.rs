@@ -2,7 +2,6 @@ mod token;
 mod source_file;
 mod syntax;
 mod language;
-//mod ir;
 mod debug;
 
 use std::env;

@@ -506,6 +506,8 @@ compile(&mut self)
 
     for (name,f,op_ls) in &mut self.fn_list
     {
+      f.block.scan();
+
       *op_ls = CompileContext::start(f,&symtbl,&self.const_list);
 
         for sym in &mut symtbl
@@ -618,16 +620,61 @@ print_operations(&self)
 
 
 
+pub struct
+For
+{
+  pub(crate) current_vi: VariableInfo,
+  pub(crate)     end_vi: VariableInfo,
+
+  pub(crate) block: Block,
+
+}
+
+
+impl
+For
+{
+
+
+pub fn
+new(name: String, e: Expression, block: Block)-> Self
+{
+  Self{
+    current_vi: VariableInfo::new(name,None),
+        end_vi: VariableInfo::new("**FOR_END_VAR**".to_string(),Some(e)),
+    block,
+  }
+}
+
+
+pub fn
+get_end_expression(&self)-> &Expression
+{
+    if let Some(e) = &self.end_vi.expression_opt
+    {
+      return e;
+    }
+
+
+  panic!();
+}
+
+
+}
+
+
+
+
 pub enum
 Statement
 {
   Empty,
-  Let(String,Option<Expression>),
-  Const(String,Option<Expression>),
+  Let(VariableInfo),
+  Const(VariableInfo),
   Expression(Expression,Option<(AssignOperator,Expression)>),
   If(Vec<(Expression,Block)>,Option<Block>),
   While(Expression,Block),
-  For(String,Expression,Block),
+  For(For),
   Loop(Block),
   Block(Block),
   Return(Option<Expression>),
@@ -650,22 +697,22 @@ print(&self)
     match self
     {
   Statement::Empty=>{print!(";");}
-  Statement::Let(name,e_opt)=>
+  Statement::Let(vi)=>
         {
-          print!("let  {}",name);
+          print!("let  {}",&vi.name);
 
-            if let Some(e) = e_opt
+            if let Some(e) = &vi.expression_opt
             {
               print!(": ");
 
               e.print();
             }
         }
-  Statement::Const(name,e_opt)=>
+  Statement::Const(vi)=>
         {
-          print!("const  {}",name);
+          print!("const  {}",&vi.name);
 
-            if let Some(e) = e_opt
+            if let Some(e) = &vi.expression_opt
             {
               print!(": ");
 
@@ -717,13 +764,13 @@ print(&self)
               blk.print();
             }
         }
-  Statement::For(name,e,blk)=>
+  Statement::For(fo)=>
         {
-          print!("for {} in ",name);
+          print!("for {} in ",&fo.current_vi.name);
 
-          e.print();
+          fo.get_end_expression().print();
 
-          blk.print();
+          fo.block.print();
         }
   Statement::While(e,blk)=>
         {
@@ -770,6 +817,7 @@ print(&self)
 pub struct
 Block
 {
+  pub(crate) stack_allocation_count: usize,
   pub(crate) statement_list: Vec<Statement>,
 
 }
@@ -778,6 +826,96 @@ Block
 impl
 Block
 {
+
+
+pub fn
+new(statement_list: Vec<Statement>)-> Self
+{
+  Self{
+    stack_allocation_count: 0,
+    statement_list,
+  }
+}
+
+
+pub fn
+scan(&mut self)
+{
+  self.scan_internal(std::ptr::null(),0);
+}
+
+
+fn
+link(cur: &mut VariableInfo, prev_ptr: *const VariableInfo)-> *const VariableInfo
+{
+  cur.previous_ptr = prev_ptr;
+
+  cur as *const VariableInfo
+}
+
+
+fn
+scan_internal(&mut self, mut last_vi_ptr: *const VariableInfo, base: usize)
+{
+  let  mut count           = 0;
+  let  mut child_count_max = 0;
+
+    for stmt in &mut self.statement_list
+    {
+        match stmt
+        {
+      Statement::Let(vi)=>
+            {
+              last_vi_ptr = Self::link(vi,last_vi_ptr);
+
+              vi.index = base+count;
+
+              count += 1;
+            }
+      Statement::Const(vi)=>
+            {
+              last_vi_ptr = Self::link(vi,last_vi_ptr);
+
+              vi.index = base+count;
+
+              count += 1;
+            }
+      Statement::Block(blk)=>
+            {
+              blk.scan_internal(last_vi_ptr,base+count);
+
+              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
+            }
+      Statement::For(fo)=>
+            {
+              let  ptr = Self::link(&mut fo.current_vi,last_vi_ptr);
+
+              fo.current_vi.index = base+count  ;
+              fo.end_vi.index     = base+count+1;
+
+              fo.block.scan_internal(ptr,count+2);
+
+              child_count_max = std::cmp::max(child_count_max,2+fo.block.stack_allocation_count);
+            }
+      Statement::While(e,blk)=>
+            {
+              blk.scan_internal(last_vi_ptr,base+count);
+
+              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
+            }
+      Statement::Loop(blk)=>
+            {
+              blk.scan_internal(last_vi_ptr,base+count);
+
+              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
+            }
+      _=>{}
+        }
+    }
+
+
+  self.stack_allocation_count = count+child_count_max;
+}
 
 
 pub fn
@@ -824,8 +962,14 @@ Function
 pub struct
 VariableInfo
 {
-  pub(crate)  name: String,
-  pub(crate) index: usize,
+  pub(crate) previous_ptr: *const VariableInfo,
+
+  pub(crate)           name: String,
+  pub(crate) expression_opt: Option<Expression>,
+
+  pub(crate)  index: usize,
+  pub(crate) offset: usize,
+  pub(crate)   size: usize,
 
 }
 
@@ -836,56 +980,15 @@ VariableInfo
 
 
 pub fn
-new(name: &str, index: usize)-> Self
+new(name: String, expression_opt: Option<Expression>)-> Self
 {
   Self{
-    name: name.to_string(),
-    index,
-  }
-}
-
-
-pub fn
-print(&self)
-{
-  print!("{}({})",&self.name,self.index);
-}
-
-
-}
-
-
-
-
-const FOR_END_NAME: &'static str = "*ForEnd";
-
-
-pub struct
-BlockFrame<'a>
-{
-  pub(crate) variable_info_list: Vec<VariableInfo>,
-  pub(crate) next_index: usize,
-  pub(crate) parent_ref_opt: Option<&'a Self>,
-
-}
-
-
-impl<'a>
-BlockFrame<'a>
-{
-
-
-pub fn
-new(parent_ref_opt: Option<&'a Self>)-> Self
-{
-  let  mut next_index: usize = if let Some(parent_ref) = parent_ref_opt{
-    parent_ref.next_index
-  } else{0};
-
-  Self{
-    variable_info_list: Vec::new(),
-    next_index,
-    parent_ref_opt,
+    previous_ptr: std::ptr::null(),
+    name,
+    expression_opt,
+     index: 0,
+    offset: 0,
+      size: 0,
   }
 }
 
@@ -893,67 +996,26 @@ new(parent_ref_opt: Option<&'a Self>)-> Self
 pub fn
 find(&self, name: &str)-> Option<&VariableInfo>
 {
-    for vi in &self.variable_info_list
+    if &self.name == name
     {
-        if &vi.name == name
-        {
-          return Some(vi);
-        }
+      return Some(self);
     }
 
 
-    if let Some(parent_ref) = self.parent_ref_opt
+    if self.previous_ptr != std::ptr::null()
     {
-      return parent_ref.find(name);
-    }
-
-
-  None
-}
-
-
-pub fn
-find_index(&self, name: &str)-> Option<usize>
-{
-    for vi in &self.variable_info_list
-    {
-        if &vi.name == name
-        {
-          return Some(vi.index);
-        }
+      return unsafe{&*self.previous_ptr}.find(name);
     }
 
 
   None
-}
-
-
-pub fn
-add(&mut self, name: &str)
-{
-  let  vi = VariableInfo::new(name,self.next_index);
-
-  self.variable_info_list.push(vi);
-
-  self.next_index += 1;
 }
 
 
 pub fn
 print(&self)
 {
-    for vi in &self.variable_info_list
-    {
-      vi.print();
-
-      print!("^\n");
-    }
-
-
-    if let Some(parent_ref) = self.parent_ref_opt
-    {
-      parent_ref.print();
-    }
+  print!("{}({})",&self.name,self.index);
 }
 
 
@@ -1035,7 +1097,6 @@ CompileContext<'a,'b>
 
   pub(crate) ctrl_id: usize,
   pub(crate)   if_id: usize,
-  pub(crate) index_max: usize,
 
   pub(crate) position_request_list: Vec<Position>,
   pub(crate)         position_list: Vec<Position>,
@@ -1058,23 +1119,16 @@ start(f_ref: &'b Function, symbol_list_ref: &'a Vec<Symbol>, const_list_ref: &'a
     operation_list: Vec::new(),
     ctrl_id: 0,
     if_id: 0,
-    index_max: 0,
     position_request_list: Vec::new(),
     position_list: Vec::new(),
   };
 
 
-  ctx.operation_list.push(Operation::AllocateLoc(0));
+  ctx.operation_list.push(Operation::AllocateLoc(f_ref.block.stack_allocation_count));
 
-  ctx.process_block(&f_ref.block,None,None);
+  let  vi = VariableInfo::new(String::new(),None);
 
-    if let Some(first) = ctx.operation_list.first_mut()
-    {
-         if let Operation::AllocateLoc(n) = first
-         {
-           *n = ctx.index_max;
-         }
-    }
+  ctx.process_block(&f_ref.block,&vi,None);
 
 
   Self::resolve_position_requests_all(&ctx.position_request_list,&ctx.position_list,&mut ctx.operation_list);
@@ -1199,7 +1253,7 @@ find_global(&self, name: &str)-> Option<usize>
 
 
 pub fn
-process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
+process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo)
 {
     match expr
     {
@@ -1212,7 +1266,7 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
           else if s ==      "null"{self.operation_list.push(Operation::LoadN);}
           else if s == "undefined"{self.operation_list.push(Operation::LoadU);}
           else
-            if let Some(vi) = bf_ref.find(&s)
+            if let Some(vi) = last_vi.find(&s)
             {
               self.operation_list.push(Operation::LoadLocRef(vi.index));
             }
@@ -1233,7 +1287,7 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
             {
               println!("process_expression error: {} not found",s);
 
-              bf_ref.print();
+              last_vi.print();
 
               panic!();
             }
@@ -1250,21 +1304,21 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
         },
   Expression::SubExpression(e)=>
         {
-          self.process_expression(e,bf_ref);
+          self.process_expression(e,last_vi);
         },
   Expression::Unary(o,e)=>
         {
-          self.process_expression(e,bf_ref);
+          self.process_expression(e,last_vi);
 
           self.operation_list.push(Operation::Unary(o.clone()));
         },
   Expression::Call(f,args)=>
         {
-          self.process_expression(f,bf_ref);
+          self.process_expression(f,last_vi);
 
             for a in args.iter().rev()
             {
-              self.process_expression(a,bf_ref);
+              self.process_expression(a,last_vi);
             }
 
 
@@ -1272,21 +1326,21 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
         },
   Expression::Subscript(target,index)=>
         {
-          self.process_expression(target,bf_ref);
-          self.process_expression( index,bf_ref);
+          self.process_expression(target,last_vi);
+          self.process_expression( index,last_vi);
 
           self.operation_list.push(Operation::Subscript);
         },
   Expression::Access(target,name)=>
         {
-          self.process_expression(target,bf_ref);
+          self.process_expression(target,last_vi);
 
           self.operation_list.push(Operation::Access(name.clone()));
         },
   Expression::Binary(o,l,r)=>
         {
-          self.process_expression(l,bf_ref);
-          self.process_expression(r,bf_ref);
+          self.process_expression(l,last_vi);
+          self.process_expression(r,last_vi);
 
           self.operation_list.push(Operation::Binary(o.clone()));
         },
@@ -1297,22 +1351,17 @@ process_expression(&mut self, expr: &Expression, bf_ref: &BlockFrame)
 
 
 pub fn
-process_block(&mut self, blk: &Block, parent_bf_ref_opt: Option<&BlockFrame>, cbf_ref_opt: Option<&ControlBlockFrame>)
+process_block(&mut self, blk: &'b Block, last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
 {
-  let  mut bf = BlockFrame::new(parent_bf_ref_opt);
-
     for stmt in &blk.statement_list
     {
-      self.process_statement(stmt,&mut bf,cbf_ref_opt);
+      self.process_statement(stmt,last_vi,cbf_ref_opt);
     }
-
-
-  self.index_max = std::cmp::max(self.index_max,bf.next_index);
 }
 
 
 pub fn
-process_if(&mut self, ls: &Vec<(Expression,Block)>, blk_opt: &Option<Block>, bf_ref: &mut BlockFrame, cbf_ref_opt: Option<&ControlBlockFrame>)
+process_if(&mut self, ls: &'b Vec<(Expression,Block)>, blk_opt: &'b Option<Block>, last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
 {
   let  base_name = format!("If{}",self.if_id);
 
@@ -1322,7 +1371,7 @@ process_if(&mut self, ls: &Vec<(Expression,Block)>, blk_opt: &Option<Block>, bf_
     {
       let  (e,blk) = &ls[i];
 
-      self.process_expression(e,bf_ref);
+      self.process_expression(e,last_vi);
 
       self.push_brnz(format!("{}_{}",&base_name,i));
     }
@@ -1330,7 +1379,7 @@ process_if(&mut self, ls: &Vec<(Expression,Block)>, blk_opt: &Option<Block>, bf_
 
     if let Some(blk) = blk_opt
     {
-      self.process_block(blk,Some(bf_ref),cbf_ref_opt);
+      self.process_block(blk,last_vi,cbf_ref_opt);
     }
 
 
@@ -1342,7 +1391,7 @@ process_if(&mut self, ls: &Vec<(Expression,Block)>, blk_opt: &Option<Block>, bf_
 
       self.push_position(format!("{}_{}",&base_name,i));
 
-      self.process_block(blk,Some(bf_ref),cbf_ref_opt);
+      self.process_block(blk,last_vi,cbf_ref_opt);
 
       self.push_jmp(format!("{}_End",&base_name));
     }
@@ -1353,14 +1402,12 @@ process_if(&mut self, ls: &Vec<(Expression,Block)>, blk_opt: &Option<Block>, bf_
 
 
 pub fn
-process_for(&mut self, name: &str, e: &Expression, blk: &Block, bf_ref: &mut BlockFrame, cbf_ref_opt: Option<&ControlBlockFrame>)
+process_for(&mut self, fo: &'b For, mut last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
 {
-  let  mut bf = BlockFrame::new(Some(bf_ref));
-
   let  cbf = ControlBlockFrame::new(&mut self.ctrl_id);
 
-  let  cur_i = bf.next_index;
-  let  end_i = cur_i+1;
+  let  cur_i = fo.current_vi.index;
+  let  end_i =     fo.end_vi.index;
 
   self.operation_list.push(Operation::LoadLocRef(cur_i));
 
@@ -1373,13 +1420,10 @@ process_for(&mut self, name: &str, e: &Expression, blk: &Block, bf_ref: &mut Blo
 
   self.operation_list.push(Operation::LoadLocRef(end_i));
 
-  self.process_expression(e,&mut bf);
+  self.process_expression(fo.get_end_expression(),last_vi);
 
   self.operation_list.push(Operation::Assign(AssignOperator::Nop));
 
-
-  bf.add(        name);
-  bf.add(FOR_END_NAME);
 
   self.operation_list.push(Operation::LoadI(0));
   self.operation_list.push(Operation::Binary(BinaryOperator::Gt));
@@ -1388,7 +1432,11 @@ process_for(&mut self, name: &str, e: &Expression, blk: &Block, bf_ref: &mut Blo
 
   self.push_position(cbf.get_start_label());
 
-  self.process_block(blk,Some(&bf),Some(&cbf));
+
+  last_vi = &fo.current_vi;
+
+
+  self.process_block(&fo.block,last_vi,Some(&cbf));
 
   self.push_position(cbf.get_restart_label());
 
@@ -1402,16 +1450,13 @@ process_for(&mut self, name: &str, e: &Expression, blk: &Block, bf_ref: &mut Blo
   self.push_brnz(cbf.get_start_label());
 
   self.push_position(cbf.get_end_label());
-
-
-  self.index_max = std::cmp::max(self.index_max,bf.next_index);
 }
 
 
 pub fn
-process_print_v(&mut self, s: &str, bf_ref: &mut BlockFrame, cbf_ref_opt: Option<&ControlBlockFrame>)
+process_print_v(&mut self, s: &str, last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
 {
-    if let Some(vi) = bf_ref.find(s)
+    if let Some(vi) = last_vi.find(s)
     {
       self.operation_list.push(Operation::PrintLoc(vi.index));
     }
@@ -1432,7 +1477,7 @@ process_print_v(&mut self, s: &str, bf_ref: &mut BlockFrame, cbf_ref_opt: Option
     {
       println!("process_statement error: {} not found",s);
 
-      bf_ref.print();
+      last_vi.print();
 
       panic!();
     }
@@ -1440,35 +1485,35 @@ process_print_v(&mut self, s: &str, bf_ref: &mut BlockFrame, cbf_ref_opt: Option
 
 
 pub fn
-process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_opt: Option<&ControlBlockFrame>)
+process_statement(&mut self, stmt: &'b Statement, mut last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
 {
     match stmt
     {
   Statement::Empty=>{}
-  Statement::Let(name,e_opt)=>
+  Statement::Let(vi)=>
         {
-            if let Some(e) = e_opt
+            if let Some(e) = &vi.expression_opt
             {
-              self.operation_list.push(Operation::LoadLocRef(bf_ref.next_index));
+              self.operation_list.push(Operation::LoadLocRef(vi.index));
 
-              self.process_expression(e,bf_ref);
+              self.process_expression(e,last_vi);
 
               self.operation_list.push(Operation::Assign(AssignOperator::Nop));
             }
 
 
-          bf_ref.add(name);
+          last_vi = vi;
         }
-  Statement::Const(name,e_opt)=>
+  Statement::Const(vi)=>
         {
         }
   Statement::Expression(e,ass_opt)=>
         {
-          self.process_expression(e,bf_ref);
+          self.process_expression(e,last_vi);
 
             if let Some((o,re)) = ass_opt
             {
-              self.process_expression(re,bf_ref);
+              self.process_expression(re,last_vi);
 
               self.operation_list.push(Operation::Assign(o.clone()));
             }
@@ -1478,11 +1523,11 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         }
   Statement::If(ls,blk_opt)=>
         {
-          self.process_if(ls,blk_opt,bf_ref,cbf_ref_opt);
+          self.process_if(ls,blk_opt,last_vi,cbf_ref_opt);
         }
-  Statement::For(name,e,blk)=>
+  Statement::For(fo)=>
         {
-          self.process_for(name,e,blk,bf_ref,cbf_ref_opt);
+          self.process_for(fo,last_vi,cbf_ref_opt);
         }
   Statement::While(e,blk)=>
         {
@@ -1492,11 +1537,11 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
 
           self.push_position(cbf.get_start_label());
 
-          self.process_block(blk,Some(bf_ref),Some(&cbf));
+          self.process_block(blk,last_vi,Some(&cbf));
 
           self.push_position(cbf.get_restart_label());
 
-          self.process_expression(e,bf_ref);
+          self.process_expression(e,last_vi);
 
           self.push_brnz(cbf.get_start_label());
 
@@ -1508,7 +1553,7 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
 
           self.push_position(cbf.get_start_label());
 
-          self.process_block(blk,Some(bf_ref),Some(&cbf));
+          self.process_block(blk,last_vi,Some(&cbf));
 
           self.push_position(cbf.get_restart_label());
 
@@ -1518,13 +1563,13 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         }
   Statement::Block(blk)=>
         {
-          self.process_block(blk,Some(bf_ref),cbf_ref_opt);
+          self.process_block(blk,last_vi,cbf_ref_opt);
         }
   Statement::Return(e_opt)=>
         {
             if let Some(e) = e_opt
             {
-              self.process_expression(e,bf_ref);
+              self.process_expression(e,last_vi);
 
               self.operation_list.push(Operation::Ret);
             }
@@ -1564,7 +1609,7 @@ process_statement(&mut self, stmt: &Statement, bf_ref: &mut BlockFrame, cbf_ref_
         }
   Statement::PrintV(s)=>
         {
-          self.process_print_v(s,bf_ref,cbf_ref_opt);
+          self.process_print_v(s,last_vi,cbf_ref_opt);
         }
     }
 }

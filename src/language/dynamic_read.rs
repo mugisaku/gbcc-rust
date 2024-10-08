@@ -22,6 +22,8 @@ use crate::language::dynamic_space::{
   Function,
   Block,
   Statement,
+  For,
+  VariableInfo,
   Declaration,
 
 };
@@ -93,7 +95,7 @@ read_fn(dir: &Directory)-> Result<(String,Function),()>
 
 
 pub fn
-read_variable(dir: &Directory)-> Result<(String,Option<Expression>),()>
+read_variable(dir: &Directory)-> Result<VariableInfo,()>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -109,12 +111,12 @@ read_variable(dir: &Directory)-> Result<(String,Option<Expression>),()>
         {
             if let Ok(e) = read_expression(e_d)
             {
-              return Ok((name,Some(e)));
+              return Ok(VariableInfo::new(name,Some(e)));
             }
         }
 
 
-      return Ok((name,None));
+      return Ok(VariableInfo::new(name,None));
     }
 
 
@@ -142,21 +144,18 @@ read_declaration(dir: &Directory)-> Result<Declaration,()>
       else
         if d_name == "let"
         {
-            if let Ok((name,e_opt)) = read_variable(d)
+            if let Ok(vi) = read_variable(d)
             {
-              return Ok(Declaration::Let(name,e_opt));
+              return Ok(Declaration::Let(vi.name,vi.expression_opt));
             }
         }
 
       else
         if d_name == "const"
         {
-            if let Ok((name,e_opt)) = read_variable(d)
+            if let Ok(vi) = read_variable(d)
             {
-                if let Some(e) = e_opt
-                {
-                  return Ok(Declaration::Const(name,e));
-                }
+              return Ok(Declaration::Const(vi.name,vi.expression_opt.unwrap()));
             }
         }
     }
@@ -387,7 +386,9 @@ read_for(dir: &Directory)-> Result<Statement,()>
                 {
                     if let Ok(blk) = read_block(blk_d)
                     {
-                      return Ok(Statement::For(name,expr,blk));
+                      let  f = For::new(name,expr,blk);
+
+                      return Ok(Statement::For(f));
                     }
                 }
             }
@@ -454,7 +455,7 @@ read_block(dir: &Directory)-> Result<Block,()>
     }
 
 
-  Ok(Block{statement_list})
+  Ok(Block::new(statement_list))
 }
 
 
@@ -529,18 +530,18 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "let"
         {
-            if let Ok((name,e_opt)) = read_variable(d)
+            if let Ok(vi) = read_variable(d)
             {
-              return Ok(Statement::Let(name,e_opt));
+              return Ok(Statement::Let(vi));
             }
         }
 
       else
         if d_name == "const"
         {
-            if let Ok((name,e_opt)) = read_variable(d)
+            if let Ok(vi) = read_variable(d)
             {
-              return Ok(Statement::Const(name,e_opt));
+              return Ok(Statement::Const(vi));
             }
         }
 
