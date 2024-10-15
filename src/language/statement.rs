@@ -1,185 +1,62 @@
 
 
-use crate::syntax::print_indent;
-
-use super::get_aligned_size;
-use super::declaration::{
-  Declaration,
-  Value,
-  Component,
-
-};
-
-use super::operation::{
-  Source,
-  Destination,
-  Operation,
-
-};
-
 use super::expression::{
   Expression,
   AssignOperator,
 
 };
 
-use super::typesystem::{
-  Ty,
+
+use super::type_info::{
+  Parameter,
+  TypeInfo,
+  StorageInfo,
 
 };
 
-use super::compile::{
-
-};
-
-
-pub enum
-StorageKind
-{
-  Static,
-  Const,
-  Argument,
-  Local,
-
-}
-
 
 pub struct
-StorageInfo
+VariableInfo
 {
-  name: String,
+  pub(crate) previous_ptr: *const VariableInfo,
 
-  ty: Ty,
+  pub(crate)           name: String,
+  pub(crate) expression_opt: Option<Expression>,
 
-  position: usize,
-
-  kind: StorageKind,
-
-}
-
-
-pub struct
-Scope
-{
-  parent_ptr: *const Scope,
-
-  storage_info_list: Vec<StorageInfo>,
-
-  begin: usize,
-    end: usize,
+  pub(crate) storage_info: StorageInfo,
 
 }
 
 
 impl
-Scope
+VariableInfo
 {
 
 
 pub fn
-new()-> Self
+new(name: String, expression_opt: Option<Expression>)-> Self
 {
   Self{
-    parent_ptr: std::ptr::null(),
-    storage_info_list: Vec::new(),
-    begin: 0,
-      end: 0,
-  }
-}
-
-
-fn
-read(decl: &Declaration, pos: &mut usize, ls: &mut Vec<StorageInfo>)
-{
-    match &decl.component
-    {
-  Component::Var(sto)=>
-        {
-          let  mut ty = sto.ty.clone();
-
-          let  position = *pos;
-
-//          *pos += ty.get_size();
-
-          let  si = StorageInfo{
-            name: decl.name.clone(),
-            ty,
-            position,
-            kind: StorageKind::Local,
-          };
-
-
-          ls.push(si);
-        }
-  Component::Static(sto)=>
-        {
-          let  si = StorageInfo{
-            name: decl.name.clone(),
-            ty: Ty::Void,
-            position: *pos,
-            kind: StorageKind::Static,
-          };
-
-
-          ls.push(si);
-        }
-  Component::Const(sto)=>
-        {
-          let  si = StorageInfo{
-            name: decl.name.clone(),
-            ty: Ty::Void,
-            position: *pos,
-            kind: StorageKind::Const,
-          };
-
-
-          ls.push(si);
-        }
-  _=>{panic!();}
-    }
-}
-
-
-pub fn
-new_child(&self, ls: &Vec<Statement>)-> Self
-{
-  let  mut storage_info_list: Vec<StorageInfo> = Vec::new();
-
-  let  mut end = self.end;
-
-    for stmt in ls
-    {
-        if let Statement::Declaration(decl) = stmt
-        {
-          Self::read(&decl,&mut end,&mut storage_info_list);
-        }
-    }
-
-
-  Self{
-    parent_ptr: self as *const Scope,
-    storage_info_list,
-    begin: self.end,
-      end,
+    previous_ptr: std::ptr::null(),
+    name,
+    expression_opt,
+    storage_info: StorageInfo::new(),
   }
 }
 
 
 pub fn
-find(&self, name: &str)-> Option<&StorageInfo>
+find(&self, name: &str)-> Option<&VariableInfo>
 {
-    for si in &self.storage_info_list
+    if &self.name == name
     {
-        if &si.name == name
-        {
-          return Some(si);
-        }
+      return Some(self);
     }
 
 
-    if self.parent_ptr != std::ptr::null()
+    if self.previous_ptr != std::ptr::null()
     {
-      return unsafe{&*self.parent_ptr}.find(name);
+      return unsafe{&*self.previous_ptr}.find(name);
     }
 
 
@@ -187,34 +64,35 @@ find(&self, name: &str)-> Option<&StorageInfo>
 }
 
 
-}
-
-
-
-
-pub struct
-ConditionalBlock
+pub fn
+print(&self)
 {
-  pub(crate)      condition: Expression,
-  pub(crate) statement_list: Vec<Statement>,
+  print!("{}({})",&self.name,self.storage_info.index);
+}
+
 
 }
+
+
 
 
 pub enum
 Statement
 {
   Empty,
-  Declaration(Declaration),
-  Block(Vec<Statement>),
-  If(Vec<ConditionalBlock>,Option<Vec<Statement>>),
-  While(ConditionalBlock),
-  Loop(Vec<Statement>),
-  For(Vec<Statement>),
+  Let(VariableInfo),
+  Const(VariableInfo),
+  Expression(Expression,Option<(AssignOperator,Expression)>),
+  If(Vec<(Expression,Block)>,Option<Block>),
+  While(Expression,Block),
+  For(For),
+  Loop(Block),
+  Block(Block),
+  Return(Option<Expression>),
   Break,
   Continue,
-  Return(Option<Expression>),
-  Expression(Expression,Option<(AssignOperator,Expression)>),
+  PrintS(String),
+  PrintV(String),
 
 }
 
@@ -225,101 +103,106 @@ Statement
 
 
 pub fn
-print_statement_list(ls: &Vec<Statement>, indent: usize)
+print(&self)
 {
-  print!("\n");
-
-  print_indent(indent);
-
-  print!("{{\n");
-
-    for stmt in ls
-    {
-      stmt.print(indent+1);
-
-      print!(";\n");
-    }
-
-
-  print_indent(indent);
-
-  print!("}}\n");
-}
-
-
-pub fn
-print_conditional_block(cond_blk: &ConditionalBlock, indent: usize)
-{
-  cond_blk.condition.print();
-
-  print!("\n");
-
-  print_indent(indent);
-
-  print!("{{\n");
-
-  Self::print_statement_list(&cond_blk.statement_list,indent+1);
-
-  print_indent(indent);
-
-  print!("}}\n");
-}
-
-
-pub fn
-print(&self, indent: usize)
-{
-  print_indent(indent);
-
     match self
     {
-  Statement::Empty=>{},
-  Statement::Declaration(d)=>{d.print();},
-  Statement::Block(ls)=>
+  Statement::Empty=>{print!(";");}
+  Statement::Let(vi)=>
         {
-          Self::print_statement_list(ls,indent);
-        },
-  Statement::If(ls,el_opt)=>
-        {
-          print!("if ");
+          print!("let  {}",&vi.name);
 
-            if let Some(first) = ls.first()
+            if let Some(e) = &vi.expression_opt
             {
-              Self::print_conditional_block(first,indent);
+              print!(": ");
+
+              e.print();
+            }
+        }
+  Statement::Const(vi)=>
+        {
+          print!("const  {}",&vi.name);
+
+            if let Some(e) = &vi.expression_opt
+            {
+              print!(": ");
+
+              e.print();
+            }
+        }
+  Statement::Expression(e,ass_opt)=>
+        {
+          e.print();
+
+            if let Some((ass_op,r)) = ass_opt
+            {
+              ass_op.print();
+
+              r.print();
+            }
+        }
+  Statement::If(ls,blk_opt)=>
+       {
+            if let Some((first_e,first_blk)) = ls.first()
+            {
+              print!("if ");
+
+              first_e.print();
+
+              first_blk.print();
+
+              print!("\n");
 
                 for i in 1..ls.len()
                 {
-                  print_indent(indent);
+                  let  (e,blk) = &ls[i];
 
                   print!("else if ");
 
-                  Self::print_conditional_block(&ls[i],indent);
-                }
+                  e.print();
 
+                  blk.print();
 
-                if let Some(el) = el_opt
-                {
-                  print!("else if ");
-
-                  Self::print_statement_list(el,indent);
+                  print!("\n");
                 }
             }
-        },
-  Statement::For(ls)=>{},
-  Statement::While(cond_blk)=>
+
+
+            if let Some(blk) = blk_opt
+            {
+              print!("else");
+
+              blk.print();
+            }
+        }
+  Statement::For(fo)=>
+        {
+          print!("for {} in ",&fo.current_vi.name);
+
+          fo.get_end_expression().print();
+
+          fo.block.print();
+        }
+  Statement::While(e,blk)=>
         {
           print!("while ");
 
-          Self::print_conditional_block(cond_blk,indent);
-        },
-  Statement::Loop(ls)=>
-        {
-          print!("loop\n");
+          e.print();
 
-          Self::print_statement_list(ls,indent);
-        },
-  Statement::Break=>{print!("break");},
-  Statement::Continue=>{print!("continue");},
+          blk.print();
+        }
+  Statement::Loop(blk)=>
+        {
+          print!("loop");
+
+          blk.print();
+        }
+  Statement::Block(blk)=>
+        {
+          print!("//plain block");
+
+          blk.print();
+        }
   Statement::Return(e_opt)=>
         {
           print!("return ");
@@ -328,18 +211,11 @@ print(&self, indent: usize)
             {
               e.print();
             }
-        },
-  Statement::Expression(e,ass_opt)=>
-        {
-          e.print();
-
-            if let Some((o,r)) = ass_opt
-            {
-              o.print();
-
-              r.print();
-            }
-        },
+        }
+  Statement::Break=>{print!("break");}
+  Statement::Continue=>{print!("continue");}
+  Statement::PrintS(s)=>{print!("print \"{}\"",s);}
+  Statement::PrintV(s)=>{print!("print {}",s);}
     }
 }
 
@@ -350,354 +226,171 @@ print(&self, indent: usize)
 
 
 pub struct
-Compiler
+Block
 {
-  number: usize,
-  pub(crate) operation_list: Vec<Operation>,
+  pub(crate) stack_allocation_count: usize,
+  pub(crate) statement_list: Vec<Statement>,
 
 }
 
 
 impl
-Compiler
+Block
 {
 
 
 pub fn
-new()-> Self
+new(statement_list: Vec<Statement>)-> Self
 {
   Self{
-    number: 0,
-    operation_list: Vec::new(),
+    stack_allocation_count: 0,
+    statement_list,
   }
 }
 
 
-fn
-generate_name(&mut self, s: &str)-> String
+pub fn
+scan(&mut self)
 {
-  let  n = self.number;
-
-  self.number += 1;
-
-  format!("ST{}{}",s,n)
+  self.scan_internal(std::ptr::null(),0);
 }
 
 
 fn
-push(&mut self, op: Operation)
+link(cur: &mut VariableInfo, prev_ptr: *const VariableInfo)-> *const VariableInfo
 {
-  self.operation_list.push(op);
+  cur.previous_ptr = prev_ptr;
+
+  cur as *const VariableInfo
 }
 
 
 fn
-push_jump(&mut self, base: &str, tail: &str)
+scan_internal(&mut self, mut last_vi_ptr: *const VariableInfo, base: usize)
 {
-  let  dst = Destination{name: format!("{}_{}",base,tail)};
+  let  mut count           = 0;
+  let  mut child_count_max = 0;
 
-  self.operation_list.push(Operation::Jump(dst));
-}
-
-
-fn
-push_label(&mut self, base: &str, tail: &str)
-{
-  self.operation_list.push(Operation::Label(format!("{}_{}",base,tail)));
-}
-
-
-fn
-compile_if(&mut self, ls: &Vec<ConditionalBlock>, el_opt: &Option<Vec<Statement>>, ctrl_name_opt: Option<&str>, scope: &Scope)-> Result<(),()>
-{
-  let  base_name = self.generate_name("if");
-
-  let  len = ls.len();
-
-    for i in 0..len
+    for stmt in &mut self.statement_list
     {
-      let  expr_name = format!("{}Expr{}",&base_name,i);
-
-      let  label = format!("{}{}_START",&base_name,i);
-
-      let  dst = Destination{name: label.clone()};
-
-        if let Ok(ti) = ls[i].condition.compile(&expr_name,scope,&mut self.operation_list)
+        match stmt
         {
-          let  src = Source{name: expr_name};
-
-          self.push(Operation::BranchIfNonZero(dst,src));
-        }
-
-      else
-        {
-          println!("compile_if error: condition{} failed",i);
-
-          return Err(());
-        }
-    }
-
-
-    if let Some(el) = el_opt
-    {
-        if self.compile_statement_list(el,ctrl_name_opt,scope).is_err()
-        {
-          println!("compile_if error: else statement_list failed");
-
-          return Err(());
-        }
-    }
-
-
-  self.push_jump(&base_name,"_END");
-
-    for i in 0..len
-    {
-      self.push(Operation::Label(format!("{}{}_START",&base_name,i)));
-
-        if self.compile_statement_list(&ls[i].statement_list,ctrl_name_opt,scope).is_err()
-        {
-          println!("compile_if error: statement_list{} failed",i);
-
-          return Err(());
-        }
-
-
-      self.push_jump(&base_name,"_END");
-    }
-
-
-  self.push_label(&base_name,"_END");
-
-  Ok(())
-}
-
-
-fn
-compile_while(&mut self, cond_blk: &ConditionalBlock, ctrl_name_opt: Option<&str>, scope: &Scope)-> Result<(),()>
-{
-  let  while_name = self.generate_name("while");
-  let   cond_name = self.generate_name("expr");
-
-  self.push_label(&while_name,"_RESTART");
-
-    if let Ok(ti) = cond_blk.condition.compile(&cond_name,scope,&mut self.operation_list)
-    {
-    }
-
-  else
-    {
-      println!("compile_block error: while condition compile is failed");
-
-      return Err(());
-    }
-
-
-  let  src = Source{name: cond_name};
-  let  dst = Destination{name: while_name.clone()};
-
-  self.push(Operation::BranchIfZero(dst,src));
-
-    if self.compile_statement_list(&cond_blk.statement_list,Some(&while_name),scope).is_err()
-    {
-      println!("compile_block error");
-
-      return Err(());
-    }
-
-
-  self.push_label(&while_name,"END");
-
-  Ok(())
-}
-
-
-fn
-compile_loop(&mut self, ls: &Vec<Statement>, ctrl_name_opt: Option<&str>, scope: &Scope)-> Result<(),()>
-{
-  let  loop_name = self.generate_name("loop");
-
-  self.push_label(&loop_name,"_RESTART");
-
-  self.compile_statement_list(&ls,Some(&loop_name),scope);
-
-  self.push_label(&loop_name,"_END");
-
-  Ok(())
-}
-
-
-fn
-compile_return(&mut self, e_opt: &Option<Expression>, ctrl_name_opt: Option<&str>, scope: &Scope)-> Result<(),()>
-{
-    if let Some(e) = e_opt
-    {
-      let  name = self.generate_name("expr");
-
-      e.compile(&name,scope,&mut self.operation_list);
-
-      let  src = Source{name};
-
-      self.push(Operation::ReturnNonVoid(src,0));
-    }
-
-  else
-    {
-      self.push(Operation::ReturnVoid);
-    }
-
-
-  Ok(())
-}
-
-
-fn
-compile_statement(&mut self, stmt: &Statement, ctrl_name_opt: Option<&str>, scope: &Scope)-> Result<(),()>
-{
-    match stmt
-    {
-  Statement::Empty=>{},
-  Statement::Declaration(d)=>
-        {
-/*
-            if let Some(st) = d.get_value()
+      Statement::Let(vi)=>
             {
-                if let Ok(ti) = st.expression.compile(&d.name,scope,&mut self.operation_list)
-                {
-                }
+              last_vi_ptr = Self::link(vi,last_vi_ptr);
 
-              else
-                {
-                  println!("compile_statement error");
+              vi.storage_info.index = base+count;
 
-                  return Err(());
-                }
+              count += 1;
             }
-*/
-        },
-  Statement::Block(ls)=>
-        {
-          return self.compile_statement_list(ls,ctrl_name_opt,scope);
-        },
-  Statement::If(ls,el_opt)=>
-        {
-          return self.compile_if(ls,el_opt,ctrl_name_opt,scope);
-        },
-  Statement::For(ls)=>
-        {
-        },
-  Statement::While(cond_blk)=>
-        {
-          return self.compile_while(cond_blk,ctrl_name_opt,scope);
-        },
-  Statement::Loop(ls)=>
-        {
-          return self.compile_loop(ls,ctrl_name_opt,scope);
-        },
-  Statement::Break=>
-        {
-            if let Some(ctrl_name) = ctrl_name_opt
+      Statement::Const(vi)=>
             {
-              self.push_jump(&ctrl_name,"_END");
-            }
+              last_vi_ptr = Self::link(vi,last_vi_ptr);
 
-          else
+              vi.storage_info.index = base+count;
+
+              count += 1;
+            }
+      Statement::Block(blk)=>
             {
-              println!("compile_statement error");
+              blk.scan_internal(last_vi_ptr,base+count);
 
-              panic!();
+              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
             }
-        },
-  Statement::Continue=>
-        {
-            if let Some(ctrl_name) = ctrl_name_opt
+      Statement::For(fo)=>
             {
-              self.push_jump(&ctrl_name,"_RESTART");
-            }
+              let  ptr = Self::link(&mut fo.current_vi,last_vi_ptr);
 
-          else
+              fo.current_vi.storage_info.index = base+count  ;
+              fo.end_vi.storage_info.index     = base+count+1;
+
+              fo.block.scan_internal(ptr,count+2);
+
+              child_count_max = std::cmp::max(child_count_max,2+fo.block.stack_allocation_count);
+            }
+      Statement::While(e,blk)=>
             {
-              panic!();
-            }
-        },
-  Statement::Return(e_opt)=>
-        {
-          return self.compile_return(e_opt,ctrl_name_opt,scope);
-        },
-  Statement::Expression(e,ass_opt)=>
-        {
-          let  l_name = self.generate_name("expr");
+              blk.scan_internal(last_vi_ptr,base+count);
 
-            if let Ok(l_ti) = e.compile(&l_name,scope,&mut self.operation_list)
+              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
+            }
+      Statement::Loop(blk)=>
             {
-                if let Some((o,r)) = ass_opt
-                {
-                  let  r_name = self.generate_name("expr");
+              blk.scan_internal(last_vi_ptr,base+count);
 
-                    if let Ok(r_ti) = r.compile(&r_name,scope,&mut self.operation_list)
-                    {
-                    }
-
-                  else
-                    {
-                      println!("compile_statement error");
-
-                      return Err(());
-                    }
-                }
+              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
             }
-
-          else
-            {
-              println!("compile_statement error");
-
-              return Err(());
-            }
-        },
-    }
-
-
-  Ok(())
-}
-
-
-fn
-compile_statement_list(&mut self, ls: &Vec<Statement>, ctrl_name_opt: Option<&str>, scope: &Scope)-> Result<(),()>
-{
-  let  child_scope = scope.new_child(ls);
-
-    for stmt in ls
-    {
-        if self.compile_statement(stmt,ctrl_name_opt,&child_scope).is_err()
-        {
-          println!("compile_statement_list error");
-
-          return Err(());
+      _=>{}
         }
     }
 
 
-  Ok(())
+  self.stack_allocation_count = count+child_count_max;
 }
-
-
-}
-
-
 
 
 pub fn
-compile_statement_list(ls: &Vec<Statement>, scope: &Scope)-> Result<Vec<Operation>,()>
+print(&self)
 {
-  let  mut cmplr = Compiler::new();
+  print!("{{\n");
 
-    if cmplr.compile_statement_list(ls,None,scope).is_ok()
+    for stmt in &self.statement_list
     {
-      return Ok(cmplr.operation_list);
+      stmt.print();
+
+      print!("\n");
     }
 
 
-  Err(())
+  print!("}}\n");
+}
+
+
+}
+
+
+
+
+pub struct
+For
+{
+  pub(crate) current_vi: VariableInfo,
+  pub(crate)     end_vi: VariableInfo,
+
+  pub(crate) block: Block,
+
+}
+
+
+impl
+For
+{
+
+
+pub fn
+new(name: String, e: Expression, block: Block)-> Self
+{
+  Self{
+    current_vi: VariableInfo::new(name,None),
+        end_vi: VariableInfo::new("**FOR_END_VAR**".to_string(),Some(e)),
+    block,
+  }
+}
+
+
+pub fn
+get_end_expression(&self)-> &Expression
+{
+    if let Some(e) = &self.end_vi.expression_opt
+    {
+      return e;
+    }
+
+
+  panic!();
+}
+
+
 }
 
 

@@ -1,5 +1,12 @@
 
 
+use super::statement::{
+  Statement,
+  Block,
+
+};
+
+
 use super::expression::{
   Expression,
   BinaryOperator,
@@ -11,8 +18,6 @@ use super::expression::{
 
 use super::dynamic_space::{
   Space,
-  Statement,
-  Block,
   Function,
   Symbol,
 

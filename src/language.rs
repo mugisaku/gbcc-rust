@@ -1,11 +1,8 @@
 
 
 pub mod expression;
-pub mod typesystem;
 pub mod statement;
-pub mod operation;
-pub mod compile;
-pub mod declaration;
+pub mod type_info;
 pub mod dynamic_space;
 pub mod dynamic_machine;
 pub mod dynamic_dictionary;
@@ -13,12 +10,7 @@ pub mod dynamic_read;
 pub mod dynamic_value;
 
 
-use crate::language::{
-  typesystem::WORD_SIZE,
-
-};
-
-
+/*
 pub fn
 get_default_aligned_size(sz: usize)-> usize
 {
@@ -39,6 +31,7 @@ get_aligned_size(sz: usize, al: usize)-> usize
       sz
     }
 }
+*/
 
 
 

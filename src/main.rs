@@ -98,8 +98,6 @@ evaluate(s: &str)
 fn
 execute(s: &str)
 {
-  use crate::language::statement::Statement;
-
 //    if let Ok(st) = Statement::make_from_string(s)
     {
 //      st.print(0);
@@ -112,8 +110,6 @@ execute(s: &str)
 fn
 execute_program(s: &str)
 {
-  use crate::language::declaration::Space;
-
 //    if let Ok(lib) = Library::make_from_string(s)
     {
 //      lib.print();
@@ -170,8 +166,6 @@ load()
 fn
 type_make(s: &str)
 {
-  use crate::language::typesystem::Ty;
-
 //    if let Ok(t) = TypeItem::make_from_string(s)
     {
 //      t.print();

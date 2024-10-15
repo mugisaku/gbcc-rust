@@ -18,12 +18,17 @@ use crate::language::expression::{
 };
 
 
-use crate::language::dynamic_space::{
-  Function,
+use crate::language::statement::{
   Block,
   Statement,
   For,
   VariableInfo,
+
+};
+
+
+use crate::language::dynamic_space::{
+  Function,
   Declaration,
 
 };

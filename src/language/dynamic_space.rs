@@ -10,6 +10,21 @@ use super::expression::{
 };
 
 
+use super::type_info::{
+  StorageInfo,
+
+};
+
+
+use super::statement::{
+  Statement,
+  Block,
+  For,
+  VariableInfo,
+
+};
+
+
 use super::dynamic_machine::{
   Operation,
 
@@ -621,326 +636,6 @@ print_operations(&self)
 
 
 pub struct
-For
-{
-  pub(crate) current_vi: VariableInfo,
-  pub(crate)     end_vi: VariableInfo,
-
-  pub(crate) block: Block,
-
-}
-
-
-impl
-For
-{
-
-
-pub fn
-new(name: String, e: Expression, block: Block)-> Self
-{
-  Self{
-    current_vi: VariableInfo::new(name,None),
-        end_vi: VariableInfo::new("**FOR_END_VAR**".to_string(),Some(e)),
-    block,
-  }
-}
-
-
-pub fn
-get_end_expression(&self)-> &Expression
-{
-    if let Some(e) = &self.end_vi.expression_opt
-    {
-      return e;
-    }
-
-
-  panic!();
-}
-
-
-}
-
-
-
-
-pub enum
-Statement
-{
-  Empty,
-  Let(VariableInfo),
-  Const(VariableInfo),
-  Expression(Expression,Option<(AssignOperator,Expression)>),
-  If(Vec<(Expression,Block)>,Option<Block>),
-  While(Expression,Block),
-  For(For),
-  Loop(Block),
-  Block(Block),
-  Return(Option<Expression>),
-  Break,
-  Continue,
-  PrintS(String),
-  PrintV(String),
-
-}
-
-
-impl
-Statement
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  Statement::Empty=>{print!(";");}
-  Statement::Let(vi)=>
-        {
-          print!("let  {}",&vi.name);
-
-            if let Some(e) = &vi.expression_opt
-            {
-              print!(": ");
-
-              e.print();
-            }
-        }
-  Statement::Const(vi)=>
-        {
-          print!("const  {}",&vi.name);
-
-            if let Some(e) = &vi.expression_opt
-            {
-              print!(": ");
-
-              e.print();
-            }
-        }
-  Statement::Expression(e,ass_opt)=>
-        {
-          e.print();
-
-            if let Some((ass_op,r)) = ass_opt
-            {
-              ass_op.print();
-
-              r.print();
-            }
-        }
-  Statement::If(ls,blk_opt)=>
-       {
-            if let Some((first_e,first_blk)) = ls.first()
-            {
-              print!("if ");
-
-              first_e.print();
-
-              first_blk.print();
-
-              print!("\n");
-
-                for i in 1..ls.len()
-                {
-                  let  (e,blk) = &ls[i];
-
-                  print!("else if ");
-
-                  e.print();
-
-                  blk.print();
-
-                  print!("\n");
-                }
-            }
-
-
-            if let Some(blk) = blk_opt
-            {
-              print!("else");
-
-              blk.print();
-            }
-        }
-  Statement::For(fo)=>
-        {
-          print!("for {} in ",&fo.current_vi.name);
-
-          fo.get_end_expression().print();
-
-          fo.block.print();
-        }
-  Statement::While(e,blk)=>
-        {
-          print!("while ");
-
-          e.print();
-
-          blk.print();
-        }
-  Statement::Loop(blk)=>
-        {
-          print!("loop");
-
-          blk.print();
-        }
-  Statement::Block(blk)=>
-        {
-          print!("//plain block");
-
-          blk.print();
-        }
-  Statement::Return(e_opt)=>
-        {
-          print!("return ");
-
-            if let Some(e) = e_opt
-            {
-              e.print();
-            }
-        }
-  Statement::Break=>{print!("break");}
-  Statement::Continue=>{print!("continue");}
-  Statement::PrintS(s)=>{print!("print \"{}\"",s);}
-  Statement::PrintV(s)=>{print!("print {}",s);}
-    }
-}
-
-
-}
-
-
-
-
-pub struct
-Block
-{
-  pub(crate) stack_allocation_count: usize,
-  pub(crate) statement_list: Vec<Statement>,
-
-}
-
-
-impl
-Block
-{
-
-
-pub fn
-new(statement_list: Vec<Statement>)-> Self
-{
-  Self{
-    stack_allocation_count: 0,
-    statement_list,
-  }
-}
-
-
-pub fn
-scan(&mut self)
-{
-  self.scan_internal(std::ptr::null(),0);
-}
-
-
-fn
-link(cur: &mut VariableInfo, prev_ptr: *const VariableInfo)-> *const VariableInfo
-{
-  cur.previous_ptr = prev_ptr;
-
-  cur as *const VariableInfo
-}
-
-
-fn
-scan_internal(&mut self, mut last_vi_ptr: *const VariableInfo, base: usize)
-{
-  let  mut count           = 0;
-  let  mut child_count_max = 0;
-
-    for stmt in &mut self.statement_list
-    {
-        match stmt
-        {
-      Statement::Let(vi)=>
-            {
-              last_vi_ptr = Self::link(vi,last_vi_ptr);
-
-              vi.index = base+count;
-
-              count += 1;
-            }
-      Statement::Const(vi)=>
-            {
-              last_vi_ptr = Self::link(vi,last_vi_ptr);
-
-              vi.index = base+count;
-
-              count += 1;
-            }
-      Statement::Block(blk)=>
-            {
-              blk.scan_internal(last_vi_ptr,base+count);
-
-              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
-            }
-      Statement::For(fo)=>
-            {
-              let  ptr = Self::link(&mut fo.current_vi,last_vi_ptr);
-
-              fo.current_vi.index = base+count  ;
-              fo.end_vi.index     = base+count+1;
-
-              fo.block.scan_internal(ptr,count+2);
-
-              child_count_max = std::cmp::max(child_count_max,2+fo.block.stack_allocation_count);
-            }
-      Statement::While(e,blk)=>
-            {
-              blk.scan_internal(last_vi_ptr,base+count);
-
-              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
-            }
-      Statement::Loop(blk)=>
-            {
-              blk.scan_internal(last_vi_ptr,base+count);
-
-              child_count_max = std::cmp::max(child_count_max,blk.stack_allocation_count);
-            }
-      _=>{}
-        }
-    }
-
-
-  self.stack_allocation_count = count+child_count_max;
-}
-
-
-pub fn
-print(&self)
-{
-  print!("{{\n");
-
-    for stmt in &self.statement_list
-    {
-      stmt.print();
-
-      print!("\n");
-    }
-
-
-  print!("}}\n");
-}
-
-
-}
-
-
-
-
-pub struct
 Function
 {
   pub(crate) parameter_list: Vec<String>,
@@ -952,71 +647,6 @@ Function
 impl
 Function
 {
-
-
-}
-
-
-
-
-pub struct
-VariableInfo
-{
-  pub(crate) previous_ptr: *const VariableInfo,
-
-  pub(crate)           name: String,
-  pub(crate) expression_opt: Option<Expression>,
-
-  pub(crate)  index: usize,
-  pub(crate) offset: usize,
-  pub(crate)   size: usize,
-
-}
-
-
-impl
-VariableInfo
-{
-
-
-pub fn
-new(name: String, expression_opt: Option<Expression>)-> Self
-{
-  Self{
-    previous_ptr: std::ptr::null(),
-    name,
-    expression_opt,
-     index: 0,
-    offset: 0,
-      size: 0,
-  }
-}
-
-
-pub fn
-find(&self, name: &str)-> Option<&VariableInfo>
-{
-    if &self.name == name
-    {
-      return Some(self);
-    }
-
-
-    if self.previous_ptr != std::ptr::null()
-    {
-      return unsafe{&*self.previous_ptr}.find(name);
-    }
-
-
-  None
-}
-
-
-pub fn
-print(&self)
-{
-  print!("{}({})",&self.name,self.index);
-}
 
 
 }
@@ -1253,8 +883,10 @@ find_global(&self, name: &str)-> Option<usize>
 
 
 pub fn
-process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo)
+process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo, offset: usize)-> StorageInfo
 {
+  let  mut si = StorageInfo::new();
+
     match expr
     {
   Expression::Identifier(p)=>
@@ -1268,7 +900,7 @@ process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo)
           else
             if let Some(vi) = last_vi.find(&s)
             {
-              self.operation_list.push(Operation::LoadLocRef(vi.index));
+              self.operation_list.push(Operation::LoadLocRef(vi.storage_info.index));
             }
 
           else
@@ -1304,21 +936,21 @@ process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo)
         },
   Expression::SubExpression(e)=>
         {
-          self.process_expression(e,last_vi);
+          self.process_expression(e,last_vi,offset);
         },
   Expression::Unary(o,e)=>
         {
-          self.process_expression(e,last_vi);
+          self.process_expression(e,last_vi,offset);
 
           self.operation_list.push(Operation::Unary(o.clone()));
         },
   Expression::Call(f,args)=>
         {
-          self.process_expression(f,last_vi);
+          self.process_expression(f,last_vi,offset);
 
             for a in args.iter().rev()
             {
-              self.process_expression(a,last_vi);
+              self.process_expression(a,last_vi,offset);
             }
 
 
@@ -1326,28 +958,29 @@ process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo)
         },
   Expression::Subscript(target,index)=>
         {
-          self.process_expression(target,last_vi);
-          self.process_expression( index,last_vi);
+          self.process_expression(target,last_vi,offset);
+          self.process_expression( index,last_vi,offset);
 
           self.operation_list.push(Operation::Subscript);
         },
   Expression::Access(target,name)=>
         {
-          self.process_expression(target,last_vi);
+          self.process_expression(target,last_vi,offset);
 
           self.operation_list.push(Operation::Access(name.clone()));
         },
   Expression::Binary(o,l,r)=>
         {
-          self.process_expression(l,last_vi);
-          self.process_expression(r,last_vi);
+          self.process_expression(l,last_vi,offset);
+          self.process_expression(r,last_vi,offset);
 
           self.operation_list.push(Operation::Binary(o.clone()));
         },
     }
+
+
+  si
 }
-
-
 
 
 pub fn
@@ -1371,7 +1004,7 @@ process_if(&mut self, ls: &'b Vec<(Expression,Block)>, blk_opt: &'b Option<Block
     {
       let  (e,blk) = &ls[i];
 
-      self.process_expression(e,last_vi);
+      self.process_expression(e,last_vi,0);
 
       self.push_brnz(format!("{}_{}",&base_name,i));
     }
@@ -1406,8 +1039,8 @@ process_for(&mut self, fo: &'b For, mut last_vi: &'b VariableInfo, cbf_ref_opt: 
 {
   let  cbf = ControlBlockFrame::new(&mut self.ctrl_id);
 
-  let  cur_i = fo.current_vi.index;
-  let  end_i =     fo.end_vi.index;
+  let  cur_i = fo.current_vi.storage_info.index;
+  let  end_i =     fo.end_vi.storage_info.index;
 
   self.operation_list.push(Operation::LoadLocRef(cur_i));
 
@@ -1420,7 +1053,7 @@ process_for(&mut self, fo: &'b For, mut last_vi: &'b VariableInfo, cbf_ref_opt: 
 
   self.operation_list.push(Operation::LoadLocRef(end_i));
 
-  self.process_expression(fo.get_end_expression(),last_vi);
+  self.process_expression(fo.get_end_expression(),last_vi,0);
 
   self.operation_list.push(Operation::Assign(AssignOperator::Nop));
 
@@ -1458,7 +1091,7 @@ process_print_v(&mut self, s: &str, last_vi: &'b VariableInfo, cbf_ref_opt: Opti
 {
     if let Some(vi) = last_vi.find(s)
     {
-      self.operation_list.push(Operation::PrintLoc(vi.index));
+      self.operation_list.push(Operation::PrintLoc(vi.storage_info.index));
     }
 
   else
@@ -1494,9 +1127,9 @@ process_statement(&mut self, stmt: &'b Statement, mut last_vi: &'b VariableInfo,
         {
             if let Some(e) = &vi.expression_opt
             {
-              self.operation_list.push(Operation::LoadLocRef(vi.index));
+              self.operation_list.push(Operation::LoadLocRef(vi.storage_info.index));
 
-              self.process_expression(e,last_vi);
+              self.process_expression(e,last_vi,0);
 
               self.operation_list.push(Operation::Assign(AssignOperator::Nop));
             }
@@ -1509,11 +1142,11 @@ process_statement(&mut self, stmt: &'b Statement, mut last_vi: &'b VariableInfo,
         }
   Statement::Expression(e,ass_opt)=>
         {
-          self.process_expression(e,last_vi);
+          self.process_expression(e,last_vi,0);
 
             if let Some((o,re)) = ass_opt
             {
-              self.process_expression(re,last_vi);
+              self.process_expression(re,last_vi,0);
 
               self.operation_list.push(Operation::Assign(o.clone()));
             }
@@ -1541,7 +1174,7 @@ process_statement(&mut self, stmt: &'b Statement, mut last_vi: &'b VariableInfo,
 
           self.push_position(cbf.get_restart_label());
 
-          self.process_expression(e,last_vi);
+          self.process_expression(e,last_vi,0);
 
           self.push_brnz(cbf.get_start_label());
 
@@ -1569,7 +1202,7 @@ process_statement(&mut self, stmt: &'b Statement, mut last_vi: &'b VariableInfo,
         {
             if let Some(e) = e_opt
             {
-              self.process_expression(e,last_vi);
+              self.process_expression(e,last_vi,0);
 
               self.operation_list.push(Operation::Ret);
             }
