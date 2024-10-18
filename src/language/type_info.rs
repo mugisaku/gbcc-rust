@@ -6,6 +6,12 @@ use super::expression::{
 };
 
 
+use super::memory::{
+  Memory,
+
+};
+
+
 const WORD_SIZE: usize = 8;
 
 
@@ -60,6 +66,81 @@ Parameter
 
 
 
+pub enum
+SymbolKind
+{
+  Null,
+  Type(TypeInfo),
+  Variable(TypeInfo,usize),
+
+}
+
+
+
+
+pub struct
+SymbolNode
+{
+  pub(crate) previous_ptr: *const SymbolNode,
+
+  pub(crate) name: String,
+
+  pub(crate) kind: SymbolKind,
+
+}
+
+
+impl
+SymbolNode
+{
+
+
+pub fn
+find_any(&self, name: &str)-> Option<&SymbolKind>
+{
+    if &self.name == name
+    {
+      return Some(&self.kind);
+    }
+
+
+    if self.previous_ptr != std::ptr::null()
+    {
+      return unsafe{&*self.previous_ptr}.find_any(name);
+    }
+
+
+  None
+}
+
+
+pub fn
+find_type(&self, name: &str)-> Option<&TypeInfo>
+{
+    if &self.name == name
+    {
+        if let SymbolKind::Type(ti) = &self.kind
+        {
+          return Some(ti);
+        }
+    }
+
+
+    if self.previous_ptr != std::ptr::null()
+    {
+      return unsafe{&*self.previous_ptr}.find_type(name);
+    }
+
+
+  None
+}
+
+
+}
+
+
+
+
 #[derive(Clone)]
 pub enum
 NumberKind
@@ -93,7 +174,7 @@ TypeKind
   Reference(Box<TypeKind>),
   FunctionReference(Vec<Parameter>,Box<TypeKind>),
 
-  Definition(String),
+  External(String),
 
 }
 
@@ -103,15 +184,110 @@ TypeKind
 {
 
 
+/*
 pub fn
-calculate(e: &Expression)-> Result<usize,()>
+calculate_unary(m: &mut Memory, o: &UnaryOperator, v: &Value, const_list: &Vec<Const>)-> Value
 {
-  Ok(0)
+    match o
+    {
+  UnaryOperator::Neg=>{Value::neg(v)},
+  UnaryOperator::Not=>{Value::not(v)},
+  UnaryOperator::LogicalNot=>{Value::logical_not(v)},
+  _=>{Value::Undefined},
+    }
 }
 
 
 pub fn
-make_ls_info_for_struct(ls: &Vec<Parameter>)-> Result<(Vec<StorageInfo>,usize,Align),()>
+calculate_binary(m: &mut Memory, o: &BinaryOperator, lv: &Value, rv: &Value, const_list: &Vec<Const>)-> Value
+{
+    match o
+    {
+  BinaryOperator::Add=>{Value::add(lv,rv)},
+  BinaryOperator::Sub=>{Value::sub(lv,rv)},
+  BinaryOperator::Mul=>{Value::mul(lv,rv)},
+  BinaryOperator::Div=>{Value::div(lv,rv)},
+  BinaryOperator::Rem=>{Value::rem(lv,rv)},
+  BinaryOperator::Shl=>{Value::shl(lv,rv)},
+  BinaryOperator::Shr=>{Value::shr(lv,rv)},
+  BinaryOperator::And=>{Value::and(lv,rv)},
+  BinaryOperator::Or=>{Value::or(lv,rv)},
+  BinaryOperator::Xor=>{Value::xor(lv,rv)},
+  BinaryOperator::Eq=>{Value::eq(lv,rv)},
+  BinaryOperator::Neq=>{Value::neq(lv,rv)},
+  BinaryOperator::Lt=>{Value::lt(lv,rv)},
+  BinaryOperator::Lteq=>{Value::lteq(lv,rv)},
+  BinaryOperator::Gt=>{Value::gt(lv,rv)},
+  BinaryOperator::Gteq=>{Value::gteq(lv,rv)},
+  BinaryOperator::LogicalAnd=>{Value::logical_and(lv,rv)},
+  BinaryOperator::LogicalOr=>{Value::logical_or(lv,rv)},
+    }
+}
+
+*/
+pub fn
+calculate(m: &mut Memory, sp: &mut usize, e: &Expression)-> Result<TypeInfo,()>
+{
+    match e
+    {
+  Expression::Identifier(s)=>
+        {
+               if s ==  "true"{  /*m.push_u(sp,1);*/  return Ok(TypeInfo::Bool);}
+          else if s == "false"{  /*m.push_u(sp,0);*/  return Ok(TypeInfo::Bool);}
+/*
+          else
+            if let Some(v) = Self::find_const(const_list,s)
+            {
+              return Ok(v);
+            }
+*/
+        },
+  Expression::Boolean(b)=>{ /* m.push_u(sp,if *b{1} else{0}); */ return Ok(TypeInfo::Bool);},
+  Expression::Integer(u)=>{ /* m.push_u(sp,*u);*/  return Ok(TypeInfo::Number(NumberKind::IntLiteral));},
+  Expression::Floating(f)=>{/*  m.push_f(sp,*f);*/  return Ok(TypeInfo::Number(NumberKind::FloatLiteral));},
+  Expression::SubExpression(sube)=>
+        {
+          return Self::calculate(m,sp,e);
+        },
+  Expression::Unary(o,e)=>
+        {
+            if let Ok(ti) = Self::calculate(m,sp,e)
+            {
+//              return Ok(Self::calculate_unary(o,&v,const_list));
+            }
+        },
+  Expression::Call(f,args)=>
+        {
+          panic!();
+        },
+  Expression::Subscript(target,index)=>
+        {
+          panic!();
+        },
+  Expression::Access(target,name)=>
+        {
+          panic!();
+        },
+  Expression::Binary(o,l,r)=>
+        {
+            if let Ok(lti) = Self::calculate(m,sp,l)
+            {
+                if let Ok(rti) = Self::calculate(m,sp,r)
+                {
+//                  return Ok(Self::calculate_binary(o,&lv,&rv,const_list));
+                }
+            }
+        },
+  _=>{}
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+make_ls_info_for_struct(ls: &Vec<Parameter>, nd: &SymbolNode)-> Result<(Vec<StorageInfo>,usize,Align),()>
 {
   let  mut si_ls: Vec<StorageInfo> = Vec::new();
 
@@ -121,7 +297,7 @@ make_ls_info_for_struct(ls: &Vec<Parameter>)-> Result<(Vec<StorageInfo>,usize,Al
 
     for p in ls
     {
-        if let Ok(type_info) = p.type_kind.make_info()
+        if let Ok(type_info) = p.type_kind.make_info(nd)
         {
           let  sz = type_info.get_size();
           let  al = type_info.get_align();
@@ -159,7 +335,7 @@ make_ls_info_for_struct(ls: &Vec<Parameter>)-> Result<(Vec<StorageInfo>,usize,Al
 
 
 pub fn
-make_ls_info_for_union(ls: &Vec<Parameter>)-> Result<(Vec<StorageInfo>,usize,Align),()>
+make_ls_info_for_union(ls: &Vec<Parameter>, nd: &SymbolNode)-> Result<(Vec<StorageInfo>,usize,Align),()>
 {
   let  mut si_ls: Vec<StorageInfo> = Vec::new();
 
@@ -169,7 +345,7 @@ make_ls_info_for_union(ls: &Vec<Parameter>)-> Result<(Vec<StorageInfo>,usize,Ali
 
     for p in ls
     {
-        if let Ok(type_info) = p.type_kind.make_info()
+        if let Ok(type_info) = p.type_kind.make_info(nd)
         {
           let  sz = type_info.get_size();
           let  al = type_info.get_align();
@@ -205,14 +381,12 @@ make_ls_info_for_union(ls: &Vec<Parameter>)-> Result<(Vec<StorageInfo>,usize,Ali
 }
 
 
-
-
 pub fn
-make_fnref_info(ls: &Vec<Parameter>, ret_tk: &TypeKind)-> Result<(Vec<StorageInfo>,TypeInfo),()>
+make_fnref_info(ls: &Vec<Parameter>, ret_tk: &TypeKind, nd: &SymbolNode)-> Result<(Vec<StorageInfo>,TypeInfo),()>
 {
-    if let Ok((si_ls,_,_)) = Self::make_ls_info_for_struct(ls)
+    if let Ok((si_ls,_,_)) = Self::make_ls_info_for_struct(ls,nd)
     {
-        if let Ok(ret_ti) = ret_tk.make_info()
+        if let Ok(ret_ti) = ret_tk.make_info(nd)
         {
           return Ok((si_ls,ret_ti));
         }
@@ -224,7 +398,42 @@ make_fnref_info(ls: &Vec<Parameter>, ret_tk: &TypeKind)-> Result<(Vec<StorageInf
 
 
 pub fn
-make_info(&self)-> Result<TypeInfo,()>
+make_array_info(tk: &TypeKind, e: &Expression, nd: &SymbolNode)-> Result<TypeInfo,()>
+{
+    if let Ok(ti) = tk.make_info(nd)
+    {
+      let  mut m = Memory::new();
+
+      let  mut sp: usize = 0;
+
+        if let Ok(e_ti) = Self::calculate(&mut m,&mut sp,e)
+        {
+            if let TypeInfo::Number(k) = e_ti
+            {
+                match k
+                {
+              NumberKind::UnsignedInt(_)
+             |NumberKind::UnsignedSize
+             |NumberKind::IntLiteral=>
+                    {
+/*                      let  n = m.pop_u(&mut sp) as usize;
+
+                      return Ok(TypeInfo::Array(Box::new(ti),n));
+  */
+                  }
+              _=>{}
+                }
+            }
+        }
+    }
+
+
+    Err(())
+}
+
+
+pub fn
+make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
 {
     match self
     {
@@ -234,22 +443,13 @@ make_info(&self)-> Result<TypeInfo,()>
   TypeKind::Bool    =>{Ok(TypeInfo::Bool)},
   TypeKind::Char    =>{Ok(TypeInfo::Char)},
   TypeKind::Number(k)=>{Ok(TypeInfo::Number(k.clone()))},
-  TypeKind::Array(k,e)=>
+  TypeKind::Array(tk,e)=>
         {
-            if let Ok(ti) = k.make_info()
-            {
-                if let Ok(n) = Self::calculate(e)
-                {
-                  return Ok(TypeInfo::Array(Box::new(ti),n));
-                }
-            }
-
-
-          Err(())
+          Self::make_array_info(tk,e,nd)
         },
   TypeKind::Tuple(ls)=>
         {
-            if let Ok((ti,sz,al)) = Self::make_ls_info_for_struct(ls)
+            if let Ok((ti,sz,al)) = Self::make_ls_info_for_struct(ls,nd)
             {
               return Ok(TypeInfo::Tuple(ti,sz,al));
             }
@@ -259,7 +459,7 @@ make_info(&self)-> Result<TypeInfo,()>
         },
   TypeKind::Struct(ls)=>
         {
-            if let Ok((ti,sz,al)) = Self::make_ls_info_for_struct(ls)
+            if let Ok((ti,sz,al)) = Self::make_ls_info_for_struct(ls,nd)
             {
               return Ok(TypeInfo::Struct(ti,sz,al));
             }
@@ -269,7 +469,7 @@ make_info(&self)-> Result<TypeInfo,()>
         },
   TypeKind::Union(ls)=>
         {
-            if let Ok((ti,sz,al)) = Self::make_ls_info_for_union(ls)
+            if let Ok((ti,sz,al)) = Self::make_ls_info_for_union(ls,nd)
             {
               return Ok(TypeInfo::Union(ti,sz,al));
             }
@@ -280,7 +480,7 @@ make_info(&self)-> Result<TypeInfo,()>
   TypeKind::Enum(name)=>{Ok(TypeInfo::Enum(name.clone()))},
   TypeKind::Pointer(k)=>
         {
-            if let Ok(ti) = k.make_info()
+            if let Ok(ti) = k.make_info(nd)
             {
               return Ok(TypeInfo::Pointer(Box::new(ti)));
             }
@@ -290,7 +490,7 @@ make_info(&self)-> Result<TypeInfo,()>
         },
   TypeKind::Reference(k)=>
         {
-            if let Ok(ti) = k.make_info()
+            if let Ok(ti) = k.make_info(nd)
             {
               return Ok(TypeInfo::Reference(Box::new(ti)));
             }
@@ -300,7 +500,7 @@ make_info(&self)-> Result<TypeInfo,()>
         },
   TypeKind::FunctionReference(ls,ret_k)=>
         {
-            if let Ok((si_ls,ret_ti)) = Self::make_fnref_info(ls,ret_k)
+            if let Ok((si_ls,ret_ti)) = Self::make_fnref_info(ls,ret_k,nd)
             {
               return Ok(TypeInfo::FunctionReference(si_ls,Box::new(ret_ti)));
             }
@@ -308,7 +508,16 @@ make_info(&self)-> Result<TypeInfo,()>
 
           Err(())
         },
-  TypeKind::Definition(name)=>{Err(())},
+  TypeKind::External(name)=>
+        {
+            if let Some(ti_ref) = nd.find_type(name)
+            {
+              return Ok(TypeInfo::External(ti_ref as *const TypeInfo));
+            }
+
+
+          Err(())
+        },
     }
 }
 
@@ -331,6 +540,7 @@ TypeInfo
   Union(Vec<StorageInfo>,usize,Align),
   Enum(String),
   FunctionReference(Vec<StorageInfo>,Box<TypeInfo>),
+  External(*const TypeInfo),
 
 }
 
@@ -371,6 +581,7 @@ get_size(&self)-> usize
   TypeInfo::Pointer(_)=>{WORD_SIZE},
   TypeInfo::Reference(_)=>{WORD_SIZE},
   TypeInfo::FunctionReference(_,_)=>{WORD_SIZE},
+  TypeInfo::External(ptr)=>{unsafe{&**ptr}.get_size()},
     }
 }
 
@@ -406,6 +617,7 @@ get_align(&self)-> Align
   TypeInfo::Pointer(_)=>{Align::default()},
   TypeInfo::Reference(_)=>{Align::default()},
   TypeInfo::FunctionReference(_,_)=>{Align::default()},
+  TypeInfo::External(ptr)=>{unsafe{&**ptr}.get_align()},
     }
 }
 
@@ -498,6 +710,7 @@ print_id_to_string(&self, s: &mut String)
 
           ret_ti.print_id_to_string(s);
         },
+  TypeInfo::External(ptr)=>{unsafe{&**ptr}.print_id_to_string(s);},
     }
 }
 

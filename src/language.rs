@@ -3,6 +3,8 @@
 pub mod expression;
 pub mod statement;
 pub mod type_info;
+pub mod memory;
+pub mod evaluator;
 pub mod dynamic_space;
 pub mod dynamic_machine;
 pub mod dynamic_dictionary;
