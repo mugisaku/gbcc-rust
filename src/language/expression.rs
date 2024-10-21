@@ -374,6 +374,30 @@ Expression
 
 
 pub fn
+read(s: &str)-> Result<Expression,()>
+{
+  use crate::syntax::dictionary::Dictionary;
+
+  let  dic = super::dynamic_dictionary::get_dictionary();
+
+  let  dics: Vec<&Dictionary> = vec![];
+
+    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"expression",Some(dics))
+    {
+      let  mut cur = crate::syntax::Cursor::new(&dir);
+
+        if let Some(d_dir) = cur.get_directory_with_name("expression")
+        {
+          return super::dynamic_read::read_expression(d_dir);
+        }
+    }
+
+
+  Err(())
+}
+
+
+pub fn
 print(&self)
 {
     match self

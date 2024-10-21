@@ -75,22 +75,34 @@ divide(s: &str)-> (&str,&str)
 
 
 fn
-evaluate(s: &str)
+evaluate()
 {
   use crate::language::expression::Expression;
+  use crate::language::evaluator::ExpressionEvaluator;
+  use crate::language::type_info::SymbolNode;
 
-//    if let Ok(e) = Expression::make_from_string(s)
+  use std::io::Read;
+
+    if let Ok(mut f) = std::fs::File::open("test.g")
     {
-//      e.print();
+      let  mut s = String::new();
 
-/*
-      let  v = e.to_value(None);
+      let  _ = f.read_to_string(&mut s);
 
-      print!(" = ");
+        if let Ok(e) = Expression::read(&s)
+        {
+          let  nd = SymbolNode::new();
 
-      v.print();
-*/
-      print!("\n");
+          e.print();
+
+          let  mut ee = ExpressionEvaluator::new();
+
+          ee.reset(&e,&nd);
+
+          ee.run();
+
+          ee.print_final_value();
+        }
     }
 }
 
@@ -178,7 +190,7 @@ type_make(s: &str)
 fn
 main()
 {
-load();
+evaluate();
 
 return; 
 /*

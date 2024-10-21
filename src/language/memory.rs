@@ -24,6 +24,17 @@ new()-> Self
 
 
 pub fn
+new_with_size(sz: usize)-> Self
+{
+  let  mut core: Vec<u8> = Vec::new();
+
+  core.resize(sz,0);
+
+  Self{core}
+}
+
+
+pub fn
 get_size(&self)-> usize
 {
   self.core.len()

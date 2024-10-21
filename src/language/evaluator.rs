@@ -2,6 +2,8 @@
 
 use super::expression::{
   Expression,
+  UnaryOperator,
+  BinaryOperator,
 
 };
 
@@ -13,13 +15,54 @@ use super::memory::{
 
 
 use super::type_info::{
+  SymbolNode,
+  SymbolKind,
   TypeInfo,
   NumberKind,
+  IntKind,
+  FloatKind,
 
 };
 
 
 const WORD_SIZE: usize = 8;
+
+
+pub struct
+CompileResult
+{
+  pub(crate) dst: Destination,
+
+  pub(crate) type_info: TypeInfo,
+
+}
+
+
+impl
+CompileResult
+{
+
+
+pub fn
+new(dst: Destination, type_info: TypeInfo)-> Self
+{
+  Self{
+    dst,
+    type_info,
+  }
+}
+
+
+pub fn
+next_dst(&self)-> Destination
+{
+  self.dst.add(self.type_info.get_size())
+}
+
+
+}
+
+
 
 
 #[derive(Clone)]
@@ -39,6 +82,37 @@ Destination
   field_index: FieldIndex,
 
 }
+
+
+impl
+Destination
+{
+
+
+pub fn
+add(&self, sz: usize)-> Self
+{
+  let  n = (sz+7)/WORD_SIZE;
+
+    match &self.field_index
+    {
+  FieldIndex::Global(i)=>{Self{field_index: FieldIndex::Global((*i)+n)}}
+  FieldIndex::Local(i) =>{Self{field_index: FieldIndex::Local( (*i)+n)}}
+    }
+}
+
+
+pub fn
+to_src(&self)-> Source
+{
+  Source{field_index: self.field_index.clone()}
+}
+
+
+
+}
+
+
 
 
 #[derive(Clone)]
@@ -79,17 +153,24 @@ OpcodeB
 {
   Nop,
 
-  NegI, NgeF,
+  NegI, NegF,
   Not,
+  LogicalNot,
   ItoU, UtoI, ItoF, FtoI,
 
 }
+
+
+pub enum
+TypeCheckResultA{I, U, F, Char, Bool, Bitwise, Err}
 
 
 #[derive(Clone)]
 pub enum
 Instruction
 {
+  Nop,
+
   OperationA(OpcodeA,Destination,Source,Source),
   OperationB(OpcodeB,Destination,Source       ),
 
@@ -109,6 +190,9 @@ ExpressionEvaluator
   pub(crate) bp: usize,
   pub(crate) sp: usize,
 
+  pub(crate) final_value_dst: Destination,
+  pub(crate) final_value_type_info: TypeInfo,
+
 }
 
 
@@ -117,76 +201,249 @@ ExpressionEvaluator
 {
 
 
-/*
 pub fn
-calculate_unary(m: &mut Memory, o: &UnaryOperator, v: &Value, const_list: &Vec<Const>)-> Value
+new()-> Self
 {
-    match o
+  Self{
+    memory: Memory::new_with_size(256),
+    instruction_list: Vec::new(),
+    pc: 0,
+    bp: 0,
+    sp: 0,
+    final_value_dst: Destination{field_index: FieldIndex::Local(0)},
+    final_value_type_info: TypeInfo::Unknown,
+  }
+}
+
+
+pub fn
+compile_unary(o: &UnaryOperator, res: &CompileResult, buf: &mut Vec<Instruction>)-> Result<CompileResult,()>
+{
+  let  (op,ti): (OpcodeB,TypeInfo) = match o
     {
-  UnaryOperator::Neg=>{Value::neg(v)},
-  UnaryOperator::Not=>{Value::not(v)},
-  UnaryOperator::LogicalNot=>{Value::logical_not(v)},
-  _=>{Value::Undefined},
+  UnaryOperator::Neg=>
+        {
+            if let TypeInfo::Number(nk) = &res.type_info
+            {
+                match nk
+                {
+              NumberKind::SignedInt(_)=>{(OpcodeB::NegI,res.type_info.clone())}
+              NumberKind::Float(_)    =>{(OpcodeB::NegF,res.type_info.clone())}
+              _=>{(OpcodeB::Nop,TypeInfo::Unknown)}
+                }
+            }
+
+          else
+            {
+              (OpcodeB::Nop,TypeInfo::Unknown)
+            }
+        },
+  UnaryOperator::Not=>
+        {
+            if let TypeInfo::Number(nk) = &res.type_info
+            {
+                match nk
+                {
+              NumberKind::SignedInt(_)  =>{(OpcodeB::Not,res.type_info.clone())}
+              NumberKind::UnsignedInt(_)=>{(OpcodeB::Not,res.type_info.clone())}
+              _=>{(OpcodeB::Nop,TypeInfo::Unknown)}
+                }
+            }
+
+          else
+            {
+              (OpcodeB::Nop,TypeInfo::Unknown)
+            }
+        },
+  UnaryOperator::LogicalNot=>{if let TypeInfo::Bool = &res.type_info{(OpcodeB::LogicalNot,TypeInfo::Bool)} else{(OpcodeB::Nop,TypeInfo::Unknown)}},
+  _=>{(OpcodeB::Nop,TypeInfo::Unknown)},
+    };
+
+
+    if let OpcodeB::Nop = op
+    {
+      Err(())
+    }
+
+  else
+    {
+      buf.push(Instruction::OperationB(op,res.next_dst(),res.dst.to_src()));
+
+      Ok(CompileResult::new(res.next_dst(),ti))
+    }
+}
+
+
+fn
+typecheck_n(l: &NumberKind, r: &NumberKind)-> (TypeCheckResultA,TypeInfo)
+{
+    if let NumberKind::SignedInt(l_ik) = l
+    {
+        if let NumberKind::SignedInt(r_ik) = r
+        {
+            if let Some(ik) = IntKind::check(l_ik,r_ik)
+            {
+              let  nk = NumberKind::SignedInt(ik);
+
+              return (TypeCheckResultA::F,TypeInfo::Number(nk));
+            }
+        }
+    }
+
+  else
+    if let NumberKind::UnsignedInt(l_ik) = l
+    {
+        if let NumberKind::UnsignedInt(r_ik) = r
+        {
+            if let Some(ik) = IntKind::check(l_ik,r_ik)
+            {
+              let  nk = NumberKind::UnsignedInt(ik);
+
+              return (TypeCheckResultA::F,TypeInfo::Number(nk));
+            }
+        }
+    }
+
+  else
+    if let NumberKind::Float(l_fk) = l
+    {
+        if let NumberKind::Float(r_fk) = r
+        {
+            if let Some(fk) = FloatKind::check(l_fk,r_fk)
+            {
+              let  nk = NumberKind::Float(fk);
+
+              return (TypeCheckResultA::F,TypeInfo::Number(nk));
+            }
+        }
+    }
+
+
+  (TypeCheckResultA::Err,TypeInfo::Unknown)
+}
+
+
+fn
+typecheck_a(l: &TypeInfo, r: &TypeInfo)-> (TypeCheckResultA,TypeInfo)
+{
+    if let TypeInfo::Number(l_nk) = l
+    {
+        if let TypeInfo::Number(r_nk) = r
+        {
+          return Self::typecheck_n(l_nk,r_nk);
+        }
+    }
+
+  else
+    if let TypeInfo::Char = l
+    {
+        if let TypeInfo::Char = r
+        {
+          return (TypeCheckResultA::Char,TypeInfo::Char);
+        }
+    }
+
+  else
+    if let TypeInfo::Bool = l
+    {
+        if let TypeInfo::Bool = r
+        {
+          return (TypeCheckResultA::Bool,TypeInfo::Bool);
+        }
+    }
+
+
+  (TypeCheckResultA::Err,TypeInfo::Unknown)
+}
+
+
+fn
+get_opcode_a(res: TypeCheckResultA, i: OpcodeA, u: OpcodeA, f: OpcodeA)-> OpcodeA
+{
+    match res
+    {
+  TypeCheckResultA::I=>{i}
+  TypeCheckResultA::U=>{u}
+  TypeCheckResultA::F=>{f}
+  _=>{OpcodeA::Nop}
     }
 }
 
 
 pub fn
-calculate_binary(m: &mut Memory, o: &BinaryOperator, lv: &Value, rv: &Value, const_list: &Vec<Const>)-> Value
+compile_binary(o: &BinaryOperator, lres: &CompileResult, rres: &CompileResult, buf: &mut Vec<Instruction>)-> Result<CompileResult,()>
 {
-    match o
+  let  (res,ti) = Self::typecheck_a(&lres.type_info,&rres.type_info);
+
+  let  op = match o
     {
-  BinaryOperator::Add=>{Value::add(lv,rv)},
-  BinaryOperator::Sub=>{Value::sub(lv,rv)},
-  BinaryOperator::Mul=>{Value::mul(lv,rv)},
-  BinaryOperator::Div=>{Value::div(lv,rv)},
-  BinaryOperator::Rem=>{Value::rem(lv,rv)},
-  BinaryOperator::Shl=>{Value::shl(lv,rv)},
-  BinaryOperator::Shr=>{Value::shr(lv,rv)},
-  BinaryOperator::And=>{Value::and(lv,rv)},
-  BinaryOperator::Or=>{Value::or(lv,rv)},
-  BinaryOperator::Xor=>{Value::xor(lv,rv)},
-  BinaryOperator::Eq=>{Value::eq(lv,rv)},
-  BinaryOperator::Neq=>{Value::neq(lv,rv)},
-  BinaryOperator::Lt=>{Value::lt(lv,rv)},
-  BinaryOperator::Lteq=>{Value::lteq(lv,rv)},
-  BinaryOperator::Gt=>{Value::gt(lv,rv)},
-  BinaryOperator::Gteq=>{Value::gteq(lv,rv)},
-  BinaryOperator::LogicalAnd=>{Value::logical_and(lv,rv)},
-  BinaryOperator::LogicalOr=>{Value::logical_or(lv,rv)},
+  BinaryOperator::Add       =>{Self::get_opcode_a(res,OpcodeA::AddI,OpcodeA::AddU,OpcodeA::AddF)},
+  BinaryOperator::Sub       =>{Self::get_opcode_a(res,OpcodeA::SubI,OpcodeA::SubU,OpcodeA::SubF)},
+  BinaryOperator::Mul       =>{Self::get_opcode_a(res,OpcodeA::MulI,OpcodeA::MulU,OpcodeA::MulF)},
+  BinaryOperator::Div       =>{Self::get_opcode_a(res,OpcodeA::DivI,OpcodeA::DivU,OpcodeA::DivF)},
+  BinaryOperator::Rem       =>{Self::get_opcode_a(res,OpcodeA::RemI,OpcodeA::RemU,OpcodeA::RemF)},
+  BinaryOperator::Shl       =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::Shl} else{OpcodeA::Nop}},
+  BinaryOperator::Shr       =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::Shr} else{OpcodeA::Nop}},
+  BinaryOperator::And       =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::And} else{OpcodeA::Nop}},
+  BinaryOperator::Or        =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::Or } else{OpcodeA::Nop}},
+  BinaryOperator::Xor       =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::Xor} else{OpcodeA::Nop}},
+  BinaryOperator::Eq        =>{Self::get_opcode_a(res,OpcodeA::Eq,   OpcodeA::Eq,   OpcodeA::Eq   )},
+  BinaryOperator::Neq       =>{Self::get_opcode_a(res,OpcodeA::Neq,  OpcodeA::Neq,  OpcodeA::Neq  )},
+  BinaryOperator::Lt        =>{Self::get_opcode_a(res,OpcodeA::LtI,  OpcodeA::LtU,  OpcodeA::LtF  )},
+  BinaryOperator::Lteq      =>{Self::get_opcode_a(res,OpcodeA::LteqI,OpcodeA::LteqU,OpcodeA::LteqF)},
+  BinaryOperator::Gt        =>{Self::get_opcode_a(res,OpcodeA::GtI,  OpcodeA::GtU,  OpcodeA::GtF  )},
+  BinaryOperator::Gteq      =>{Self::get_opcode_a(res,OpcodeA::GteqI,OpcodeA::GteqU,OpcodeA::GteqF)},
+  BinaryOperator::LogicalAnd=>{if let TypeCheckResultA::Bool = res{OpcodeA::LogicalAnd} else{OpcodeA::Nop}},
+  BinaryOperator::LogicalOr =>{if let TypeCheckResultA::Bool = res{OpcodeA::LogicalOr } else{OpcodeA::Nop}},
+    };
+
+
+    if let OpcodeA::Nop = op
+    {
+      Err(())
+    }
+
+  else
+    {
+      buf.push(Instruction::OperationA(op,rres.next_dst(),lres.dst.to_src(),rres.dst.to_src()));
+
+      Ok(CompileResult::new(rres.next_dst(),ti))
     }
 }
 
-*/
+
 pub fn
-calculate(e: &Expression, dst: Destination)-> Result<(Instruction,TypeInfo),()>
+compile(e: &Expression, root_nd: &SymbolNode, dst: Destination, buf: &mut Vec<Instruction>)-> Result<CompileResult,()>
 {
     match e
     {
   Expression::Identifier(s)=>
         {
-               if s ==  "true"{return Ok((Instruction::LdU(dst,1),TypeInfo::Bool));}
-          else if s == "false"{return Ok((Instruction::LdU(dst,0),TypeInfo::Bool));}
-/*
+               if s ==  "true"{  buf.push(Instruction::LdU(dst.clone(),1));  return Ok(CompileResult::new(dst,TypeInfo::Bool));}
+          else if s == "false"{  buf.push(Instruction::LdU(dst.clone(),0));  return Ok(CompileResult::new(dst,TypeInfo::Bool));}
           else
-            if let Some(v) = Self::find_const(const_list,s)
+            if let Some(k) = root_nd.find_any(s)
             {
-              return Ok(v);
+                match k
+                {
+              SymbolKind::Type(ti)=>{return Ok(CompileResult::new(dst,TypeInfo::External(ti as *const TypeInfo)));}
+              SymbolKind::Variable(ti,offset)=>{}
+              _=>{}
+                }
             }
-*/
         },
-  Expression::Boolean(b) =>{return Ok((Instruction::LdU(dst,if *b{1} else{0}),TypeInfo::Bool));},
-  Expression::Integer(u) =>{return Ok((Instruction::LdU(dst,*u),TypeInfo::Number(NumberKind::IntLiteral)));},
-  Expression::Floating(f)=>{return Ok((Instruction::LdF(dst,*f),TypeInfo::Number(NumberKind::FloatLiteral)));},
+  Expression::Boolean(b) =>{  buf.push(Instruction::LdU(dst.clone(),if *b{1} else{0}));  return Ok(CompileResult::new(dst,TypeInfo::Bool));},
+  Expression::Integer(u) =>{  buf.push(Instruction::LdU(dst.clone(),*u));                return Ok(CompileResult::new(dst,TypeInfo::new_uliteral()));},
+  Expression::Floating(f)=>{  buf.push(Instruction::LdF(dst.clone(),*f));                return Ok(CompileResult::new(dst,TypeInfo::new_fliteral()));},
   Expression::SubExpression(sube)=>
         {
-          return Self::calculate(e,dst);
+          return Self::compile(e,root_nd,dst,buf);
         },
   Expression::Unary(o,e)=>
         {
-            if let Ok((instr,ti)) = Self::calculate(e,dst)
+            if let Ok(res) = Self::compile(e,root_nd,dst,buf)
             {
-//              return Ok(Self::calculate_unary(o,&v,const_list));
+              return Self::compile_unary(o,&res,buf);
             }
         },
   Expression::Call(f,args)=>
@@ -203,11 +460,11 @@ calculate(e: &Expression, dst: Destination)-> Result<(Instruction,TypeInfo),()>
         },
   Expression::Binary(o,l,r)=>
         {
-            if let Ok((linstr,lti)) = Self::calculate(l,dst.clone())
+            if let Ok(lres) = Self::compile(l,root_nd,dst,buf)
             {
-//                if let Ok((rinstr,rti)) = Self::calculate(r)
+                if let Ok(rres) = Self::compile(r,root_nd,lres.next_dst(),buf)
                 {
-//                  return Ok(Self::calculate_binary(o,&lv,&rv,const_list));
+                  return Self::compile_binary(o,&lres,&rres,buf);
                 }
             }
         },
@@ -220,19 +477,31 @@ calculate(e: &Expression, dst: Destination)-> Result<(Instruction,TypeInfo),()>
 
 
 pub fn
-reset(&mut self, e: &Expression)
+reset(&mut self, e: &Expression, root_nd: &SymbolNode)
 {
   self.instruction_list.clear();
   self.pc = 0;
+  self.bp = 0;
+  self.sp = 0;
 
-  
+  let  dst = Destination{field_index: FieldIndex::Local(0)};
+
+    if let Ok(res) = Self::compile(e,root_nd,dst,&mut self.instruction_list)
+    {
+      self.final_value_dst = res.next_dst();
+      self.final_value_type_info = res.type_info;
+    }
 }
 
 
 fn
 get_address(&self, fi: &FieldIndex)-> usize
 {
-  0
+    match fi
+    {
+  FieldIndex::Global(v)=>{        (8*(*v))}
+  FieldIndex::Local(v) =>{self.bp+(8*(*v))}
+    }
 }
 
 
@@ -301,13 +570,14 @@ operate_b(&mut self, op: &OpcodeB, dst: &Destination, src: &Source)
     {
   OpcodeB::Nop=>{}
 
-  OpcodeB::NegI=>{self.memory.negi(dst_addr,src_addr);}
-  OpcodeB::NgeF=>{self.memory.negf(dst_addr,src_addr);}
-  OpcodeB::Not =>{self.memory.not( dst_addr,src_addr);}
-  OpcodeB::ItoU=>{self.memory.itou(dst_addr,src_addr);}
-  OpcodeB::UtoI=>{self.memory.utoi(dst_addr,src_addr);}
-  OpcodeB::ItoF=>{self.memory.itof(dst_addr,src_addr);}
-  OpcodeB::FtoI=>{self.memory.ftoi(dst_addr,src_addr);}
+  OpcodeB::NegI      =>{self.memory.negi(dst_addr,src_addr);}
+  OpcodeB::NegF      =>{self.memory.negf(dst_addr,src_addr);}
+  OpcodeB::Not       =>{self.memory.not( dst_addr,src_addr);}
+  OpcodeB::LogicalNot=>{self.memory.logical_not( dst_addr,src_addr);}
+  OpcodeB::ItoU      =>{self.memory.itou(dst_addr,src_addr);}
+  OpcodeB::UtoI      =>{self.memory.utoi(dst_addr,src_addr);}
+  OpcodeB::ItoF      =>{self.memory.itof(dst_addr,src_addr);}
+  OpcodeB::FtoI      =>{self.memory.ftoi(dst_addr,src_addr);}
     }
 }
 
@@ -350,6 +620,7 @@ step(&mut self)-> Option<()>
 
         match &instr
         {
+      Instruction::Nop=>{}
       Instruction::OperationA(op,dst,src1,src2)=>{self.operate_a(op,dst,src1,src2);}
       Instruction::OperationB(op,dst,src      )=>{self.operate_b(op,dst,src      );}
       Instruction::LdI(dst,i)=>{self.ldi(dst,*i);}
@@ -363,6 +634,30 @@ step(&mut self)-> Option<()>
 
 
   None
+}
+
+
+pub fn
+run(&mut self)
+{
+    loop
+    {
+        if let None = self.step()
+        {
+          break;
+        }
+    }
+}
+
+
+pub fn
+print_final_value(&self)
+{
+  let  addr = self.get_address(&self.final_value_dst.field_index);
+
+  self.final_value_type_info.print();
+
+  print!(" = {}",self.memory.get_u64(addr));
 }
 
 

@@ -96,6 +96,17 @@ SymbolNode
 
 
 pub fn
+new()-> Self
+{
+  Self{
+    previous_ptr: std::ptr::null(),
+    name: String::new(),
+    kind: SymbolKind::Null,
+  }
+}
+
+
+pub fn
 find_any(&self, name: &str)-> Option<&SymbolKind>
 {
     if &self.name == name
@@ -143,19 +154,278 @@ find_type(&self, name: &str)-> Option<&TypeInfo>
 
 #[derive(Clone)]
 pub enum
-NumberKind
+IntKind
 {
-    SignedInt(usize),
-  UnsignedInt(usize),
-  Float(usize),
+  Sized(usize),
 
-    SignedSize,
-  UnsignedSize,
+  Size,
 
-    IntLiteral,
-  FloatLiteral,
+  Literal,
 
 }
+
+
+impl
+IntKind
+{
+
+
+pub fn
+check(l: &Self, r: &Self)-> Option<Self>
+{
+    if let Self::Literal = l
+    {
+      return Some(r.clone());
+    }
+
+  else
+    if let Self::Literal = r
+    {
+      return Some(l.clone());
+    }
+
+  else
+    if let Self::Size = l
+    {
+        if let Self::Size = r
+        {
+          return Some(l.clone());
+        }
+    }
+
+  else
+    if let Self::Sized(l_sz) = l
+    {
+        if let Self::Sized(r_sz) = r
+        {
+            if l_sz == r_sz
+            {
+              return Some(l.clone());
+            }
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+get_size(&self)-> usize
+{
+    match self
+    {
+  IntKind::Sized(sz)=>{*sz}
+  IntKind::Size=>{WORD_SIZE}
+  IntKind::Literal=>{WORD_SIZE}
+    }
+}
+
+
+pub fn
+get_align(&self)-> Align
+{
+    match self
+    {
+  IntKind::Sized(sz)=>{Align{value: *sz}}
+  IntKind::Size=>{Align{value: WORD_SIZE}}
+  IntKind::Literal=>{Align{value: WORD_SIZE}}
+    }
+}
+
+
+pub fn
+print_id_to_string(&self, s: &mut String)
+{
+    match self
+    {
+  IntKind::Sized(sz)=>{  let  t = format!("{}",8*(*sz)); s.push_str(&t);}
+  IntKind::Size=>{s.push_str("sz");}
+  IntKind::Literal=>{s.push_str("lt");}
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  IntKind::Sized(sz)=>{print!("{}",8*(*sz));}
+  IntKind::Size=>{print!("size")}
+  IntKind::Literal=>{print!("literal")}
+    }
+}
+
+
+}
+
+
+
+
+#[derive(Clone)]
+pub enum
+FloatKind
+{
+  Sized(usize),
+  Literal,
+
+}
+
+
+impl
+FloatKind
+{
+
+
+
+pub fn
+check(l: &Self, r: &Self)-> Option<Self>
+{
+    if let Self::Literal = l
+    {
+      return Some(r.clone());
+    }
+
+  else
+    if let Self::Literal = r
+    {
+      return Some(l.clone());
+    }
+
+  else
+    if let Self::Sized(l_sz) = l
+    {
+        if let Self::Sized(r_sz) = r
+        {
+            if l_sz == r_sz
+            {
+              return Some(l.clone());
+            }
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+get_size(&self)-> usize
+{
+    match self
+    {
+  FloatKind::Sized(sz)=>{*sz}
+  FloatKind::Literal=>{WORD_SIZE}
+    }
+}
+
+
+pub fn
+get_align(&self)-> Align
+{
+    match self
+    {
+  FloatKind::Sized(sz)=>{Align{value: *sz}}
+  FloatKind::Literal=>{Align{value: WORD_SIZE}}
+    }
+}
+
+
+pub fn
+print_id_to_string(&self, s: &mut String)
+{
+    match self
+    {
+  FloatKind::Sized(sz)=>{  let  t = format!("{}",8*(*sz)); s.push_str(&t);}
+  FloatKind::Literal=>{s.push_str("lt");}
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  FloatKind::Sized(sz)=>{print!("{}",8*(*sz));}
+  FloatKind::Literal=>{print!("literal");}
+    }
+}
+
+
+}
+
+
+
+
+#[derive(Clone)]
+pub enum
+NumberKind
+{
+    SignedInt(IntKind),
+  UnsignedInt(IntKind),
+  Float(FloatKind),
+
+}
+
+
+impl
+NumberKind
+{
+
+
+pub fn
+print_id_to_string(&self, s: &mut String)
+{
+    match self
+    {
+  NumberKind::SignedInt(ik)=>
+        {
+          s.push('i');
+          ik.print_id_to_string(s);
+        }
+  NumberKind::UnsignedInt(ik)=>
+        {
+          s.push('u');
+          ik.print_id_to_string(s);
+        }
+  NumberKind::Float(fk)=>
+        {
+          s.push('f');
+          fk.print_id_to_string(s);
+        }
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  NumberKind::SignedInt(ik)=>
+        {
+          print!("i");
+          ik.print();
+        }
+  NumberKind::UnsignedInt(ik)=>
+        {
+          print!("u");
+          ik.print();
+        }
+  NumberKind::Float(fk)=>
+        {
+          print!("f");
+          fk.print();
+        }
+    }
+}
+
+
+}
+
+
 
 
 pub enum
@@ -182,108 +452,6 @@ TypeKind
 impl
 TypeKind
 {
-
-
-/*
-pub fn
-calculate_unary(m: &mut Memory, o: &UnaryOperator, v: &Value, const_list: &Vec<Const>)-> Value
-{
-    match o
-    {
-  UnaryOperator::Neg=>{Value::neg(v)},
-  UnaryOperator::Not=>{Value::not(v)},
-  UnaryOperator::LogicalNot=>{Value::logical_not(v)},
-  _=>{Value::Undefined},
-    }
-}
-
-
-pub fn
-calculate_binary(m: &mut Memory, o: &BinaryOperator, lv: &Value, rv: &Value, const_list: &Vec<Const>)-> Value
-{
-    match o
-    {
-  BinaryOperator::Add=>{Value::add(lv,rv)},
-  BinaryOperator::Sub=>{Value::sub(lv,rv)},
-  BinaryOperator::Mul=>{Value::mul(lv,rv)},
-  BinaryOperator::Div=>{Value::div(lv,rv)},
-  BinaryOperator::Rem=>{Value::rem(lv,rv)},
-  BinaryOperator::Shl=>{Value::shl(lv,rv)},
-  BinaryOperator::Shr=>{Value::shr(lv,rv)},
-  BinaryOperator::And=>{Value::and(lv,rv)},
-  BinaryOperator::Or=>{Value::or(lv,rv)},
-  BinaryOperator::Xor=>{Value::xor(lv,rv)},
-  BinaryOperator::Eq=>{Value::eq(lv,rv)},
-  BinaryOperator::Neq=>{Value::neq(lv,rv)},
-  BinaryOperator::Lt=>{Value::lt(lv,rv)},
-  BinaryOperator::Lteq=>{Value::lteq(lv,rv)},
-  BinaryOperator::Gt=>{Value::gt(lv,rv)},
-  BinaryOperator::Gteq=>{Value::gteq(lv,rv)},
-  BinaryOperator::LogicalAnd=>{Value::logical_and(lv,rv)},
-  BinaryOperator::LogicalOr=>{Value::logical_or(lv,rv)},
-    }
-}
-
-*/
-pub fn
-calculate(m: &mut Memory, sp: &mut usize, e: &Expression)-> Result<TypeInfo,()>
-{
-    match e
-    {
-  Expression::Identifier(s)=>
-        {
-               if s ==  "true"{  /*m.push_u(sp,1);*/  return Ok(TypeInfo::Bool);}
-          else if s == "false"{  /*m.push_u(sp,0);*/  return Ok(TypeInfo::Bool);}
-/*
-          else
-            if let Some(v) = Self::find_const(const_list,s)
-            {
-              return Ok(v);
-            }
-*/
-        },
-  Expression::Boolean(b)=>{ /* m.push_u(sp,if *b{1} else{0}); */ return Ok(TypeInfo::Bool);},
-  Expression::Integer(u)=>{ /* m.push_u(sp,*u);*/  return Ok(TypeInfo::Number(NumberKind::IntLiteral));},
-  Expression::Floating(f)=>{/*  m.push_f(sp,*f);*/  return Ok(TypeInfo::Number(NumberKind::FloatLiteral));},
-  Expression::SubExpression(sube)=>
-        {
-          return Self::calculate(m,sp,e);
-        },
-  Expression::Unary(o,e)=>
-        {
-            if let Ok(ti) = Self::calculate(m,sp,e)
-            {
-//              return Ok(Self::calculate_unary(o,&v,const_list));
-            }
-        },
-  Expression::Call(f,args)=>
-        {
-          panic!();
-        },
-  Expression::Subscript(target,index)=>
-        {
-          panic!();
-        },
-  Expression::Access(target,name)=>
-        {
-          panic!();
-        },
-  Expression::Binary(o,l,r)=>
-        {
-            if let Ok(lti) = Self::calculate(m,sp,l)
-            {
-                if let Ok(rti) = Self::calculate(m,sp,r)
-                {
-//                  return Ok(Self::calculate_binary(o,&lv,&rv,const_list));
-                }
-            }
-        },
-  _=>{}
-    }
-
-
-  Err(())
-}
 
 
 pub fn
@@ -406,25 +574,23 @@ make_array_info(tk: &TypeKind, e: &Expression, nd: &SymbolNode)-> Result<TypeInf
 
       let  mut sp: usize = 0;
 
+/*
         if let Ok(e_ti) = Self::calculate(&mut m,&mut sp,e)
         {
-            if let TypeInfo::Number(k) = e_ti
+            if let TypeInfo::Number(nk) = e_ti
             {
-                match k
+                if let NumberKind::UnsignedInt(ik) = nk
                 {
-              NumberKind::UnsignedInt(_)
-             |NumberKind::UnsignedSize
-             |NumberKind::IntLiteral=>
+                    if let IntKind::Size = ik
                     {
-/*                      let  n = m.pop_u(&mut sp) as usize;
+                      let  n = m.pop_u(&mut sp) as usize;
 
-                      return Ok(TypeInfo::Array(Box::new(ti),n));
-  */
-                  }
-              _=>{}
+                          return Ok(TypeInfo::Array(Box::new(ti),n));
+                    }
                 }
             }
         }
+*/
     }
 
 
@@ -525,6 +691,7 @@ make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
 }
 
 
+#[derive(Clone)]
 pub enum
 TypeInfo
 {
@@ -551,6 +718,27 @@ TypeInfo
 
 
 pub fn
+new_usize()-> Self
+{
+  Self::Number(NumberKind::UnsignedInt(IntKind::Size))
+}
+
+
+pub fn
+new_uliteral()-> Self
+{
+  Self::Number(NumberKind::UnsignedInt(IntKind::Literal))
+}
+
+
+pub fn
+new_fliteral()-> Self
+{
+  Self::Number(NumberKind::Float(FloatKind::Literal))
+}
+
+
+pub fn
 get_size(&self)-> usize
 {
     match self
@@ -560,17 +748,13 @@ get_size(&self)-> usize
   TypeInfo::Void=>{0},
   TypeInfo::Bool=>{1},
   TypeInfo::Char=>{1},
-  TypeInfo::Number(k)=>
+  TypeInfo::Number(nk)=>
         {
-            match k
+            match nk
             {
-          NumberKind::SignedInt(sz)  =>{*sz}
-          NumberKind::UnsignedInt(sz)=>{*sz}
-          NumberKind::Float(sz)      =>{*sz}
-          NumberKind::SignedSize  =>{WORD_SIZE}
-          NumberKind::UnsignedSize=>{WORD_SIZE}
-          NumberKind::IntLiteral  =>{0}
-          NumberKind::FloatLiteral=>{0}
+          NumberKind::SignedInt(ik)  =>{ik.get_size()}
+          NumberKind::UnsignedInt(ik)=>{ik.get_size()}
+          NumberKind::Float(fk)      =>{fk.get_size()}
             }
         },
   TypeInfo::Array(ti,n)=>{ti.get_size()* *n},
@@ -596,17 +780,13 @@ get_align(&self)-> Align
   TypeInfo::Void=>{Align{value: 0}},
   TypeInfo::Bool=>{Align{value: 1}},
   TypeInfo::Char=>{Align{value: 1}},
-  TypeInfo::Number(k)=>
+  TypeInfo::Number(nk)=>
         {
-            match k
+            match nk
             {
-          NumberKind::SignedInt(sz)  =>{Align{value: *sz}}
-          NumberKind::UnsignedInt(sz)=>{Align{value: *sz}}
-          NumberKind::Float(sz)      =>{Align{value: *sz}}
-          NumberKind::SignedSize  =>{Align::default()}
-          NumberKind::UnsignedSize=>{Align::default()}
-          NumberKind::IntLiteral  =>{Align{value: 0}}
-          NumberKind::FloatLiteral=>{Align{value: 0}}
+          NumberKind::SignedInt(ik)  =>{ik.get_align()}
+          NumberKind::UnsignedInt(ik)=>{ik.get_align()}
+          NumberKind::Float(fk)      =>{fk.get_align()}
             }
         },
   TypeInfo::Array(ti,_)=>{ti.get_align()},
@@ -642,18 +822,9 @@ print_id_to_string(&self, s: &mut String)
   TypeInfo::Void=>{s.push('v');},
   TypeInfo::Bool=>{s.push('b');},
   TypeInfo::Char=>{s.push('c');},
-  TypeInfo::Number(k)=>
+  TypeInfo::Number(nk)=>
         {
-            match k
-            {
-          NumberKind::SignedInt(sz)  =>{  s.push('i');  let  t = format!("{}",8* *sz);  s.push_str(&t);}
-          NumberKind::UnsignedInt(sz)=>{  s.push('u');  let  t = format!("{}",8* *sz);  s.push_str(&t);}
-          NumberKind::SignedSize  =>{s.push_str("isz")}
-          NumberKind::UnsignedSize=>{s.push_str("usz")}
-          NumberKind::Float(sz)      =>{  s.push('f');  let  t = format!("{}",8* *sz);  s.push_str(&t);}
-          NumberKind::IntLiteral  =>{s.push_str("il");}
-          NumberKind::FloatLiteral=>{s.push_str("fl");}
-            }
+          nk.print_id_to_string(s);
         },
   TypeInfo::Array(ti,n)=>
         {
@@ -715,11 +886,63 @@ print_id_to_string(&self, s: &mut String)
 }
 
 
+pub fn
+print(&self)
+{
+    match self
+    {
+  TypeInfo::Unknown=>{print!("unknown");},
+
+  TypeInfo::Void=>{print!("void");},
+  TypeInfo::Bool=>{print!("bool");},
+  TypeInfo::Char=>{print!("char");},
+  TypeInfo::Number(nk)=>
+        {
+          nk.print();
+        },
+  TypeInfo::Array(ti,n)=>
+        {
+        },
+  TypeInfo::Tuple(ls,_,_)=>
+        {
+        },
+  TypeInfo::Struct(ls,_,_)=>
+        {
+        },
+  TypeInfo::Union(ls,_,_)=>
+        {
+        },
+  TypeInfo::Enum(name)=>{print!("{}",name);},
+  TypeInfo::Pointer(ti)=>
+        {
+          print!("");
+        },
+  TypeInfo::Reference(ti)=>
+        {
+          print!("");
+        },
+  TypeInfo::FunctionReference(ls,ret_ti)=>
+        {
+          print!("");
+
+            for si in ls
+            {
+            }
+
+
+          print!("");
+        },
+  TypeInfo::External(ptr)=>{unsafe{&**ptr}.print();},
+    }
+}
+
+
 }
 
 
 
 
+#[derive(Clone)]
 pub struct
 StorageInfo
 {
