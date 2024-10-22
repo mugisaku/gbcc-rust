@@ -75,6 +75,27 @@ FieldIndex
 }
 
 
+impl
+FieldIndex
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Self::Global(i)=>{print!("g{}",*i);}
+  Self::Local(i) =>{print!("l{}",*i);}
+    }
+}
+
+
+}
+
+
+
+
 #[derive(Clone)]
 pub struct
 Destination
@@ -147,6 +168,66 @@ OpcodeA
 }
 
 
+impl
+OpcodeA
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Self::Nop=>{print!("nop");},
+
+  Self::AddI=>{print!("addi");},
+  Self::SubI=>{print!("subi");},
+  Self::MulI=>{print!("muli");},
+  Self::DivI=>{print!("divi");},
+  Self::RemI=>{print!("remi");},
+  Self::AddU=>{print!("addu");},
+  Self::SubU=>{print!("subu");},
+  Self::MulU=>{print!("mulu");},
+  Self::DivU=>{print!("divu");},
+  Self::RemU=>{print!("remu");},
+  Self::AddF=>{print!("addf");},
+  Self::SubF=>{print!("subf");},
+  Self::MulF=>{print!("mulf");},
+  Self::DivF=>{print!("divf");},
+  Self::RemF=>{print!("remf");},
+
+  Self::Shl=>{print!("shl");},
+  Self::Shr=>{print!("shr");},
+  Self::And=>{print!("and");},
+  Self::Or =>{print!("or");},
+  Self::Xor=>{print!("xor");},
+
+  Self::Eq =>{print!("eq");},
+  Self::Neq=>{print!("neq");},
+
+  Self::LtI  =>{print!("lti");},
+  Self::LteqI=>{print!("lteqi");},
+  Self::GtI  =>{print!("gti");},
+  Self::GteqI=>{print!("gteqi");},
+  Self::LtU  =>{print!("ltu");},
+  Self::LteqU=>{print!("ltequ");},
+  Self::GtU  =>{print!("gtu");},
+  Self::GteqU=>{print!("gtequ");},
+  Self::LtF  =>{print!("ltf");},
+  Self::LteqF=>{print!("lteqf");},
+  Self::GtF  =>{print!("gtf");},
+  Self::GteqF=>{print!("gteqf");},
+
+  Self::LogicalAnd=>{print!("logical_and");},
+  Self::LogicalOr =>{print!("logical_or");},
+    }
+}
+
+
+}
+
+
+
 #[derive(Clone)]
 pub enum
 OpcodeB
@@ -157,6 +238,33 @@ OpcodeB
   Not,
   LogicalNot,
   ItoU, UtoI, ItoF, FtoI,
+
+}
+
+
+impl
+OpcodeB
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Self::Nop=>{print!("nop");},
+
+  Self::NegI      =>{print!("negi");},
+  Self::NegF      =>{print!("negf");},
+  Self::Not       =>{print!("not");},
+  Self::LogicalNot=>{print!("logical_not");},
+  Self::ItoU      =>{print!("itou");},
+  Self::UtoI      =>{print!("utoi");},
+  Self::ItoF      =>{print!("itof");},
+  Self::FtoI      =>{print!("ftoi");},
+    }
+}
+
 
 }
 
@@ -179,6 +287,48 @@ Instruction
   LdF(Destination,f64),
 
 }
+
+
+impl
+Instruction
+{
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Self::Nop=>{print!("nop");}
+
+  Self::OperationA(op,dst,src1,src2)=>
+        {
+          dst.field_index.print();
+          print!(" = ");
+          op.print();
+          print!(" ");
+          src1.field_index.print();
+          print!(" ");
+          src2.field_index.print();
+        }
+  Self::OperationB(op,dst,src)=>
+        {
+          dst.field_index.print();
+          print!(" = ");
+          op.print();
+          print!(" ");
+          src.field_index.print();
+        }
+  Self::LdI(dst,i)=>{  dst.field_index.print();  print!(" = ldi {}",*i);}
+  Self::LdU(dst,u)=>{  dst.field_index.print();  print!(" = ldu {}",*u);}
+  Self::LdF(dst,f)=>{  dst.field_index.print();  print!(" = ldf {}",*f);}
+    }
+}
+
+
+}
+
+
 
 
 pub struct
@@ -285,7 +435,7 @@ typecheck_n(l: &NumberKind, r: &NumberKind)-> (TypeCheckResultA,TypeInfo)
             {
               let  nk = NumberKind::SignedInt(ik);
 
-              return (TypeCheckResultA::F,TypeInfo::Number(nk));
+              return (TypeCheckResultA::I,TypeInfo::Number(nk));
             }
         }
     }
@@ -299,7 +449,7 @@ typecheck_n(l: &NumberKind, r: &NumberKind)-> (TypeCheckResultA,TypeInfo)
             {
               let  nk = NumberKind::UnsignedInt(ik);
 
-              return (TypeCheckResultA::F,TypeInfo::Number(nk));
+              return (TypeCheckResultA::U,TypeInfo::Number(nk));
             }
         }
     }
@@ -488,8 +638,13 @@ reset(&mut self, e: &Expression, root_nd: &SymbolNode)
 
     if let Ok(res) = Self::compile(e,root_nd,dst,&mut self.instruction_list)
     {
-      self.final_value_dst = res.next_dst();
+      self.final_value_dst = res.dst.clone();
       self.final_value_type_info = res.type_info;
+    }
+
+  else
+    {
+      panic!();
     }
 }
 
@@ -653,11 +808,29 @@ run(&mut self)
 pub fn
 print_final_value(&self)
 {
-  let  addr = self.get_address(&self.final_value_dst.field_index);
+    for instr in &self.instruction_list
+    {
+      instr.print();
+
+      println!("");
+    }
+
+
+  print!("return value index is ");
+
+  self.final_value_dst.field_index.print();
+
+  println!("");
+
+  print!("return value type is ");
 
   self.final_value_type_info.print();
 
-  print!(" = {}",self.memory.get_u64(addr));
+  println!("");
+
+  let  addr = self.get_address(&self.final_value_dst.field_index);
+
+  print!(" = {}({})",self.memory.get_u64(addr),addr);
 }
 
 

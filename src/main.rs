@@ -95,6 +95,8 @@ evaluate()
 
           e.print();
 
+          println!("");
+
           let  mut ee = ExpressionEvaluator::new();
 
           ee.reset(&e,&nd);
