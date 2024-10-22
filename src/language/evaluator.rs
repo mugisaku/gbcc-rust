@@ -634,6 +634,8 @@ reset(&mut self, e: &Expression, root_nd: &SymbolNode)
   self.bp = 0;
   self.sp = 0;
 
+  self.final_value_type_info = TypeInfo::Unknown;
+
   let  dst = Destination{field_index: FieldIndex::Local(0)};
 
     if let Ok(res) = Self::compile(e,root_nd,dst,&mut self.instruction_list)
@@ -802,6 +804,15 @@ run(&mut self)
           break;
         }
     }
+}
+
+
+pub fn
+get_final_value_as_usize(&self)-> usize
+{
+  let  addr = self.get_address(&self.final_value_dst.field_index);
+
+  self.memory.get_u64(addr) as usize
 }
 
 

@@ -12,6 +12,12 @@ use super::memory::{
 };
 
 
+use super::evaluator::{
+  ExpressionEvaluator,
+
+};
+
+
 const WORD_SIZE: usize = 8;
 
 
@@ -570,31 +576,28 @@ make_array_info(tk: &TypeKind, e: &Expression, nd: &SymbolNode)-> Result<TypeInf
 {
     if let Ok(ti) = tk.make_info(nd)
     {
-      let  mut m = Memory::new();
+      let  mut ee = ExpressionEvaluator::new();
 
-      let  mut sp: usize = 0;
+      ee.reset(e,nd);
 
-/*
-        if let Ok(e_ti) = Self::calculate(&mut m,&mut sp,e)
+      ee.run();
+
+        if let TypeInfo::Number(nk) = &ee.final_value_type_info
         {
-            if let TypeInfo::Number(nk) = e_ti
+            if let NumberKind::UnsignedInt(ik) = nk
             {
-                if let NumberKind::UnsignedInt(ik) = nk
+                if let IntKind::Size = ik
                 {
-                    if let IntKind::Size = ik
-                    {
-                      let  n = m.pop_u(&mut sp) as usize;
+                  let  n = ee.get_final_value_as_usize();
 
-                          return Ok(TypeInfo::Array(Box::new(ti),n));
-                    }
+                  return Ok(TypeInfo::Array(Box::new(ti),n));
                 }
             }
         }
-*/
     }
 
 
-    Err(())
+  Err(())
 }
 
 
