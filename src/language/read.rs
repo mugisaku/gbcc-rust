@@ -34,7 +34,7 @@ use crate::language::type_info::{
 };
 
 
-use crate::language::dynamic_space::{
+use crate::language::space::{
   Function,
   Declaration,
 

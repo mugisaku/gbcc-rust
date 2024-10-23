@@ -5,11 +5,10 @@ pub mod statement;
 pub mod type_info;
 pub mod memory;
 pub mod evaluator;
-pub mod dynamic_space;
+pub mod space;
 //pub mod dynamic_machine;
-pub mod dynamic_dictionary;
-pub mod dynamic_read;
-//pub mod dynamic_value;
+pub mod dictionary;
+pub mod read;
 
 
 /*

@@ -378,7 +378,7 @@ read(s: &str)-> Expression
 {
   use crate::syntax::dictionary::Dictionary;
 
-  let  dic = super::dynamic_dictionary::get_dictionary();
+  let  dic = super::dictionary::get_dictionary();
 
   let  dics: Vec<&Dictionary> = vec![];
 
@@ -388,7 +388,7 @@ read(s: &str)-> Expression
 
         if let Some(d_dir) = cur.get_directory_with_name("expression")
         {
-          return super::dynamic_read::read_expression(d_dir);
+          return super::read::read_expression(d_dir);
         }
     }
 

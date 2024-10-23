@@ -135,7 +135,7 @@ execute_program(s: &str)
 fn
 load()
 {
-  use crate::language::dynamic_space::{
+  use crate::language::space::{
     Space, Function
   };
 

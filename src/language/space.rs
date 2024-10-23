@@ -23,13 +23,13 @@ use super::statement::{
 };
 
 
-use super::dynamic_dictionary::{
+use super::dictionary::{
   get_dictionary
 
 };
 
 
-use super::dynamic_read::{
+use super::read::{
   read_declaration,
 
 };
@@ -92,7 +92,7 @@ read(&mut self, s: &str)
 {
   use crate::syntax::dictionary::Dictionary;
 
-  let  dic = super::dynamic_dictionary::get_dictionary();
+  let  dic = super::dictionary::get_dictionary();
 
   let  dics: Vec<&Dictionary> = vec![];
 
@@ -102,7 +102,7 @@ read(&mut self, s: &str)
 
         while let Some(d_dir) = cur.get_directory()
         {
-          let  decl = super::dynamic_read::read_declaration(d_dir);
+          let  decl = super::read::read_declaration(d_dir);
 
             match decl
             {
