@@ -1,18 +1,16 @@
 
 
-use super::expression::{
-  TableElement,
-  Expression,
-  UnaryOperator,
-  BinaryOperator,
-  AssignOperator,
+use super::type_info::{
+  Parameter,
+  TypeKind,
+  TypeInfo,
+  StorageInfo,
 
 };
 
 
-use super::type_info::{
-  StorageInfo,
-
+use super::expression::{
+  Expression,
 };
 
 
@@ -21,12 +19,6 @@ use super::statement::{
   Block,
   For,
   VariableInfo,
-
-};
-
-
-use super::dynamic_machine::{
-  Operation,
 
 };
 
@@ -43,77 +35,26 @@ use super::dynamic_read::{
 };
 
 
-use super::dynamic_value::{
-  Value,
-  Element,
-
-};
-
-
 
 
 pub enum
 Declaration
 {
   Fn(String,Function),
-  Let(String,Option<Expression>),
-  Const(String,Expression),
+  Let(VariableInfo),
+  Const(VariableInfo),
 
 }
 
 
-
-
-pub struct
-Symbol
-{
-  pub(crate) name: String,
-  pub(crate) index: usize,
-  pub(crate) value: Value,
-
-  pub(crate) ro_flag: bool,
-
-}
-
-
-impl
-Symbol
-{
-
-
-pub fn
-new(name: &str, index: usize, ro_flag: bool)-> Self
-{
-  Self{
-    name: name.to_string(),
-    index,
-    value: Value::Null,
-    ro_flag,
-  }
-}
-
-
-}
-
-
-
-
-pub struct
-Const
-{
-  pub(crate) name: String,
-  pub(crate) expression: Expression,
-  pub(crate) value: Value,
-
-}
 
 
 pub struct
 Var
 {
   pub(crate) name: String,
-  pub(crate) expression_opt: Option<Expression>,
-  pub(crate) value: Value,
+  pub(crate) type_kind: TypeKind,
+  pub(crate) expression: Expression,
 
 }
 
@@ -121,10 +62,10 @@ Var
 pub struct
 Space
 {
-  pub(crate) symbol_list: Vec<Symbol>,
-  pub(crate)  const_list: Vec<Const>,
-  pub(crate)    let_list: Vec<Var>,
-  pub(crate)     fn_list: Vec<(String,Function,Vec<Operation>)>,
+//  pub(crate) symbol_list: Vec<Symbol>,
+  pub(crate)  const_list: Vec<VariableInfo>,
+  pub(crate)    let_list: Vec<VariableInfo>,
+  pub(crate)     fn_list: Vec<(String,Function)>,
 
 }
 
@@ -138,7 +79,7 @@ pub fn
 new()-> Self
 {
   Self{
-    symbol_list: Vec::new(),
+//    symbol_list: Vec::new(),
      const_list: Vec::new(),
        let_list: Vec::new(),
         fn_list: Vec::new(),
@@ -161,23 +102,22 @@ read(&mut self, s: &str)
 
         while let Some(d_dir) = cur.get_directory()
         {
-            if let Ok(decl) = super::dynamic_read::read_declaration(d_dir)
+          let  decl = super::dynamic_read::read_declaration(d_dir);
+
+            match decl
             {
-                match decl
+          Declaration::Fn(name,f)=>
                 {
-              Declaration::Fn(name,f)=>
-                    {
-                      self.fn_list.push((name,f,Vec::new()));
-                    }
-              Declaration::Let(name,e_opt)=>
-                    {
-                      self.let_list.push(Var{name, expression_opt: e_opt, value: Value::Null});
-                    }
-              Declaration::Const(name,e)=>
-                    {
-                      self.const_list.push(Const{name, expression: e, value: Value::Null});
-                    }
-               }
+                  self.fn_list.push((name,f));
+                }
+          Declaration::Let(var)=>
+                {
+                  self.let_list.push(var);
+                }
+          Declaration::Const(var)=>
+                {
+                  self.const_list.push(var);
+                }
             }
 
 
@@ -192,6 +132,7 @@ read(&mut self, s: &str)
 }
 
 
+/*
 pub fn
 find_fn(&self, name: &str)-> Option<&Function>
 {
@@ -210,170 +151,26 @@ find_fn(&self, name: &str)-> Option<&Function>
 }
 
 
-pub fn
-find_const_value(&self, name: &str)-> Option<&Value>
-{
-    for c in &self.const_list
-    {
-        if &c.name == name
-        {
-          return Some(&c.value);
-        }
-    }
-
-
-  None
-}
-
-
 fn
-find_const(const_list: &Vec<Const>, name: &str)-> Option<Value>
+find_const(const_list: &Vec<Const>, name: &str)-> Option<()>
 {
     for c in const_list
     {
         if c.name == name
         {
-          return Some(c.value.clone());
+          return Some(());
         }
     }
 
 
   None
-}
-
-
-pub fn
-calculate_unary(o: &UnaryOperator, v: &Value, const_list: &Vec<Const>)-> Value
-{
-    match o
-    {
-  UnaryOperator::Neg=>{Value::neg(v)},
-  UnaryOperator::Not=>{Value::not(v)},
-  UnaryOperator::LogicalNot=>{Value::logical_not(v)},
-  _=>{Value::Undefined},
-    }
-}
-
-
-pub fn
-calculate_binary(o: &BinaryOperator, lv: &Value, rv: &Value, const_list: &Vec<Const>)-> Value
-{
-    match o
-    {
-  BinaryOperator::Add=>{Value::add(lv,rv)},
-  BinaryOperator::Sub=>{Value::sub(lv,rv)},
-  BinaryOperator::Mul=>{Value::mul(lv,rv)},
-  BinaryOperator::Div=>{Value::div(lv,rv)},
-  BinaryOperator::Rem=>{Value::rem(lv,rv)},
-  BinaryOperator::Shl=>{Value::shl(lv,rv)},
-  BinaryOperator::Shr=>{Value::shr(lv,rv)},
-  BinaryOperator::And=>{Value::and(lv,rv)},
-  BinaryOperator::Or=>{Value::or(lv,rv)},
-  BinaryOperator::Xor=>{Value::xor(lv,rv)},
-  BinaryOperator::Eq=>{Value::eq(lv,rv)},
-  BinaryOperator::Neq=>{Value::neq(lv,rv)},
-  BinaryOperator::Lt=>{Value::lt(lv,rv)},
-  BinaryOperator::Lteq=>{Value::lteq(lv,rv)},
-  BinaryOperator::Gt=>{Value::gt(lv,rv)},
-  BinaryOperator::Gteq=>{Value::gteq(lv,rv)},
-  BinaryOperator::LogicalAnd=>{Value::logical_and(lv,rv)},
-  BinaryOperator::LogicalOr=>{Value::logical_or(lv,rv)},
-    }
-}
-
-
-pub fn
-to_element_list(src: &Vec<TableElement>, const_list: &Vec<Const>)-> Vec<Element>
-{
-  let  mut dst: Vec<Element> = Vec::new();
-
-    for te in src
-    {
-        if let Ok(v) = Space::calculate(&te.expression,const_list)
-        {
-          dst.push(Element::new(&te.name,v));
-        }
-
-      else
-        {
-          panic!();
-        }
-    }
-
-
-  dst
-}
-
-
-pub fn
-calculate(e: &Expression, const_list: &Vec<Const>)-> Result<Value,()>
-{
-    match e
-    {
-  Expression::Identifier(s)=>
-        {
-               if s == "true"{return Ok(Value::Boolean(true));}
-          else if s == "false"{return Ok(Value::Boolean(false));}
-          else if s == "null"{return Ok(Value::Null);}
-          else if s == "undefined"{return Ok(Value::Undefined);}
-          else
-            if let Some(v) = Self::find_const(const_list,s)
-            {
-              return Ok(v);
-            }
-        },
-  Expression::Boolean(b)=>{return Ok(Value::Boolean(*b));},
-  Expression::Integer(u)=>{return Ok(Value::Integer(*u as i64));},
-  Expression::Floating(f)=>{return Ok(Value::Floating(*f));},
-  Expression::String(s)=>{return Ok(Value::String(s.clone()));},
-  Expression::Table(ls)=>
-        {
-          return Ok(Value::Table(Self::to_element_list(ls,const_list)));
-        },
-  Expression::SubExpression(sube)=>
-        {
-          return Self::calculate(sube,const_list);
-        },
-  Expression::Unary(o,e)=>
-        {
-            if let Ok(v) = Self::calculate(e,const_list)
-            {
-              return Ok(Self::calculate_unary(o,&v,const_list));
-            }
-        },
-  Expression::Call(f,args)=>
-        {
-          panic!();
-        },
-  Expression::Subscript(target,index)=>
-        {
-          panic!();
-        },
-  Expression::Access(target,name)=>
-        {
-          panic!();
-        },
-  Expression::Binary(o,l,r)=>
-        {
-            if let Ok(lv) = Self::calculate(l,const_list)
-            {
-                if let Ok(rv) = Self::calculate(r,const_list)
-                {
-                  return Ok(Self::calculate_binary(o,&lv,&rv,const_list));
-                }
-            }
-        },
-  _=>{}
-    }
-
-
-  Err(())
 }
 
 
 pub fn
 calculate_const_values(const_list: &mut Vec<Const>)
 {
+/*
   let  mut tmp: Vec<Const> = Vec::new();
   let  mut  ok: Vec<Const> = Vec::new();
   let  mut err: Vec<Const> = Vec::new();
@@ -421,19 +218,21 @@ calculate_const_values(const_list: &mut Vec<Const>)
 
 
   std::mem::swap(const_list,&mut ok);
+*/
 }
 
 
 pub fn
 calculate_let_values(let_list: &mut Vec<Var>, const_list: &Vec<Const>)
 {
+/*
     for var in let_list
     {
-        if let Some(e) = &var.expression_opt
+//        if let Some(e) = &var.expression_opt
         {
             if let Ok(v) = Self::calculate(e,const_list)
             {
-              var.value = v;
+//              var.value = v;
             }
 
           else
@@ -442,6 +241,7 @@ calculate_let_values(let_list: &mut Vec<Var>, const_list: &Vec<Const>)
             }
         }
     }
+*/
 }
 
 
@@ -516,9 +316,10 @@ compile(&mut self)
 
   Self::check_name(&symtbl);
 
-  Self::calculate_const_values(&mut self.const_list);
-  Self::calculate_let_values(&mut self.let_list,&self.const_list);
+//  Self::calculate_const_values(&mut self.const_list);
+//  Self::calculate_let_values(&mut self.let_list,&self.const_list);
 
+/*
     for (name,f,op_ls) in &mut self.fn_list
     {
       f.block.scan();
@@ -535,6 +336,7 @@ compile(&mut self)
             }
         }
     }
+*/
 
 
   self.symbol_list = symtbl;
@@ -564,7 +366,7 @@ print(&self)
     {
       print!("const  {}: ",&c.name);
 
-      c.expression.print();
+//      c.expression.print();
 
       print!(";\n");
     }
@@ -574,9 +376,9 @@ print(&self)
     {
       print!("fn  {}(",name);
 
-        for name in &f.parameter_list
+        for para in &f.parameter_list
         {
-          print!("{},",name);
+          print!("{},",&para.name);
         }
 
 
@@ -594,9 +396,9 @@ print_operations(&self)
     {
       print!("fn  {}(",name);
 
-        for name in &f.parameter_list
+        for para in &f.parameter_list
         {
-          print!("{},",name);
+          print!("{},",&para.name);
         }
 
 
@@ -630,6 +432,7 @@ print_operations(&self)
 }
 
 
+*/
 }
 
 
@@ -638,7 +441,7 @@ print_operations(&self)
 pub struct
 Function
 {
-  pub(crate) parameter_list: Vec<String>,
+  pub(crate) parameter_list: Vec<Parameter>,
   pub(crate) block: Block,
 
 }
@@ -716,12 +519,13 @@ Position
 
 
 
+/*
 pub struct
 CompileContext<'a,'b>
 {
   pub(crate)   symbol_list_ref: &'a Vec<Symbol>,
   pub(crate)    const_list_ref: &'a Vec<Const>,
-  pub(crate) parameter_list_ref: &'b Vec<String>,
+  pub(crate) parameter_list_ref: &'b Vec<Parameter>,
 
   pub(crate) operation_list: Vec<Operation>,
 
@@ -855,7 +659,7 @@ find_parameter(&self, name: &str)-> Option<usize>
     {
       let  ii = l-1-i;
 
-        if &self.parameter_list_ref[ii] == name
+        if &self.parameter_list_ref[ii].name == name
         {
           return Some(ii);
         }
@@ -889,28 +693,26 @@ process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo, offs
 
     match expr
     {
-  Expression::Identifier(p)=>
+  Expression::Identifier(s)=>
         {
-          let  s = p.to_string();
-
                if s ==      "true"{self.operation_list.push(Operation::LoadB(true));}
           else if s ==     "false"{self.operation_list.push(Operation::LoadB(false));}
           else if s ==      "null"{self.operation_list.push(Operation::LoadN);}
           else if s == "undefined"{self.operation_list.push(Operation::LoadU);}
           else
-            if let Some(vi) = last_vi.find(&s)
+            if let Some(vi) = last_vi.find(s)
             {
               self.operation_list.push(Operation::LoadLocRef(vi.storage_info.index));
             }
 
           else
-            if let Some(i) = self.find_parameter(&s)
+            if let Some(i) = self.find_parameter(s)
             {
               self.operation_list.push(Operation::LoadArgRef(i));
             }
 
           else
-            if let Some(i) = self.find_global(&s)
+            if let Some(i) = self.find_global(s)
             {
               self.operation_list.push(Operation::LoadGloRef(i));
             }
@@ -930,9 +732,11 @@ process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo, offs
   Expression::String(s)  =>{self.operation_list.push(Operation::LoadS(s.clone()));},
   Expression::Table(ls)=>
         {
+/*
           let  e_ls = Space::to_element_list(ls,self.const_list_ref);
 
           self.operation_list.push(Operation::LoadT(e_ls));
+*/
         },
   Expression::SubExpression(e)=>
         {
@@ -1272,7 +1076,7 @@ print_position_lists(&self)
 
 
 }
-
+*/
 
 
 

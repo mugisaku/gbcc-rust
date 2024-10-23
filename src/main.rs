@@ -89,22 +89,21 @@ evaluate()
 
       let  _ = f.read_to_string(&mut s);
 
-        if let Ok(e) = Expression::read(&s)
-        {
-          let  nd = SymbolNode::new();
+      let  e = Expression::read(&s);
 
-          e.print();
+      let  nd = SymbolNode::new();
 
-          println!("");
+      e.print();
 
-          let  mut ee = ExpressionEvaluator::new();
+      println!("");
 
-          ee.reset(&e,&nd);
+      let  mut ee = ExpressionEvaluator::new();
 
-          ee.run();
+      ee.reset(&e,&nd);
 
-          ee.print_final_value();
-        }
+      ee.run();
+
+      ee.print_final_value();
     }
 }
 
@@ -140,6 +139,7 @@ load()
     Space, Function
   };
 
+/*
   use crate::language::dynamic_machine::{
     Machine,
     StepResult,
@@ -157,13 +157,11 @@ load()
 
       sp.read(&s);
 
-      sp.print();
+//      sp.print();
 
       print!("\n--\n");
 
-      sp.compile();
-
-      sp.print_operations();
+//      sp.compile();
 
       print!("\n");
 
@@ -174,6 +172,7 @@ load()
 
       println!("finished");
     }
+*/
 }
 
 

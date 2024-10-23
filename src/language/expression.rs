@@ -374,7 +374,7 @@ Expression
 
 
 pub fn
-read(s: &str)-> Result<Expression,()>
+read(s: &str)-> Expression
 {
   use crate::syntax::dictionary::Dictionary;
 
@@ -393,7 +393,7 @@ read(s: &str)-> Result<Expression,()>
     }
 
 
-  Err(())
+  panic!();
 }
 
 

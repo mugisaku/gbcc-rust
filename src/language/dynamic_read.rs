@@ -27,6 +27,13 @@ use crate::language::statement::{
 };
 
 
+use crate::language::type_info::{
+  TypeKind,
+  Parameter,
+
+};
+
+
 use crate::language::dynamic_space::{
   Function,
   Declaration,
@@ -34,36 +41,42 @@ use crate::language::dynamic_space::{
 };
 
 
-use crate::language::dynamic_value::{
-  Value,
-  Element,
-
-};
-
-
 pub fn
-read_parameter_list(dir: &Directory)-> Result<Vec<String>,()>
+read_parameter(dir: &Directory)-> Parameter
 {
   let  mut cur = Cursor::new(dir);
 
-  let  mut ls: Vec<String> = Vec::new();
+  cur.advance(1);
+
+  Parameter{name: String::new(), type_kind: TypeKind::Unknown}
+}
+
+
+pub fn
+read_parameter_list(dir: &Directory)-> Vec<Parameter>
+{
+  let  mut cur = Cursor::new(dir);
+
+  let  mut ls: Vec<Parameter> = Vec::new();
 
   cur.advance(1);
 
-    while let Some(s) = cur.get_identifier()
+    while let Some(p_d) = cur.get_directory_with_name("parameter")
     {
-      ls.push(s.clone());
+      let  p = read_parameter(p_d);
+
+      ls.push(p);
 
       cur.advance(2);
     }
 
 
-  Ok(ls)
+  ls
 }
 
  
 pub fn
-read_fn(dir: &Directory)-> Result<(String,Function),()>
+read_fn(dir: &Directory)-> (String,Function)
 {
   let  mut cur = Cursor::new(dir);
 
@@ -77,30 +90,28 @@ read_fn(dir: &Directory)-> Result<(String,Function),()>
 
         if let Some(parals_d) = cur.get_directory_with_name("parameter_list")
         {
-            if let Ok(parameter_list) = read_parameter_list(parals_d)
+          let  parameter_list = read_parameter_list(parals_d);
+
+          cur.advance(1);
+
+            if let Some(stmts_d) = cur.seek_directory_with_name("statement_list")
             {
-              cur.advance(1);
+              let  block = read_block(stmts_d);
 
-                if let Some(stmts_d) = cur.seek_directory_with_name("statement_list")
-                {
-                    if let Ok(block) = read_block(stmts_d)
-                    {
-                      let  f = Function{parameter_list, block};
+              let  f = Function{parameter_list, block};
 
-                      return Ok((name,f));
-                    }
-                }
+              return (name,f);
             }
         }
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_variable(dir: &Directory)-> Result<VariableInfo,()>
+read_variable(dir: &Directory)-> VariableInfo
 {
   let  mut cur = Cursor::new(dir);
 
@@ -114,23 +125,22 @@ read_variable(dir: &Directory)-> Result<VariableInfo,()>
 
         if let Some(e_d) = cur.seek_directory_with_name("expression")
         {
-            if let Ok(e) = read_expression(e_d)
-            {
-              return Ok(VariableInfo::new(name,Some(e)));
-            }
+          let  e = read_expression(e_d);
+
+          return VariableInfo::new(name,Some(e));
         }
 
 
-      return Ok(VariableInfo::new(name,None));
+      return VariableInfo::new(name,None);
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_declaration(dir: &Directory)-> Result<Declaration,()>
+read_declaration(dir: &Directory)-> Declaration
 {
   let  mut cur = Cursor::new(dir);
 
@@ -140,122 +150,115 @@ read_declaration(dir: &Directory)-> Result<Declaration,()>
 
         if d_name == "fn"
         {
-            if let Ok((name,f)) = read_fn(d)
-            {
-              return Ok(Declaration::Fn(name,f));
-            }
+          let (name,f) = read_fn(d);
+
+          return Declaration::Fn(name,f);
         }
 
       else
         if d_name == "let"
         {
-            if let Ok(vi) = read_variable(d)
-            {
-              return Ok(Declaration::Let(vi.name,vi.expression_opt));
-            }
+          let  vi = read_variable(d);
+
+          return Declaration::Let(vi);
         }
 
       else
         if d_name == "const"
         {
-            if let Ok(vi) = read_variable(d)
-            {
-              return Ok(Declaration::Const(vi.name,vi.expression_opt.unwrap()));
-            }
+          let  vi = read_variable(d);
+
+          return Declaration::Const(vi);
         }
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 
 
 pub fn
-read_expression_or_assign(dir: &Directory)-> Result<Statement,()>
+read_expression_or_assign(dir: &Directory)-> Statement
 {
   let  mut cur = Cursor::new(dir);
 
     if let Some(e_dir) = cur.get_directory_with_name("expression")
     {
-        if let Ok(e) = read_expression(e_dir)
+      let  e = read_expression(e_dir);
+
+      cur.advance(1);
+
+        if let Some(o_dir) = cur.get_directory_with_name("assign_operator")
         {
+          let  o = read_assign_operator(o_dir);
+
           cur.advance(1);
 
-            if let Some(o_dir) = cur.get_directory_with_name("assign_operator")
+            if let Some(r_dir) = cur.get_directory_with_name("expression")
             {
-                if let Ok(o) = read_assign_operator(o_dir)
-                {
-                  cur.advance(1);
+              let  r = read_expression(r_dir);
 
-                    if let Some(r_dir) = cur.get_directory_with_name("expression")
-                    {
-                        if let Ok(r) = read_expression(r_dir)
-                        {
-                          return Ok(Statement::Expression(e,Some((o,r))));
-                        }
-                    }
-                }
-
-              else
-                {
-                  return Ok(Statement::Expression(e,None));
-                }
+              return Statement::Expression(e,Some((o,r)));
             }
+        }
+
+      else
+        {
+          return Statement::Expression(e,None);
         }
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_assign_operator(dir: &Directory)-> Result<AssignOperator,()>
+read_assign_operator(dir: &Directory)-> AssignOperator
 {
   let  cur = Cursor::new(dir);
 
     if let Some(s) = cur.get_others_string()
     {
-           if s ==   "="{return Ok(AssignOperator::Nop);}
-      else if s ==  "+="{return Ok(AssignOperator::Add);}
-      else if s ==  "-="{return Ok(AssignOperator::Sub);}
-      else if s ==  "*="{return Ok(AssignOperator::Mul);}
-      else if s ==  "/="{return Ok(AssignOperator::Div);}
-      else if s ==  "%="{return Ok(AssignOperator::Rem);}
-      else if s == "<<="{return Ok(AssignOperator::Shl);}
-      else if s == ">>="{return Ok(AssignOperator::Shr);}
-      else if s ==  "&="{return Ok(AssignOperator::And);}
-      else if s ==  "|="{return Ok(AssignOperator::Or);}
-      else if s ==  "^="{return Ok(AssignOperator::Xor);}
+           if s ==   "="{return AssignOperator::Nop;}
+      else if s ==  "+="{return AssignOperator::Add;}
+      else if s ==  "-="{return AssignOperator::Sub;}
+      else if s ==  "*="{return AssignOperator::Mul;}
+      else if s ==  "/="{return AssignOperator::Div;}
+      else if s ==  "%="{return AssignOperator::Rem;}
+      else if s == "<<="{return AssignOperator::Shl;}
+      else if s == ">>="{return AssignOperator::Shr;}
+      else if s ==  "&="{return AssignOperator::And;}
+      else if s ==  "|="{return AssignOperator::Or;}
+      else if s ==  "^="{return AssignOperator::Xor;}
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_return(dir: &Directory)-> Result<Statement,()>
+read_return(dir: &Directory)-> Statement
 {
   let  mut cur = Cursor::new(dir);
 
     if let Some(d) = cur.seek_directory_with_name("expression")
     {
-        if let Ok(e) = read_expression(d)
-        {
-          return Ok(Statement::Return(Some(e)));
-        }
+      let  e = read_expression(d);
+
+      return Statement::Return(Some(e));
     }
 
 
-  Ok(Statement::Return(None))
+  Statement::Return(None)
 }
 
 
 pub fn
-read_if(dir: &Directory)-> Result<Statement,()>
+read_if(dir: &Directory)-> Statement
 {
   let  mut cur = Cursor::new(dir);
 
@@ -267,61 +270,48 @@ read_if(dir: &Directory)-> Result<Statement,()>
 
     while let Some(expr_d) = cur.get_directory_with_name("expression")
     {
-        if let Ok(condition) = read_expression(expr_d)
+      let  condition = read_expression(expr_d);
+
+      cur.advance(1);
+
+        if let Some(ls_d) = cur.get_directory_with_name("statement_list")
+        {
+          let  blk = read_block(ls_d);
+
+          cur.advance(1);
+
+          cond_blk_ls.push((condition,blk));
+        }
+
+
+        if cur.test_keyword("else")
         {
           cur.advance(1);
 
-            if let Some(ls_d) = cur.get_directory_with_name("statement_list")
-            {
-                if let Ok(blk) = read_block(ls_d)
-                {
-                  cur.advance(1);
-
-                  cond_blk_ls.push((condition,blk));
-                }
-            }
-
-
-            if cur.test_keyword("else")
+            if cur.test_keyword("if")
             {
               cur.advance(1);
-
-                if cur.test_keyword("if")
-                {
-                  cur.advance(1);
-                }
-
-              else
-                if let Some(else_d) = cur.get_directory_with_name("statement_list")
-                {
-                    if let Ok(else_blk) = read_block(else_d)
-                    {
-                      else_blk_opt = Some(else_blk);
-
-                      break;
-                    }
-
-                  else
-                    {
-                      return Err(());
-                    }
-                }
             }
-        }
 
-      else
-        {
-          return Err(());
+          else
+            if let Some(else_d) = cur.get_directory_with_name("statement_list")
+            {
+              let  else_blk = read_block(else_d);
+
+              else_blk_opt = Some(else_blk);
+
+              break;
+            }
         }
     }
 
 
-  Ok(Statement::If(cond_blk_ls,else_blk_opt))
+  Statement::If(cond_blk_ls,else_blk_opt)
 }
 
 
 pub fn
-read_while(dir: &Directory)-> Result<Statement,()>
+read_while(dir: &Directory)-> Statement
 {
   let  mut cur = Cursor::new(dir);
 
@@ -329,27 +319,25 @@ read_while(dir: &Directory)-> Result<Statement,()>
 
     if let Some(expr_d) = cur.get_directory_with_name("expression")
     {
-        if let Ok(condition) = read_expression(expr_d)
-        {
-          cur.advance(1);
+      let  condition = read_expression(expr_d);
 
-            if let Some(ls_d) = cur.get_directory_with_name("statement_list")
-            {
-                if let Ok(blk) = read_block(ls_d)
-                {
-                  return Ok(Statement::While(condition,blk));
-                }
-            }
+      cur.advance(1);
+
+        if let Some(ls_d) = cur.get_directory_with_name("statement_list")
+        {
+          let  blk = read_block(ls_d);
+
+          return Statement::While(condition,blk);
         }
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_loop(dir: &Directory)-> Result<Statement,()>
+read_loop(dir: &Directory)-> Statement
 {
   let  mut cur = Cursor::new(dir);
 
@@ -357,19 +345,18 @@ read_loop(dir: &Directory)-> Result<Statement,()>
 
     if let Some(ls_d) = cur.get_directory_with_name("statement_list")
     {
-        if let Ok(blk) = read_block(ls_d)
-        {
-          return Ok(Statement::Loop(blk));
-        }
+      let  blk = read_block(ls_d);
+
+      return Statement::Loop(blk);
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_for(dir: &Directory)-> Result<Statement,()>
+read_for(dir: &Directory)-> Statement
 {
   let  mut cur = Cursor::new(dir);
 
@@ -383,30 +370,28 @@ read_for(dir: &Directory)-> Result<Statement,()>
 
         if let Some(expr_d) = cur.get_directory_with_name("expression")
         {
-            if let Ok(expr) = read_expression(expr_d)
+          let  expr = read_expression(expr_d);
+
+          cur.advance(1);
+
+            if let Some(blk_d) = cur.get_directory_with_name("statement_list")
             {
-              cur.advance(1);
+              let  blk = read_block(blk_d);
 
-                if let Some(blk_d) = cur.get_directory_with_name("statement_list")
-                {
-                    if let Ok(blk) = read_block(blk_d)
-                    {
-                      let  f = For::new(name,expr,blk);
+              let  f = For::new(name,expr,blk);
 
-                      return Ok(Statement::For(f));
-                    }
-                }
+              return Statement::For(f);
             }
         }
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_print_s(dir: &Directory)-> Result<String,()>
+read_print_s(dir: &Directory)-> String
 {
   let  mut cur = Cursor::new(dir);
 
@@ -414,16 +399,16 @@ read_print_s(dir: &Directory)-> Result<String,()>
 
     if let Some(s) = cur.get_string()
     {
-      return Ok(s.clone());
+      return s.clone();
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_print_v(dir: &Directory)-> Result<String,()>
+read_print_v(dir: &Directory)-> String
 {
   let  mut cur = Cursor::new(dir);
 
@@ -431,16 +416,16 @@ read_print_v(dir: &Directory)-> Result<String,()>
 
     if let Some(s) = cur.get_identifier()
     {
-      return Ok(s.clone());
+      return s.clone();
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_block(dir: &Directory)-> Result<Block,()>
+read_block(dir: &Directory)-> Block
 {
   let  mut cur = Cursor::new(dir);
 
@@ -450,22 +435,20 @@ read_block(dir: &Directory)-> Result<Block,()>
 
     while let Some(d) = cur.get_directory()
     {
-        if let Ok(stmt) = read_statement(d)
-        {
-          statement_list.push(stmt);
-        }
+      let  stmt = read_statement(d);
 
+      statement_list.push(stmt);
 
       cur.advance(1);
     }
 
 
-  Ok(Block::new(statement_list))
+  Block::new(statement_list)
 }
 
 
 pub fn
-read_statement(dir: &Directory)-> Result<Statement,()>
+read_statement(dir: &Directory)-> Statement
 {
   let  mut cur = Cursor::new(dir);
 
@@ -473,7 +456,7 @@ read_statement(dir: &Directory)-> Result<Statement,()>
     {
         if s == ";"
         {
-          return Ok(Statement::Empty);
+          return Statement::Empty;
         }
     }
 
@@ -484,10 +467,9 @@ read_statement(dir: &Directory)-> Result<Statement,()>
 
         if d_name == "statement_list"
         {
-            if let Ok(blk) = read_block(d)
-            {
-              return Ok(Statement::Block(blk));
-            }
+          let  blk = read_block(d);
+
+          return Statement::Block(blk);
         }
 
       else
@@ -517,13 +499,13 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "break"
         {
-          return Ok(Statement::Break);
+          return Statement::Break;
         }
 
       else
         if d_name == "continue"
         {
-          return Ok(Statement::Continue);
+          return Statement::Continue;
         }
 
       else
@@ -535,162 +517,149 @@ read_statement(dir: &Directory)-> Result<Statement,()>
       else
         if d_name == "let"
         {
-            if let Ok(vi) = read_variable(d)
-            {
-              return Ok(Statement::Let(vi));
-            }
+          let  vi = read_variable(d);
+
+          return Statement::Let(vi);
         }
 
       else
         if d_name == "const"
         {
-            if let Ok(vi) = read_variable(d)
-            {
-              return Ok(Statement::Const(vi));
-            }
+          let  vi = read_variable(d);
+
+          return Statement::Const(vi);
         }
 
       else
         if d_name == "print_s"
         {
-            if let Ok(s) = read_print_s(d)
-            {
-              return Ok(Statement::PrintS(s));
-            }
+          let  s = read_print_s(d);
+
+          return Statement::PrintS(s);
         }
 
       else
         if d_name == "print_v"
         {
-            if let Ok(s) = read_print_v(d)
-            {
-              return Ok(Statement::PrintV(s));
-            }
+          let  s = read_print_v(d);
+
+          return Statement::PrintV(s);
         }
 
       else
         if d_name == "expression_or_assign"
         {
-            if let Ok(st) = read_expression_or_assign(d)
-            {
-              return Ok(st);
-            }
+          let  st = read_expression_or_assign(d);
+
+          return st;
         }
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 
 
 pub fn
-read_expression(dir: &Directory)-> Result<Expression,()>
+read_expression(dir: &Directory)-> Expression
 {
   let  mut cur = Cursor::new(dir);
 
     if let Some(o_dir) = cur.get_directory_with_name("operand")
     {
-        if let Ok(mut e) = read_operand(o_dir)
+      let  mut e = read_operand(o_dir);
+
+      cur.advance(1);
+
+        while let Some(b_dir) = cur.get_directory_with_name("binary_operator")
         {
+          let  b = read_binary_operator(b_dir);
+
           cur.advance(1);
 
-            while let Some(b_dir) = cur.get_directory_with_name("binary_operator")
+            if let Some(next_o_dir) = cur.get_directory_with_name("operand")
             {
-                if let Ok(b) = read_binary_operator(b_dir)
-                {
-                  cur.advance(1);
+              let  next_e = read_operand(next_o_dir);
 
-                    if let Some(next_o_dir) = cur.get_directory_with_name("operand")
-                    {
-                        if let Ok(next_e) = read_operand(next_o_dir)
-                        {
-                          cur.advance(1);
+              cur.advance(1);
 
-                          let  l = Box::new(     e);
-                          let  r = Box::new(next_e);
+              let  l = Box::new(     e);
+              let  r = Box::new(next_e);
 
-                          e = Expression::Binary(b,l,r);
-                        }
-                    }
-
-                  else
-                    {
-                      return Err(());
-                    }
-                }
-
-              else
-                {
-                  return Err(());
-                }
+              e = Expression::Binary(b,l,r);
             }
 
-
-          return Ok(e);
+          else
+            {
+              panic!();
+            }
         }
+
+
+      return e;
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 
 
 pub fn
-read_unary_operator(dir: &Directory)-> Result<UnaryOperator,()>
+read_unary_operator(dir: &Directory)-> UnaryOperator
 {
   let  cur = Cursor::new(dir);
 
     if let Some(s) = cur.get_others_string()
     {
-           if s == "~"{return Ok(UnaryOperator::Not);}
-      else if s == "!"{return Ok(UnaryOperator::LogicalNot);}
-      else if s == "-"{return Ok(UnaryOperator::Neg);}
-      else if s == "*"{return Ok(UnaryOperator::Deref);}
+           if s == "~"{return UnaryOperator::Not;}
+      else if s == "!"{return UnaryOperator::LogicalNot;}
+      else if s == "-"{return UnaryOperator::Neg;}
+      else if s == "*"{return UnaryOperator::Deref;}
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_binary_operator(dir: &Directory)-> Result<BinaryOperator,()>
+read_binary_operator(dir: &Directory)-> BinaryOperator
 {
   let  cur = Cursor::new(dir);
 
     if let Some(s) = cur.get_others_string()
     {
-           if s ==  "+"{return Ok(BinaryOperator::Add);}
-      else if s ==  "-"{return Ok(BinaryOperator::Sub);}
-      else if s ==  "*"{return Ok(BinaryOperator::Mul);}
-      else if s ==  "/"{return Ok(BinaryOperator::Div);}
-      else if s ==  "%"{return Ok(BinaryOperator::Rem);}
-      else if s == "<<"{return Ok(BinaryOperator::Shl);}
-      else if s == ">>"{return Ok(BinaryOperator::Shr);}
-      else if s ==  "&"{return Ok(BinaryOperator::And);}
-      else if s ==  "|"{return Ok(BinaryOperator::Or);}
-      else if s ==  "^"{return Ok(BinaryOperator::Xor);}
-      else if s == "=="{return Ok(BinaryOperator::Eq);}
-      else if s == "!="{return Ok(BinaryOperator::Neq);}
-      else if s ==  "<"{return Ok(BinaryOperator::Lt);}
-      else if s == "<="{return Ok(BinaryOperator::Lteq);}
-      else if s ==  ">"{return Ok(BinaryOperator::Gt);}
-      else if s == ">="{return Ok(BinaryOperator::Gteq);}
-      else if s == "&&"{return Ok(BinaryOperator::LogicalAnd);}
-      else if s == "||"{return Ok(BinaryOperator::LogicalOr);}
+           if s ==  "+"{return BinaryOperator::Add;}
+      else if s ==  "-"{return BinaryOperator::Sub;}
+      else if s ==  "*"{return BinaryOperator::Mul;}
+      else if s ==  "/"{return BinaryOperator::Div;}
+      else if s ==  "%"{return BinaryOperator::Rem;}
+      else if s == "<<"{return BinaryOperator::Shl;}
+      else if s == ">>"{return BinaryOperator::Shr;}
+      else if s ==  "&"{return BinaryOperator::And;}
+      else if s ==  "|"{return BinaryOperator::Or;}
+      else if s ==  "^"{return BinaryOperator::Xor;}
+      else if s == "=="{return BinaryOperator::Eq;}
+      else if s == "!="{return BinaryOperator::Neq;}
+      else if s ==  "<"{return BinaryOperator::Lt;}
+      else if s == "<="{return BinaryOperator::Lteq;}
+      else if s ==  ">"{return BinaryOperator::Gt;}
+      else if s == ">="{return BinaryOperator::Gteq;}
+      else if s == "&&"{return BinaryOperator::LogicalAnd;}
+      else if s == "||"{return BinaryOperator::LogicalOr;}
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_postfix_operator(dir: &Directory, e: Box<Expression>)-> Result<Expression,()>
+read_postfix_operator(dir: &Directory, e: Box<Expression>)-> Expression
 {
   let  cur = Cursor::new(dir);
 
@@ -704,12 +673,12 @@ read_postfix_operator(dir: &Directory, e: Box<Expression>)-> Result<Expression,(
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_access(dir: &Directory, e: Box<Expression>)-> Result<Expression,()>
+read_access(dir: &Directory, e: Box<Expression>)-> Expression
 {
   let  mut cur = Cursor::new(dir);
 
@@ -719,17 +688,17 @@ read_access(dir: &Directory, e: Box<Expression>)-> Result<Expression,()>
     {
         if let ObjectData::Identifier(s) = o.get_data()
         {
-          return Ok(Expression::Access(e,s.clone()));
+          return Expression::Access(e,s.clone());
         }
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_subscript(dir: &Directory, target_e: Box<Expression>)-> Result<Expression,()>
+read_subscript(dir: &Directory, target_e: Box<Expression>)-> Expression
 {
   let  mut cur = Cursor::new(dir);
 
@@ -737,19 +706,18 @@ read_subscript(dir: &Directory, target_e: Box<Expression>)-> Result<Expression,(
 
     if let Some(e_dir) = cur.get_directory_with_name("expression")
     {
-        if let Ok(e) = read_expression(e_dir)
-        {
-          return Ok(Expression::Subscript(target_e,Box::new(e)));
-        }
+      let  e = read_expression(e_dir);
+
+      return Expression::Subscript(target_e,Box::new(e));
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_call(dir: &Directory, fe: Box<Expression>)-> Result<Expression,()>
+read_call(dir: &Directory, fe: Box<Expression>)-> Expression
 {
   let  mut cur = Cursor::new(dir);
 
@@ -759,42 +727,29 @@ read_call(dir: &Directory, fe: Box<Expression>)-> Result<Expression,()>
 
     if let Some(first_e_dir) = cur.get_directory_with_name("expression")
     {
-        if let Ok(e) = read_expression(first_e_dir)
+      let  e = read_expression(first_e_dir);
+
+      args.push(e);
+
+      cur.advance(2);
+
+        while let Some(e_dir) = cur.get_directory_with_name("expression")
         {
+          let  e = read_expression(e_dir);
+
           args.push(e);
 
           cur.advance(2);
         }
-
-      else
-        {
-          return Err(());
-        }
-
-
-        while let Some(e_dir) = cur.get_directory_with_name("expression")
-        {
-            if let Ok(e) = read_expression(e_dir)
-            {
-              args.push(e);
-
-              cur.advance(2);
-            }
-
-          else
-            {
-              return Err(());
-            }
-        }
     }
 
 
-  Ok(Expression::Call(fe,args))
+  Expression::Call(fe,args)
 }
 
 
 pub fn
-read_table_element(dir: &Directory)-> Result<TableElement,()>
+read_table_element(dir: &Directory)-> TableElement
 {
   let  mut cur = Cursor::new(dir);
 
@@ -806,20 +761,19 @@ read_table_element(dir: &Directory)-> Result<TableElement,()>
 
         if let Some(e_dir) = cur.get_directory_with_name("expression")
         {
-            if let Ok(e) = read_expression(e_dir)
-            {
-              return Ok(TableElement::new(s,e));
-            }
+          let  e = read_expression(e_dir);
+
+          return TableElement::new(s,e);
         }
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_table(dir: &Directory)-> Result<Vec<TableElement>,()>
+read_table(dir: &Directory)-> Vec<TableElement>
 {
   let  mut cur = Cursor::new(dir);
 
@@ -829,41 +783,34 @@ read_table(dir: &Directory)-> Result<Vec<TableElement>,()>
 
     while let Some(te_dir) = cur.get_directory_with_name("table_element")
     {
-        if let Ok(te) = read_table_element(te_dir)
-        {
-          cur.advance(2);
+      let  te = read_table_element(te_dir);
 
-          ls.push(te);
-        }
+      cur.advance(2);
 
-      else
-        {
-          return Err(());
-        }
+      ls.push(te);
     }
 
 
-  Ok(ls)
+  ls
 }
 
 
 pub fn
-read_operand_core(dir: &Directory)-> Result<Expression,()>
+read_operand_core(dir: &Directory)-> Expression
 {
   let  mut cur = Cursor::new(dir);
 
     if let Some(id) = cur.get_identifier()
     {
-      return Ok(Expression::Identifier(id.clone()));
+      return Expression::Identifier(id.clone());
     }
 
   else
     if let Some(t_dir) = cur.get_directory_with_name("table")
     {
-        if let Ok(ls) = read_table(t_dir)
-        {
-          return Ok(Expression::Table(ls));
-        }
+      let  ls = read_table(t_dir);
+
+      return Expression::Table(ls);
     }
 
   else
@@ -871,9 +818,9 @@ read_operand_core(dir: &Directory)-> Result<Expression,()>
     {
         match o.get_data()
         {
-      ObjectData::Integer(i)=>   {return Ok(Expression::Integer(*i));},
-      ObjectData::Floating(f)=>  {return Ok(Expression::Floating(*f));},
-      ObjectData::String(s)=>    {return Ok(Expression::String(s.clone()));},
+      ObjectData::Integer(i)=>   {return Expression::Integer(*i);},
+      ObjectData::Floating(f)=>  {return Expression::Floating(*f);},
+      ObjectData::String(s)=>    {return Expression::String(s.clone());},
       ObjectData::OthersString(s)=>
           {
               if s == "("
@@ -882,10 +829,9 @@ read_operand_core(dir: &Directory)-> Result<Expression,()>
 
                   if let Some(e_dir) = cur.get_directory_with_name("expression")
                   {
-                      if let Ok(e) = read_expression(e_dir)
-                      {
-                        return Ok(Expression::SubExpression(Box::new(e)));
-                      }
+                    let  e = read_expression(e_dir);
+
+                    return Expression::SubExpression(Box::new(e));
                   }
               }
           },
@@ -894,12 +840,12 @@ read_operand_core(dir: &Directory)-> Result<Expression,()>
     }
 
 
-  Err(())
+  panic!();
 }
 
 
 pub fn
-read_operand(dir: &Directory)-> Result<Expression,()>
+read_operand(dir: &Directory)-> Expression
 {
   let  mut cur = Cursor::new(dir);
 
@@ -907,54 +853,41 @@ read_operand(dir: &Directory)-> Result<Expression,()>
 
     while let Some(un_dir) = cur.get_directory_with_name("unary_operator")
     {
-        if let Ok(pre) = read_unary_operator(un_dir)
-        {
-          cur.advance(1);
+      let  pre = read_unary_operator(un_dir);
 
-          un_ls.push(pre);
-        }
+      cur.advance(1);
 
-      else
-        {
-          return Err(());
-        }
+      un_ls.push(pre);
     }
 
 
     if let Some(core_dir) = cur.get_directory_with_name("operand_core")
     {
-        if let Ok(mut e) = read_operand_core(core_dir)
+      let  mut e = read_operand_core(core_dir);
+
+      cur.advance(1);
+
+        while let Some(post_dir) = cur.get_directory_with_name("postfix_operator")
         {
+          let  new_e = read_postfix_operator(post_dir,Box::new(e));
+
           cur.advance(1);
 
-            while let Some(post_dir) = cur.get_directory_with_name("postfix_operator")
-            {
-                if let Ok(new_e) = read_postfix_operator(post_dir,Box::new(e))
-                {
-                  cur.advance(1);
-
-                  e = new_e;
-                }
-
-              else
-                {
-                  return Err(());
-                }
-            }
-
-
-            while let Some(un) = un_ls.pop()
-            {
-              e = Expression::Unary(un,Box::new(e));
-            }
-
-
-          return Ok(e);
+          e = new_e;
         }
+
+
+        while let Some(un) = un_ls.pop()
+        {
+          e = Expression::Unary(un,Box::new(e));
+        }
+
+
+      return e;
     }
 
 
-  Err(())
+  panic!();
 }
 
 

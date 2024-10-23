@@ -588,7 +588,7 @@ ready_main(&mut self, symtbl: &Vec<Symbol>)
         {
             if let Value::ProgramPointer(ptr) = &sym.value
             {
-              self.operation_list_ptr = *ptr;
+//              self.operation_list_ptr = *ptr;
 
               self.stack.extend(SYSTEM_RESERVED_STACK_SIZE);
 

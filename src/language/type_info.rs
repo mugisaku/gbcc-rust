@@ -163,9 +163,7 @@ pub enum
 IntKind
 {
   Sized(usize),
-
   Size,
-
   Literal,
 
 }

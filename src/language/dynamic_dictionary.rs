@@ -8,6 +8,9 @@ r##"
 #dynamic
 
 
+type: ["*" | "&"] & .Identifier;
+
+
 table_element: .Identifier & ":" & expression;
 
 table: "[" & [table_element & {"," & table_element}] & "]";
@@ -96,11 +99,13 @@ while: 'while -> expression & statement_list;
 for  : 'for -> .Identifier & 'in -> expression & statement_list;
 
 
-parameter_list: "(" & [.Identifier & [{"," & .Identifier}]] & ")";
+parameter: .Identifier & ":" & type;
+parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
 
-fn   : 'fn    -> .Identifier & parameter_list & statement_list;
-let  : 'let   -> .Identifier & [":" & expression];
-const: 'const -> .Identifier & ":" & expression;
+fn   : 'fn    -> .Identifier & parameter_list & ["->" & type] & statement_list;
+var  : .Identifier & [":" & type] & "=" & expression;
+let  : 'let   -> var;
+const: 'const -> var;
 print_s: 'print & .String;
 print_v: 'print & .Identifier;
 
