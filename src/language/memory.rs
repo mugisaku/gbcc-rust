@@ -501,8 +501,9 @@ itof(&mut self, dst: usize, src: usize)
   self.put_f64(dst,o as f64);
 }
 
+
 pub fn
-cp(&mut self, dst: usize, src: usize, sz: usize)
+copy(&mut self, dst: usize, src: usize, sz: usize)
 {
     for off in 0..sz
     {

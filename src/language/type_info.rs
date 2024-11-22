@@ -6,6 +6,24 @@ use super::expression::{
 };
 
 
+use super::literal::{
+  Literal,
+
+};
+
+
+use super::constant::{
+  Constant,
+
+};
+
+
+use super::symbol::{
+  SymbolDirectory,
+
+};
+
+
 use super::memory::{
   Memory,
 
@@ -18,7 +36,7 @@ use super::evaluator::{
 };
 
 
-const WORD_SIZE: usize = 8;
+pub const WORD_SIZE: usize = 8;
 
 
 #[derive(Clone)]
@@ -70,360 +88,17 @@ Parameter
 }
 
 
-
-
-pub enum
-SymbolKind
-{
-  Null,
-  Type(TypeInfo),
-  Variable(TypeInfo,usize),
-
-}
-
-
-
-
-pub struct
-SymbolNode
-{
-  pub(crate) previous_ptr: *const SymbolNode,
-
-  pub(crate) name: String,
-
-  pub(crate) kind: SymbolKind,
-
-}
-
-
 impl
-SymbolNode
+Parameter
 {
-
-
-pub fn
-new()-> Self
-{
-  Self{
-    previous_ptr: std::ptr::null(),
-    name: String::new(),
-    kind: SymbolKind::Null,
-  }
-}
-
-
-pub fn
-find_any(&self, name: &str)-> Option<&SymbolKind>
-{
-    if &self.name == name
-    {
-      return Some(&self.kind);
-    }
-
-
-    if self.previous_ptr != std::ptr::null()
-    {
-      return unsafe{&*self.previous_ptr}.find_any(name);
-    }
-
-
-  None
-}
-
-
-pub fn
-find_type(&self, name: &str)-> Option<&TypeInfo>
-{
-    if &self.name == name
-    {
-        if let SymbolKind::Type(ti) = &self.kind
-        {
-          return Some(ti);
-        }
-    }
-
-
-    if self.previous_ptr != std::ptr::null()
-    {
-      return unsafe{&*self.previous_ptr}.find_type(name);
-    }
-
-
-  None
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub enum
-IntKind
-{
-  Sized(usize),
-  Size,
-  Literal,
-
-}
-
-
-impl
-IntKind
-{
-
-
-pub fn
-check(l: &Self, r: &Self)-> Option<Self>
-{
-    if let Self::Literal = l
-    {
-      return Some(r.clone());
-    }
-
-  else
-    if let Self::Literal = r
-    {
-      return Some(l.clone());
-    }
-
-  else
-    if let Self::Size = l
-    {
-        if let Self::Size = r
-        {
-          return Some(l.clone());
-        }
-    }
-
-  else
-    if let Self::Sized(l_sz) = l
-    {
-        if let Self::Sized(r_sz) = r
-        {
-            if l_sz == r_sz
-            {
-              return Some(l.clone());
-            }
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-get_size(&self)-> usize
-{
-    match self
-    {
-  IntKind::Sized(sz)=>{*sz}
-  IntKind::Size=>{WORD_SIZE}
-  IntKind::Literal=>{WORD_SIZE}
-    }
-}
-
-
-pub fn
-get_align(&self)-> Align
-{
-    match self
-    {
-  IntKind::Sized(sz)=>{Align{value: *sz}}
-  IntKind::Size=>{Align{value: WORD_SIZE}}
-  IntKind::Literal=>{Align{value: WORD_SIZE}}
-    }
-}
-
-
-pub fn
-print_id_to_string(&self, s: &mut String)
-{
-    match self
-    {
-  IntKind::Sized(sz)=>{  let  t = format!("{}",8*(*sz)); s.push_str(&t);}
-  IntKind::Size=>{s.push_str("sz");}
-  IntKind::Literal=>{s.push_str("lt");}
-    }
-}
 
 
 pub fn
 print(&self)
 {
-    match self
-    {
-  IntKind::Sized(sz)=>{print!("{}",8*(*sz));}
-  IntKind::Size=>{print!("size")}
-  IntKind::Literal=>{print!("literal")}
-    }
-}
+  print!("{}: ",&self.name);
 
-
-}
-
-
-
-
-#[derive(Clone)]
-pub enum
-FloatKind
-{
-  Sized(usize),
-  Literal,
-
-}
-
-
-impl
-FloatKind
-{
-
-
-
-pub fn
-check(l: &Self, r: &Self)-> Option<Self>
-{
-    if let Self::Literal = l
-    {
-      return Some(r.clone());
-    }
-
-  else
-    if let Self::Literal = r
-    {
-      return Some(l.clone());
-    }
-
-  else
-    if let Self::Sized(l_sz) = l
-    {
-        if let Self::Sized(r_sz) = r
-        {
-            if l_sz == r_sz
-            {
-              return Some(l.clone());
-            }
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-get_size(&self)-> usize
-{
-    match self
-    {
-  FloatKind::Sized(sz)=>{*sz}
-  FloatKind::Literal=>{WORD_SIZE}
-    }
-}
-
-
-pub fn
-get_align(&self)-> Align
-{
-    match self
-    {
-  FloatKind::Sized(sz)=>{Align{value: *sz}}
-  FloatKind::Literal=>{Align{value: WORD_SIZE}}
-    }
-}
-
-
-pub fn
-print_id_to_string(&self, s: &mut String)
-{
-    match self
-    {
-  FloatKind::Sized(sz)=>{  let  t = format!("{}",8*(*sz)); s.push_str(&t);}
-  FloatKind::Literal=>{s.push_str("lt");}
-    }
-}
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  FloatKind::Sized(sz)=>{print!("{}",8*(*sz));}
-  FloatKind::Literal=>{print!("literal");}
-    }
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub enum
-NumberKind
-{
-    SignedInt(IntKind),
-  UnsignedInt(IntKind),
-  Float(FloatKind),
-
-}
-
-
-impl
-NumberKind
-{
-
-
-pub fn
-print_id_to_string(&self, s: &mut String)
-{
-    match self
-    {
-  NumberKind::SignedInt(ik)=>
-        {
-          s.push('i');
-          ik.print_id_to_string(s);
-        }
-  NumberKind::UnsignedInt(ik)=>
-        {
-          s.push('u');
-          ik.print_id_to_string(s);
-        }
-  NumberKind::Float(fk)=>
-        {
-          s.push('f');
-          fk.print_id_to_string(s);
-        }
-    }
-}
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  NumberKind::SignedInt(ik)=>
-        {
-          print!("i");
-          ik.print();
-        }
-  NumberKind::UnsignedInt(ik)=>
-        {
-          print!("u");
-          ik.print();
-        }
-  NumberKind::Float(fk)=>
-        {
-          print!("f");
-          fk.print();
-        }
-    }
+  self.type_kind.print();
 }
 
 
@@ -437,8 +112,10 @@ TypeKind
 {
   Unknown,
 
-  Void, Bool, Char,
-  Number(NumberKind),
+  Void, Bool,
+  I8, I16, I32, I64, ISize,
+  U8, U16, U32, U64, USize,
+  F32, F64,
   Array(Box<TypeKind>,Expression),
   Tuple(Vec<Parameter>),
   Struct(Vec<Parameter>),
@@ -459,7 +136,7 @@ TypeKind
 
 
 pub fn
-make_ls_info_for_struct(ls: &Vec<Parameter>, nd: &SymbolNode)-> Result<(Vec<StorageInfo>,usize,Align),()>
+make_ls_info_for_struct(ls: &Vec<Parameter>, dir: &SymbolDirectory)-> Result<(Vec<StorageInfo>,usize,Align),()>
 {
   let  mut si_ls: Vec<StorageInfo> = Vec::new();
 
@@ -469,7 +146,7 @@ make_ls_info_for_struct(ls: &Vec<Parameter>, nd: &SymbolNode)-> Result<(Vec<Stor
 
     for p in ls
     {
-        if let Ok(type_info) = p.type_kind.make_info(nd)
+        if let Ok(type_info) = p.type_kind.make_info(dir)
         {
           let  sz = type_info.get_size();
           let  al = type_info.get_align();
@@ -507,7 +184,7 @@ make_ls_info_for_struct(ls: &Vec<Parameter>, nd: &SymbolNode)-> Result<(Vec<Stor
 
 
 pub fn
-make_ls_info_for_union(ls: &Vec<Parameter>, nd: &SymbolNode)-> Result<(Vec<StorageInfo>,usize,Align),()>
+make_ls_info_for_union(ls: &Vec<Parameter>, dir: &SymbolDirectory)-> Result<(Vec<StorageInfo>,usize,Align),()>
 {
   let  mut si_ls: Vec<StorageInfo> = Vec::new();
 
@@ -517,7 +194,7 @@ make_ls_info_for_union(ls: &Vec<Parameter>, nd: &SymbolNode)-> Result<(Vec<Stora
 
     for p in ls
     {
-        if let Ok(type_info) = p.type_kind.make_info(nd)
+        if let Ok(type_info) = p.type_kind.make_info(dir)
         {
           let  sz = type_info.get_size();
           let  al = type_info.get_align();
@@ -554,11 +231,11 @@ make_ls_info_for_union(ls: &Vec<Parameter>, nd: &SymbolNode)-> Result<(Vec<Stora
 
 
 pub fn
-make_fnref_info(ls: &Vec<Parameter>, ret_tk: &TypeKind, nd: &SymbolNode)-> Result<(Vec<StorageInfo>,TypeInfo),()>
+make_fnref_info(ls: &Vec<Parameter>, ret_tk: &TypeKind, dir: &SymbolDirectory)-> Result<(Vec<StorageInfo>,TypeInfo),()>
 {
-    if let Ok((si_ls,_,_)) = Self::make_ls_info_for_struct(ls,nd)
+    if let Ok((si_ls,_,_)) = Self::make_ls_info_for_struct(ls,dir)
     {
-        if let Ok(ret_ti) = ret_tk.make_info(nd)
+        if let Ok(ret_ti) = ret_tk.make_info(dir)
         {
           return Ok((si_ls,ret_ti));
         }
@@ -570,27 +247,21 @@ make_fnref_info(ls: &Vec<Parameter>, ret_tk: &TypeKind, nd: &SymbolNode)-> Resul
 
 
 pub fn
-make_array_info(tk: &TypeKind, e: &Expression, nd: &SymbolNode)-> Result<TypeInfo,()>
+make_array_info(tk: &TypeKind, e: &Expression, dir: &SymbolDirectory)-> Result<TypeInfo,()>
 {
-    if let Ok(ti) = tk.make_info(nd)
+    if let Ok(ti) = tk.make_info(dir)
     {
       let  mut ee = ExpressionEvaluator::new();
 
-      ee.reset(e,nd);
+      ee.reset(e,dir);
 
       ee.run();
 
-        if let TypeInfo::Number(nk) = &ee.final_value_type_info
+        if let TypeInfo::USize = &ee.final_value_type_info
         {
-            if let NumberKind::UnsignedInt(ik) = nk
-            {
-                if let IntKind::Size = ik
-                {
-                  let  n = ee.get_final_value_as_usize();
+          let  n = ee.get_final_value_as_usize();
 
-                  return Ok(TypeInfo::Array(Box::new(ti),n));
-                }
-            }
+          return Ok(TypeInfo::Array(Box::new(ti),n));
         }
     }
 
@@ -600,7 +271,7 @@ make_array_info(tk: &TypeKind, e: &Expression, nd: &SymbolNode)-> Result<TypeInf
 
 
 pub fn
-make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
+make_info(&self, dir: &SymbolDirectory)-> Result<TypeInfo,()>
 {
     match self
     {
@@ -608,15 +279,25 @@ make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
 
   TypeKind::Void    =>{Ok(TypeInfo::Void)},
   TypeKind::Bool    =>{Ok(TypeInfo::Bool)},
-  TypeKind::Char    =>{Ok(TypeInfo::Char)},
-  TypeKind::Number(k)=>{Ok(TypeInfo::Number(k.clone()))},
+  TypeKind::I8=>{Ok(TypeInfo::I8)},
+  TypeKind::I16=>{Ok(TypeInfo::I16)},
+  TypeKind::I32=>{Ok(TypeInfo::I32)},
+  TypeKind::I64=>{Ok(TypeInfo::I64)},
+  TypeKind::ISize=>{Ok(TypeInfo::ISize)},
+  TypeKind::U8=>{Ok(TypeInfo::U8)},
+  TypeKind::U16=>{Ok(TypeInfo::U16)},
+  TypeKind::U32=>{Ok(TypeInfo::U32)},
+  TypeKind::U64=>{Ok(TypeInfo::U64)},
+  TypeKind::USize=>{Ok(TypeInfo::USize)},
+  TypeKind::F32=>{Ok(TypeInfo::F32)},
+  TypeKind::F64=>{Ok(TypeInfo::F64)},
   TypeKind::Array(tk,e)=>
         {
-          Self::make_array_info(tk,e,nd)
+          Self::make_array_info(tk,e,dir)
         },
   TypeKind::Tuple(ls)=>
         {
-            if let Ok((ti,sz,al)) = Self::make_ls_info_for_struct(ls,nd)
+            if let Ok((ti,sz,al)) = Self::make_ls_info_for_struct(ls,dir)
             {
               return Ok(TypeInfo::Tuple(ti,sz,al));
             }
@@ -626,7 +307,7 @@ make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
         },
   TypeKind::Struct(ls)=>
         {
-            if let Ok((ti,sz,al)) = Self::make_ls_info_for_struct(ls,nd)
+            if let Ok((ti,sz,al)) = Self::make_ls_info_for_struct(ls,dir)
             {
               return Ok(TypeInfo::Struct(ti,sz,al));
             }
@@ -636,7 +317,7 @@ make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
         },
   TypeKind::Union(ls)=>
         {
-            if let Ok((ti,sz,al)) = Self::make_ls_info_for_union(ls,nd)
+            if let Ok((ti,sz,al)) = Self::make_ls_info_for_union(ls,dir)
             {
               return Ok(TypeInfo::Union(ti,sz,al));
             }
@@ -647,7 +328,7 @@ make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
   TypeKind::Enum(name)=>{Ok(TypeInfo::Enum(name.clone()))},
   TypeKind::Pointer(k)=>
         {
-            if let Ok(ti) = k.make_info(nd)
+            if let Ok(ti) = k.make_info(dir)
             {
               return Ok(TypeInfo::Pointer(Box::new(ti)));
             }
@@ -657,7 +338,7 @@ make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
         },
   TypeKind::Reference(k)=>
         {
-            if let Ok(ti) = k.make_info(nd)
+            if let Ok(ti) = k.make_info(dir)
             {
               return Ok(TypeInfo::Reference(Box::new(ti)));
             }
@@ -667,7 +348,7 @@ make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
         },
   TypeKind::FunctionReference(ls,ret_k)=>
         {
-            if let Ok((si_ls,ret_ti)) = Self::make_fnref_info(ls,ret_k,nd)
+            if let Ok((si_ls,ret_ti)) = Self::make_fnref_info(ls,ret_k,dir)
             {
               return Ok(TypeInfo::FunctionReference(si_ls,Box::new(ret_ti)));
             }
@@ -677,13 +358,119 @@ make_info(&self, nd: &SymbolNode)-> Result<TypeInfo,()>
         },
   TypeKind::External(name)=>
         {
-            if let Some(ti_ref) = nd.find_type(name)
+            if let Some(ti_ref) = dir.find_type(name)
             {
               return Ok(TypeInfo::External(ti_ref as *const TypeInfo));
             }
 
 
           Err(())
+        },
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  TypeKind::Unknown=>{print!("unknown");},
+
+  TypeKind::Void    =>{print!("void");},
+  TypeKind::Bool    =>{print!("bool");},
+  TypeKind::I8=>{print!("i8");},
+  TypeKind::I16=>{print!("i16");},
+  TypeKind::I32=>{print!("i32");},
+  TypeKind::I64=>{print!("i64");},
+  TypeKind::ISize=>{print!("isize");},
+  TypeKind::U8=>{print!("u8");},
+  TypeKind::U16=>{print!("u16");},
+  TypeKind::U32=>{print!("u32");},
+  TypeKind::U64=>{print!("u64");},
+  TypeKind::USize=>{print!("usize");},
+  TypeKind::F32=>{print!("f32");},
+  TypeKind::F64=>{print!("f64");},
+  TypeKind::Array(tk,e)=>
+        {
+          print!("[");
+
+          e.print();
+
+          print!("]");
+
+          tk.print();
+        },
+  TypeKind::Tuple(ls)=>
+        {
+          print!("(");
+
+            for p in ls
+            {
+              p.print();
+
+              print!(", ");
+            }
+
+          print!(")-> ");
+        },
+  TypeKind::Struct(ls)=>
+        {
+          print!("struct{{");
+
+            for p in ls
+            {
+              p.print();
+
+              print!(", ");
+            }
+
+          print!("}}");
+        },
+  TypeKind::Union(ls)=>
+        {
+          print!("union{{");
+
+            for p in ls
+            {
+              p.print();
+
+              print!(", ");
+            }
+
+          print!("}}");
+        }
+  TypeKind::Enum(name)=>{print!("enum {}",name);},
+  TypeKind::Pointer(k)=>
+        {
+          print!("*");
+
+          k.print();
+        },
+  TypeKind::Reference(k)=>
+        {
+          print!("&");
+
+          k.print();
+        },
+  TypeKind::FunctionReference(ls,ret_k)=>
+        {
+          print!("(");
+
+            for p in ls
+            {
+              p.type_kind.print();
+
+              print!(", ");
+            }
+
+          print!(")-> ");
+
+          ret_k.print();
+        },
+  TypeKind::External(name)=>
+        {
+          print!("{}",name);
         },
     }
 }
@@ -698,8 +485,10 @@ TypeInfo
 {
   Unknown,
 
-  Void, Bool, Char,
-  Number(NumberKind),
+  Void, Bool,
+  I8, I16, I32, I64, ISize,
+  U8, U16, U32, U64, USize,
+  F32, F64,
   Array(Box<TypeInfo>,usize),
   Pointer(Box<TypeInfo>),
   Reference(Box<TypeInfo>),
@@ -719,23 +508,85 @@ TypeInfo
 
 
 pub fn
-new_usize()-> Self
+is_unknown(&self)-> bool
 {
-  Self::Number(NumberKind::UnsignedInt(IntKind::Size))
+  if let TypeInfo::Unknown = self{true} else{false}
 }
 
 
 pub fn
-new_uliteral()-> Self
+is_bool(&self)-> bool
 {
-  Self::Number(NumberKind::UnsignedInt(IntKind::Literal))
+  if let TypeInfo::Bool = self{true} else{false}
 }
 
 
 pub fn
-new_fliteral()-> Self
+is_comparable(&self)-> bool
 {
-  Self::Number(NumberKind::Float(FloatKind::Literal))
+    match self
+    {
+  TypeInfo::I8 |TypeInfo::I16|TypeInfo::I32|TypeInfo::I64|TypeInfo::ISize
+ |TypeInfo::U8 |TypeInfo::U16|TypeInfo::U32|TypeInfo::U64|TypeInfo::USize
+ |TypeInfo::F32|TypeInfo::F64
+ |TypeInfo::Pointer(_)=>{true}
+  _=>{false}
+    }
+}
+
+
+pub fn
+is_number(&self)-> bool
+{
+    match self
+    {
+  TypeInfo::I8 |TypeInfo::I16|TypeInfo::I32|TypeInfo::I64|TypeInfo::ISize
+ |TypeInfo::U8 |TypeInfo::U16|TypeInfo::U32|TypeInfo::U64|TypeInfo::USize
+ |TypeInfo::F32|TypeInfo::F64=>{true}
+  _=>{false}
+    }
+}
+
+
+pub fn
+is_int(&self)-> bool
+{
+    match self
+    {
+  TypeInfo::I8
+ |TypeInfo::I16
+ |TypeInfo::I32
+ |TypeInfo::I64
+ |TypeInfo::ISize=>{true}
+  _=>{false}
+    }
+}
+
+
+pub fn
+is_uint(&self)-> bool
+{
+    match self
+    {
+  TypeInfo::U8
+ |TypeInfo::U16
+ |TypeInfo::U32
+ |TypeInfo::U64
+ |TypeInfo::USize=>{true}
+  _=>{false}
+    }
+}
+
+
+pub fn
+is_float(&self)-> bool
+{
+    match self
+    {
+  TypeInfo::F32
+ |TypeInfo::F64=>{true}
+  _=>{false}
+    }
 }
 
 
@@ -748,16 +599,18 @@ get_size(&self)-> usize
 
   TypeInfo::Void=>{0},
   TypeInfo::Bool=>{1},
-  TypeInfo::Char=>{1},
-  TypeInfo::Number(nk)=>
-        {
-            match nk
-            {
-          NumberKind::SignedInt(ik)  =>{ik.get_size()}
-          NumberKind::UnsignedInt(ik)=>{ik.get_size()}
-          NumberKind::Float(fk)      =>{fk.get_size()}
-            }
-        },
+  TypeInfo::I8=>{1},
+  TypeInfo::I16=>{2},
+  TypeInfo::I32=>{4},
+  TypeInfo::I64=>{8},
+  TypeInfo::ISize=>{8},
+  TypeInfo::U8=>{1},
+  TypeInfo::U16=>{2},
+  TypeInfo::U32=>{4},
+  TypeInfo::U64=>{8},
+  TypeInfo::USize=>{8},
+  TypeInfo::F32=>{4},
+  TypeInfo::F64=>{8},
   TypeInfo::Array(ti,n)=>{ti.get_size()* *n},
   TypeInfo::Tuple(_,sz,_)=>{*sz},
   TypeInfo::Struct(_,sz,_)=>{*sz},
@@ -780,16 +633,18 @@ get_align(&self)-> Align
 
   TypeInfo::Void=>{Align{value: 0}},
   TypeInfo::Bool=>{Align{value: 1}},
-  TypeInfo::Char=>{Align{value: 1}},
-  TypeInfo::Number(nk)=>
-        {
-            match nk
-            {
-          NumberKind::SignedInt(ik)  =>{ik.get_align()}
-          NumberKind::UnsignedInt(ik)=>{ik.get_align()}
-          NumberKind::Float(fk)      =>{fk.get_align()}
-            }
-        },
+  TypeInfo::I8=>{Align{value: 1}},
+  TypeInfo::I16=>{Align{value: 2}},
+  TypeInfo::I32=>{Align{value: 4}},
+  TypeInfo::I64=>{Align{value: 8}},
+  TypeInfo::ISize=>{Align{value: 8}},
+  TypeInfo::U8=>{Align{value: 1}},
+  TypeInfo::U16=>{Align{value: 2}},
+  TypeInfo::U32=>{Align{value: 4}},
+  TypeInfo::U64=>{Align{value: 8}},
+  TypeInfo::USize=>{Align{value: 8}},
+  TypeInfo::F32=>{Align{value: 4}},
+  TypeInfo::F64=>{Align{value: 8}},
   TypeInfo::Array(ti,_)=>{ti.get_align()},
   TypeInfo::Tuple(_,_,al)=>{al.clone()},
   TypeInfo::Struct(_,_,al)=>{al.clone()},
@@ -822,11 +677,18 @@ print_id_to_string(&self, s: &mut String)
 
   TypeInfo::Void=>{s.push('v');},
   TypeInfo::Bool=>{s.push('b');},
-  TypeInfo::Char=>{s.push('c');},
-  TypeInfo::Number(nk)=>
-        {
-          nk.print_id_to_string(s);
-        },
+  TypeInfo::I8=>{s.push_str("i8");},
+  TypeInfo::I16=>{s.push_str("i16");},
+  TypeInfo::I32=>{s.push_str("i32");},
+  TypeInfo::I64=>{s.push_str("i64");},
+  TypeInfo::ISize=>{s.push_str("isize");},
+  TypeInfo::U8=>{s.push_str("u8");},
+  TypeInfo::U16=>{s.push_str("u16");},
+  TypeInfo::U32=>{s.push_str("u32");},
+  TypeInfo::U64=>{s.push_str("u64");},
+  TypeInfo::USize=>{s.push_str("usize");},
+  TypeInfo::F32=>{s.push_str("f32");},
+  TypeInfo::F64=>{s.push_str("f64");},
   TypeInfo::Array(ti,n)=>
         {
           s.push_str("arr");
@@ -888,6 +750,17 @@ print_id_to_string(&self, s: &mut String)
 
 
 pub fn
+get_id(&self)-> String
+{
+  let  mut s = String::new();
+
+  self.print_id_to_string(&mut s);
+
+  s
+}
+
+
+pub fn
 print(&self)
 {
     match self
@@ -896,11 +769,18 @@ print(&self)
 
   TypeInfo::Void=>{print!("void");},
   TypeInfo::Bool=>{print!("bool");},
-  TypeInfo::Char=>{print!("char");},
-  TypeInfo::Number(nk)=>
-        {
-          nk.print();
-        },
+  TypeInfo::I8=>{print!("i8");},
+  TypeInfo::I16=>{print!("i16");},
+  TypeInfo::I32=>{print!("i32");},
+  TypeInfo::I64=>{print!("i64");},
+  TypeInfo::ISize=>{print!("isize");},
+  TypeInfo::U8=>{print!("u8");},
+  TypeInfo::U16=>{print!("u16");},
+  TypeInfo::U32=>{print!("u32");},
+  TypeInfo::U64=>{print!("u64");},
+  TypeInfo::USize=>{print!("usize");},
+  TypeInfo::F32=>{print!("f32");},
+  TypeInfo::F64=>{print!("f64");},
   TypeInfo::Array(ti,n)=>
         {
         },
@@ -973,6 +853,54 @@ new()-> Self
 
 
 }
+
+
+
+
+#[derive(Clone)]
+pub enum
+ValueKind
+{
+  Literal(Literal),
+  Constant(Constant),
+  Variable,
+  Dereference,
+  Moved,
+
+}
+
+
+#[derive(Clone)]
+pub struct
+ValueInfo
+{
+  pub(crate)      kind: ValueKind,
+  pub(crate) type_info: TypeInfo,
+
+}
+
+
+impl
+ValueInfo
+{
+
+
+pub fn      new_literal(l: Literal)-> Self{Self{kind: ValueKind::Literal(l), type_info: TypeInfo::Void}}
+pub fn     new_constant(c: Constant)-> Self{Self{kind: ValueKind::Constant(c), type_info: TypeInfo::Void}}
+pub fn     new_variable(type_info: TypeInfo)-> Self{Self{kind: ValueKind::Variable   , type_info}}
+pub fn  new_dereference(type_info: TypeInfo)-> Self{Self{kind: ValueKind::Dereference, type_info}}
+pub fn        new_moved(type_info: TypeInfo)-> Self{Self{kind: ValueKind::Moved      , type_info}}
+
+pub fn      is_literal(&self)-> bool{if let ValueKind::Literal(_)  = &self.kind{true} else{false}}
+pub fn     is_constant(&self)-> bool{if let ValueKind::Constant(_) = &self.kind{true} else{false}}
+pub fn     is_variable(&self)-> bool{if let ValueKind::Variable    = &self.kind{true} else{false}}
+pub fn  is_dereference(&self)-> bool{if let ValueKind::Dereference = &self.kind{true} else{false}}
+pub fn        is_moved(&self)-> bool{if let ValueKind::Moved       = &self.kind{true} else{false}}
+
+
+}
+
+
 
 
 

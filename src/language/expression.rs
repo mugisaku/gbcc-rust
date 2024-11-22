@@ -348,6 +348,8 @@ print(&self)
 pub enum
 Expression
 {
+  Void,
+
   Identifier(String),
   Boolean(bool),
   Integer(u64),
@@ -402,6 +404,7 @@ print(&self)
 {
     match self
     {
+  Expression::Void=>{print!("void");},
   Expression::Identifier(s)=>{print!("{}",s);},
   Expression::Boolean(b)=>{print!("{}",b);},
   Expression::Integer(u)=>{print!("{}",u);},

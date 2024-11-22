@@ -79,7 +79,6 @@ evaluate()
 {
   use crate::language::expression::Expression;
   use crate::language::evaluator::ExpressionEvaluator;
-  use crate::language::type_info::SymbolNode;
 
   use std::io::Read;
 
@@ -90,20 +89,6 @@ evaluate()
       let  _ = f.read_to_string(&mut s);
 
       let  e = Expression::read(&s);
-
-      let  nd = SymbolNode::new();
-
-      e.print();
-
-      println!("");
-
-      let  mut ee = ExpressionEvaluator::new();
-
-      ee.reset(&e,&nd);
-
-      ee.run();
-
-      ee.print_final_value();
     }
 }
 
@@ -136,7 +121,7 @@ fn
 load()
 {
   use crate::language::space::{
-    Space, Function
+    Space, FunctionDecl
   };
 
 /*

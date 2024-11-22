@@ -22,7 +22,6 @@ use crate::language::statement::{
   Block,
   Statement,
   For,
-  VariableInfo,
 
 };
 
@@ -35,10 +34,43 @@ use crate::language::type_info::{
 
 
 use crate::language::space::{
-  Function,
+  TypeDecl,
+  VariableDecl,
+  FunctionDecl,
   Declaration,
 
 };
+
+
+pub fn
+read_type(dir: &Directory)-> TypeKind
+{
+  let  mut cur = Cursor::new(dir);
+
+  let  mut tk = TypeKind::Unknown;
+
+  let  mut prefix = String::new();
+
+    if let Some(s) = cur.get_others_string()
+    {
+      prefix = s.clone();
+
+      cur.advance(1);
+    }
+
+
+    if let Some(s) = cur.get_identifier()
+    {
+      tk = TypeKind::External(s.clone());
+
+           if prefix == "&"{tk = TypeKind::Reference(Box::new(tk));}
+      else if prefix == "*"{tk = TypeKind::Pointer(  Box::new(tk));}
+      else{panic!();}
+    }
+
+
+  tk
+}
 
 
 pub fn
@@ -46,9 +78,24 @@ read_parameter(dir: &Directory)-> Parameter
 {
   let  mut cur = Cursor::new(dir);
 
-  cur.advance(1);
+  let  mut name = String::new();
+  let  mut type_kind = TypeKind::Unknown;
 
-  Parameter{name: String::new(), type_kind: TypeKind::Unknown}
+    if let Some(s) = cur.get_identifier()
+    {
+      name = s.clone();
+
+      cur.advance(2);
+    }
+
+
+    if let Some(d) = cur.get_directory()
+    {
+      type_kind = read_type(d);
+    }
+
+
+  Parameter{name, type_kind}
 }
 
 
@@ -76,7 +123,7 @@ read_parameter_list(dir: &Directory)-> Vec<Parameter>
 
  
 pub fn
-read_fn(dir: &Directory)-> (String,Function)
+read_fn(dir: &Directory)-> FunctionDecl
 {
   let  mut cur = Cursor::new(dir);
 
@@ -92,15 +139,28 @@ read_fn(dir: &Directory)-> (String,Function)
         {
           let  parameter_list = read_parameter_list(parals_d);
 
+          let  mut return_type_kind = TypeKind::Void;
+
           cur.advance(1);
+
+            if let Some(_) = cur.get_others_string()
+            {
+              cur.advance(1);
+
+                if let Some(ty_d) = cur.get_directory()
+                {
+                  return_type_kind = read_type(ty_d);
+
+                  cur.advance(1);
+                }
+            }
+
 
             if let Some(stmts_d) = cur.seek_directory_with_name("statement_list")
             {
               let  block = read_block(stmts_d);
 
-              let  f = Function{parameter_list, block};
-
-              return (name,f);
+              return FunctionDecl{name, parameter_list, return_type_kind, block};
             }
         }
     }
@@ -111,7 +171,7 @@ read_fn(dir: &Directory)-> (String,Function)
 
 
 pub fn
-read_variable(dir: &Directory)-> VariableInfo
+read_variable(dir: &Directory)-> VariableDecl
 {
   let  mut cur = Cursor::new(dir);
 
@@ -121,17 +181,29 @@ read_variable(dir: &Directory)-> VariableInfo
     {
       let  name = id_s.clone();
 
+      let  mut type_kind = TypeKind::Unknown;
+
       cur.advance(1);
 
-        if let Some(e_d) = cur.seek_directory_with_name("expression")
+        if let Some(_) = cur.get_others_string()
         {
-          let  e = read_expression(e_d);
+          cur.advance(1);
 
-          return VariableInfo::new(name,Some(e));
+            if let Some(ty_d) = cur.get_directory()
+            {
+              type_kind = read_type(ty_d);
+
+              cur.advance(1);
+            }
         }
 
 
-      return VariableInfo::new(name,None);
+        if let Some(e_d) = cur.seek_directory_with_name("expression")
+        {
+          let  expression = read_expression(e_d);
+
+          return VariableDecl{name, type_kind, expression};
+        }
     }
 
 
@@ -150,25 +222,25 @@ read_declaration(dir: &Directory)-> Declaration
 
         if d_name == "fn"
         {
-          let (name,f) = read_fn(d);
+          let  f = read_fn(d);
 
-          return Declaration::Fn(name,f);
+          return Declaration::Fn(f);
         }
 
       else
         if d_name == "let"
         {
-          let  vi = read_variable(d);
+          let  v = read_variable(d);
 
-          return Declaration::Let(vi);
+          return Declaration::Let(v);
         }
 
       else
         if d_name == "const"
         {
-          let  vi = read_variable(d);
+          let  v = read_variable(d);
 
-          return Declaration::Const(vi);
+          return Declaration::Const(v);
         }
     }
 
@@ -517,17 +589,17 @@ read_statement(dir: &Directory)-> Statement
       else
         if d_name == "let"
         {
-          let  vi = read_variable(d);
+          let  v = read_variable(d);
 
-          return Statement::Let(vi);
+          return Statement::Let(v);
         }
 
       else
         if d_name == "const"
         {
-          let  vi = read_variable(d);
+          let  v = read_variable(d);
 
-          return Statement::Const(vi);
+          return Statement::Const(v);
         }
 
       else

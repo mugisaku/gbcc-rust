@@ -14,11 +14,26 @@ use super::expression::{
 };
 
 
+use super::memory::{
+  Memory,
+};
+
+
+use super::compile_for_block::{
+  compile,
+};
+
+
+use super::symbol::{
+  SymbolDirectory,
+
+};
+
+
 use super::statement::{
   Statement,
   Block,
   For,
-  VariableInfo,
 
 };
 
@@ -35,14 +50,20 @@ use super::read::{
 };
 
 
+use super::evaluator::{
+  ExpressionEvaluator,
+
+};
+
+
 
 
 pub enum
 Declaration
 {
-  Fn(String,Function),
-  Let(VariableInfo),
-  Const(VariableInfo),
+  Fn(FunctionDecl),
+  Let(VariableDecl),
+  Const(VariableDecl),
 
 }
 
@@ -50,7 +71,120 @@ Declaration
 
 
 pub struct
-Var
+FunctionDecl
+{
+  pub(crate) name: String,
+
+  pub(crate) parameter_list: Vec<Parameter>,
+
+  pub(crate) return_type_kind: TypeKind,
+
+  pub(crate) block: Block,
+
+}
+
+
+impl
+FunctionDecl
+{
+
+
+pub fn
+get_processed_parameter_list(&self, dir: &SymbolDirectory)-> Vec<(String,TypeInfo)>
+{
+  let  mut ls: Vec<(String,TypeInfo)> = Vec::new();
+
+    for p in &self.parameter_list
+    {
+        if let Ok(ti) = p.type_kind.make_info(dir)
+        {
+          ls.push((p.name.clone(),ti));
+        }
+
+      else
+        {
+          panic!();
+        }
+    }
+
+
+  ls
+}
+
+
+pub fn
+get_return_type_info(&self, dir: &SymbolDirectory)-> TypeInfo
+{
+    if let Ok(ti) = self.return_type_kind.make_info(dir)
+    {
+      return ti;
+    }
+
+  else
+    {
+      panic!();
+    }
+}
+
+
+pub fn
+print(&self)
+{
+  print!("{}(",&self.name);
+
+    for para in &self.parameter_list
+    {
+      print!("{},",&para.name);
+    }
+
+
+  print!(")-> ");
+
+  self.return_type_kind.print();
+
+  print!("\n");
+
+  self.block.print();
+}
+
+
+}
+
+
+
+
+pub struct
+TypeDecl
+{
+  pub(crate) name: String,
+  pub(crate) type_kind: TypeKind,
+
+}
+
+
+impl
+TypeDecl
+{
+
+
+pub fn
+print(&self)
+{
+  print!("{}: ",&self.name);
+
+  self.type_kind.print();
+
+  print!(" = ");
+}
+
+
+}
+
+
+
+
+pub struct
+VariableDecl
 {
   pub(crate) name: String,
   pub(crate) type_kind: TypeKind,
@@ -59,13 +193,46 @@ Var
 }
 
 
+impl
+VariableDecl
+{
+
+
+pub fn
+print(&self)
+{
+  print!("{}: ",&self.name);
+
+  self.type_kind.print();
+
+  print!(" = ");
+
+  self.expression.print();
+}
+
+
+}
+
+
+
+
+pub enum
+SymbolSource<'a>
+{
+  Type(&'a TypeDecl),
+  Const(&'a VariableDecl),
+
+}
+
+
+
+
 pub struct
 Space
 {
-//  pub(crate) symbol_list: Vec<Symbol>,
-  pub(crate)  const_list: Vec<VariableInfo>,
-  pub(crate)    let_list: Vec<VariableInfo>,
-  pub(crate)     fn_list: Vec<(String,Function)>,
+  pub(crate)  const_list: Vec<VariableDecl>,
+  pub(crate)    let_list: Vec<VariableDecl>,
+  pub(crate)     fn_list: Vec<FunctionDecl>,
 
 }
 
@@ -79,7 +246,6 @@ pub fn
 new()-> Self
 {
   Self{
-//    symbol_list: Vec::new(),
      const_list: Vec::new(),
        let_list: Vec::new(),
         fn_list: Vec::new(),
@@ -106,17 +272,17 @@ read(&mut self, s: &str)
 
             match decl
             {
-          Declaration::Fn(name,f)=>
+          Declaration::Fn(f)=>
                 {
-                  self.fn_list.push((name,f));
+                  self.fn_list.push(f);
                 }
-          Declaration::Let(var)=>
+          Declaration::Let(v)=>
                 {
-                  self.let_list.push(var);
+                  self.let_list.push(v);
                 }
-          Declaration::Const(var)=>
+          Declaration::Const(v)=>
                 {
-                  self.const_list.push(var);
+                  self.const_list.push(v);
                 }
             }
 
@@ -132,214 +298,147 @@ read(&mut self, s: &str)
 }
 
 
-/*
 pub fn
-find_fn(&self, name: &str)-> Option<&Function>
+calculate(e: &Expression, dir: &SymbolDirectory)-> Result<(Vec<u8>,TypeInfo),()>
 {
-    for i in 0..self.fn_list.len()
-    {
-      let  (f_name,f,_) = &self.fn_list[i];
+  let  mut ee = ExpressionEvaluator::new();
 
-        if f_name == name
-        {
-          return Some(f);
-        }
-    }
+  ee.reset(e,dir);
 
+  ee.run();
 
-  None
-}
-
-
-fn
-find_const(const_list: &Vec<Const>, name: &str)-> Option<()>
-{
-    for c in const_list
-    {
-        if c.name == name
-        {
-          return Some(());
-        }
-    }
-
-
-  None
+  Ok(ee.get_final_value_and_type_info())
 }
 
 
 pub fn
-calculate_const_values(const_list: &mut Vec<Const>)
+process_source(src: &SymbolSource, dir: &mut SymbolDirectory)-> Result<(),()>
 {
-/*
-  let  mut tmp: Vec<Const> = Vec::new();
-  let  mut  ok: Vec<Const> = Vec::new();
-  let  mut err: Vec<Const> = Vec::new();
-
-  let  mut last_err_n = 0;
-
-  std::mem::swap(const_list,&mut tmp);
-
-    while tmp.len() != 0
+    match src
     {
-        while let Some(mut c) = tmp.pop()
+  SymbolSource::Type(decl)=>
         {
-            if let Ok(v) = Self::calculate(&c.expression,&ok)
+            if let Ok(ti) = decl.type_kind.make_info(dir)
             {
-              c.value = v;
+              dir.add_type(&decl.name,ti);
 
-              ok.push(c);
+              return Ok(());
             }
-
-          else
+        }
+  SymbolSource::Const(decl)=>
+        {
+            if let Ok((b,e_ti)) = Self::calculate(&decl.expression,dir)
             {
-              err.push(c);
+                if let Ok(ti) = decl.type_kind.make_info(dir)
+                {
+                  dir.add_constant(&decl.name,ti,b);
+                }
+
+
+              return Ok(());
+            }
+        }
+  _=>{}
+    }
+
+
+  Err(())
+}
+
+
+pub fn
+process_source_list(mut tmp_ls: Vec<SymbolSource>, dir: &mut SymbolDirectory)
+{
+    if tmp_ls.len() == 0
+    {
+      return;
+    }
+
+
+  let  mut err_ls: Vec<SymbolSource> = Vec::new();
+
+  let  mut last_len: usize = tmp_ls.len();
+
+    loop
+    {
+        while let Some(symsrc) = tmp_ls.pop()
+        {
+            if Self::process_source(&symsrc,dir).is_err()
+            {
+              err_ls.push(symsrc);
             }
         }
 
 
-        if err.is_empty()
+      let  cur_len = err_ls.len();
+
+        if cur_len == 0
         {
           break;
         }
 
-
-      let  err_n = err.len();
-
-        if last_err_n == err_n
+      else
+        if cur_len == last_len
         {
           panic!();
         }
 
 
-      last_err_n = err_n;
+      last_len = cur_len;
 
-      std::mem::swap(&mut err,&mut tmp);
-    }
-
-
-  std::mem::swap(const_list,&mut ok);
-*/
-}
-
-
-pub fn
-calculate_let_values(let_list: &mut Vec<Var>, const_list: &Vec<Const>)
-{
-/*
-    for var in let_list
-    {
-//        if let Some(e) = &var.expression_opt
-        {
-            if let Ok(v) = Self::calculate(e,const_list)
-            {
-//              var.value = v;
-            }
-
-          else
-            {
-              panic!();
-            }
-        }
-    }
-*/
-}
-
-
-fn
-count_name(tbl: &Vec<Symbol>, name: &str)-> usize
-{
-  let  mut count: usize = 0;
-
-    for sym in tbl
-    {
-        if sym.name == name
-        {
-          count += 1;
-        }
-    }
-
-
-  count
-}
-
-
-fn
-check_name(tbl: &Vec<Symbol>)
-{
-    for sym in tbl
-    {
-        if Self::count_name(tbl,&sym.name) != 1
-        {
-          panic!();
-        }
+      std::mem::swap(&mut tmp_ls,&mut err_ls);
     }
 }
 
 
 fn
-create_symbol_table(&self)-> Vec<Symbol>
+append_basic_types(dir: &mut SymbolDirectory)
 {
-  let  mut symtbl: Vec<Symbol> = vec![Symbol::new("",0,true)];
-
-    for c in &self.const_list
-    {
-      let  i = symtbl.len();
-
-      symtbl.push(Symbol::new(&c.name,i,true));
-    }
-
-
-    for v in &self.let_list
-    {
-      let  i = symtbl.len();
-
-      symtbl.push(Symbol::new(&v.name,i,false));
-    }
-
-
-    for (name,_,_) in &self.fn_list
-    {
-      let  i = symtbl.len();
-
-      symtbl.push(Symbol::new(name,i,true));
-    }
-
-
-  symtbl
+  dir.add_type("void",TypeInfo::Void);
+  dir.add_type("bool",TypeInfo::Bool);
+  dir.add_type(   "i8",TypeInfo::I8);
+  dir.add_type(  "i16",TypeInfo::I16);
+  dir.add_type(  "i32",TypeInfo::I32);
+  dir.add_type(  "i64",TypeInfo::I64);
+  dir.add_type("isize",TypeInfo::ISize);
+  dir.add_type(   "u8",TypeInfo::U8);
+  dir.add_type(  "u16",TypeInfo::U16);
+  dir.add_type(  "u32",TypeInfo::U32);
+  dir.add_type(  "u64",TypeInfo::U64);
+  dir.add_type("usize",TypeInfo::USize);
+  dir.add_type(  "f32",TypeInfo::F32);
+  dir.add_type(  "f64",TypeInfo::F64);
 }
 
 
 pub fn
 compile(&mut self)
 {
-  let  mut symtbl = self.create_symbol_table();
+  let  mut root_dir = SymbolDirectory::new_as_root();
 
-  Self::check_name(&symtbl);
+  Self::append_basic_types(&mut root_dir);
 
-//  Self::calculate_const_values(&mut self.const_list);
-//  Self::calculate_let_values(&mut self.let_list,&self.const_list);
+  let  mut ls: Vec<SymbolSource> = Vec::new();
 
-/*
-    for (name,f,op_ls) in &mut self.fn_list
+    for v in &self.const_list
     {
-      f.block.scan();
-
-      *op_ls = CompileContext::start(f,&symtbl,&self.const_list);
-
-        for sym in &mut symtbl
-        {
-            if &sym.name == name
-            {
-              sym.value = Value::ProgramPointer(op_ls as *const Vec<Operation>);
-
-              break;
-            }
-        }
+      ls.push(SymbolSource::Const(v));
     }
-*/
 
 
-  self.symbol_list = symtbl;
+  Self::process_source_list(ls,&mut root_dir);
+
+    for fndecl in &self.fn_list
+    {
+      let      ls = fndecl.get_processed_parameter_list(&root_dir);
+      let  ret_ti = fndecl.get_return_type_info(&root_dir);
+
+      root_dir.add_function(&fndecl.name,ls,ret_ti);
+
+//      let  symblk = SymbolBlock::new(&mut root_dir, &fndecl.block);
+
+//      buf.push(symblk);
+    }
 }
 
 
@@ -348,735 +447,35 @@ print(&self)
 {
     for v in &self.let_list
     {
-      print!("let  {}",&v.name);
+      print!("let  ");
 
-        if let Some(e) = &v.expression_opt
-        {
-          print!(": ");
-
-          e.print();
-        }
-
+      v.print();
 
       print!(";\n");
     }
 
 
-    for c in &self.const_list
+    for v in &self.const_list
     {
-      print!("const  {}: ",&c.name);
+      print!("const  ");
 
-//      c.expression.print();
+      v.print();
 
       print!(";\n");
     }
 
 
-    for (name,f,_) in &self.fn_list
+    for f in &self.fn_list
     {
-      print!("fn  {}(",name);
+      print!("fn  ");
 
-        for para in &f.parameter_list
-        {
-          print!("{},",&para.name);
-        }
-
-
-      print!(")\n");
-
-      f.block.print();
+      f.print();
     }
 }
 
 
-pub fn
-print_operations(&self)
-{
-    for (name,f,op_ls) in &self.fn_list
-    {
-      print!("fn  {}(",name);
-
-        for para in &f.parameter_list
-        {
-          print!("{},",&para.name);
-        }
-
-
-      print!(")\n");
-
-        for i in 0..op_ls.len()
-        {
-          print!("[{:>4}]  ",i);
-
-          let  op = &op_ls[i];
-
-            if op.is_control()
-            {
-              print!("*");
-            }
-
-          else
-            {
-              print!(" ");
-            }
-
-
-          op.print();
-
-          print!("\n");
-        }
-
-
-      print!("\n");
-    }
 }
 
-
-*/
-}
-
-
-
-
-pub struct
-Function
-{
-  pub(crate) parameter_list: Vec<Parameter>,
-  pub(crate) block: Block,
-
-}
-
-
-impl
-Function
-{
-
-
-}
-
-
-
-
-pub struct
-ControlBlockFrame
-{
-  pub(crate) base_name: String,
-
-}
-
-
-impl
-ControlBlockFrame
-{
-
-
-pub fn
-new(id_ref: &mut usize)-> Self
-{
-  let  id = *id_ref     ;
-            *id_ref += 1;
-
-  Self{
-    base_name: format!("{}",id),
-  }
-}
-
-
-pub fn
-get_start_label(&self)-> String
-{
-  format!("{}_Start",&self.base_name)
-}
-
-
-pub fn
-get_restart_label(&self)-> String
-{
-  format!("{}_Restart",&self.base_name)
-}
-
-
-pub fn
-get_end_label(&self)-> String
-{
-  format!("{}_End",&self.base_name)
-}
-
-
-}
-
-
-
-
-pub struct
-Position
-{
-  pub(crate) name: String,
-  pub(crate) value: usize,
-
-	}
-
-
-
-
-/*
-pub struct
-CompileContext<'a,'b>
-{
-  pub(crate)   symbol_list_ref: &'a Vec<Symbol>,
-  pub(crate)    const_list_ref: &'a Vec<Const>,
-  pub(crate) parameter_list_ref: &'b Vec<Parameter>,
-
-  pub(crate) operation_list: Vec<Operation>,
-
-  pub(crate) ctrl_id: usize,
-  pub(crate)   if_id: usize,
-
-  pub(crate) position_request_list: Vec<Position>,
-  pub(crate)         position_list: Vec<Position>,
-
-}
-
-
-impl<'a,'b>
-CompileContext<'a,'b>
-{
-
-
-pub fn
-start(f_ref: &'b Function, symbol_list_ref: &'a Vec<Symbol>, const_list_ref: &'a Vec<Const>)-> Vec<Operation>
-{
-  let  mut ctx = Self{
-    symbol_list_ref,
-     const_list_ref,
-    parameter_list_ref: &f_ref.parameter_list,
-    operation_list: Vec::new(),
-    ctrl_id: 0,
-    if_id: 0,
-    position_request_list: Vec::new(),
-    position_list: Vec::new(),
-  };
-
-
-  ctx.operation_list.push(Operation::AllocateLoc(f_ref.block.stack_allocation_count));
-
-  let  vi = VariableInfo::new(String::new(),None);
-
-  ctx.process_block(&f_ref.block,&vi,None);
-
-
-  Self::resolve_position_requests_all(&ctx.position_request_list,&ctx.position_list,&mut ctx.operation_list);
-
-  ctx.operation_list
-}
-
-
-pub fn
-resolve_position_request(name: &str, pos_ls: &Vec<Position>, op: &mut Operation)
-{
-    for pos in pos_ls
-    {
-        if &pos.name == name
-        {
-            match op
-            {
-          Operation::Jmp(i) =>{*i = pos.value;}
-          Operation::Brz(i) =>{*i = pos.value;}
-          Operation::Brnz(i)=>{*i = pos.value;}
-          _=>{panic!();}
-            }
-
-
-          return;
-        }
-    }
-
-
-  panic!();
-}
-
-
-pub fn
-resolve_position_requests_all(posreq_ls: &Vec<Position>, pos_ls: &Vec<Position>, op_ls: &mut Vec<Operation>)
-{
-    for posreq in posreq_ls
-    {
-      let  op = &mut op_ls[posreq.value];
-
-      Self::resolve_position_request(&posreq.name,pos_ls,op);
-    }
-}
-
-
-pub fn
-push_jmp(&mut self, name: String)
-{
-  let  i = self.operation_list.len();
-
-  self.operation_list.push(Operation::Jmp(0));
-
-  self.position_request_list.push(Position{name, value: i});
-}
-
-
-pub fn
-push_brz(&mut self, name: String)
-{
-  let  i = self.operation_list.len();
-
-  self.operation_list.push(Operation::Brz(0));
-
-  self.position_request_list.push(Position{name, value: i});
-}
-
-
-pub fn
-push_brnz(&mut self, name: String)
-{
-  let  i = self.operation_list.len();
-
-  self.operation_list.push(Operation::Brnz(0));
-
-  self.position_request_list.push(Position{name, value: i});
-}
-
-
-pub fn
-push_position(&mut self, name: String)
-{
-  let  i = self.operation_list.len();
-
-  self.position_list.push(Position{name, value: i});
-}
-
-
-pub fn
-find_parameter(&self, name: &str)-> Option<usize>
-{
-  let  l = self.parameter_list_ref.len();
-
-    for i in 0..l
-    {
-      let  ii = l-1-i;
-
-        if &self.parameter_list_ref[ii].name == name
-        {
-          return Some(ii);
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-find_global(&self, name: &str)-> Option<usize>
-{
-    for sym in self.symbol_list_ref
-    {
-        if &sym.name == name
-        {
-          return Some(sym.index);
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-process_expression(&mut self, expr: &Expression, last_vi: &'b VariableInfo, offset: usize)-> StorageInfo
-{
-  let  mut si = StorageInfo::new();
-
-    match expr
-    {
-  Expression::Identifier(s)=>
-        {
-               if s ==      "true"{self.operation_list.push(Operation::LoadB(true));}
-          else if s ==     "false"{self.operation_list.push(Operation::LoadB(false));}
-          else if s ==      "null"{self.operation_list.push(Operation::LoadN);}
-          else if s == "undefined"{self.operation_list.push(Operation::LoadU);}
-          else
-            if let Some(vi) = last_vi.find(s)
-            {
-              self.operation_list.push(Operation::LoadLocRef(vi.storage_info.index));
-            }
-
-          else
-            if let Some(i) = self.find_parameter(s)
-            {
-              self.operation_list.push(Operation::LoadArgRef(i));
-            }
-
-          else
-            if let Some(i) = self.find_global(s)
-            {
-              self.operation_list.push(Operation::LoadGloRef(i));
-            }
-
-          else
-            {
-              println!("process_expression error: {} not found",s);
-
-              last_vi.print();
-
-              panic!();
-            }
-        },
-  Expression::Boolean(b) =>{self.operation_list.push(Operation::LoadB(*b));},
-  Expression::Integer(u) =>{self.operation_list.push(Operation::LoadI(*u as i64));},
-  Expression::Floating(f)=>{self.operation_list.push(Operation::LoadF(*f));},
-  Expression::String(s)  =>{self.operation_list.push(Operation::LoadS(s.clone()));},
-  Expression::Table(ls)=>
-        {
-/*
-          let  e_ls = Space::to_element_list(ls,self.const_list_ref);
-
-          self.operation_list.push(Operation::LoadT(e_ls));
-*/
-        },
-  Expression::SubExpression(e)=>
-        {
-          self.process_expression(e,last_vi,offset);
-        },
-  Expression::Unary(o,e)=>
-        {
-          self.process_expression(e,last_vi,offset);
-
-          self.operation_list.push(Operation::Unary(o.clone()));
-        },
-  Expression::Call(f,args)=>
-        {
-          self.process_expression(f,last_vi,offset);
-
-            for a in args.iter().rev()
-            {
-              self.process_expression(a,last_vi,offset);
-            }
-
-
-          self.operation_list.push(Operation::Cal(args.len()));
-        },
-  Expression::Subscript(target,index)=>
-        {
-          self.process_expression(target,last_vi,offset);
-          self.process_expression( index,last_vi,offset);
-
-          self.operation_list.push(Operation::Subscript);
-        },
-  Expression::Access(target,name)=>
-        {
-          self.process_expression(target,last_vi,offset);
-
-          self.operation_list.push(Operation::Access(name.clone()));
-        },
-  Expression::Binary(o,l,r)=>
-        {
-          self.process_expression(l,last_vi,offset);
-          self.process_expression(r,last_vi,offset);
-
-          self.operation_list.push(Operation::Binary(o.clone()));
-        },
-    }
-
-
-  si
-}
-
-
-pub fn
-process_block(&mut self, blk: &'b Block, last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
-{
-    for stmt in &blk.statement_list
-    {
-      self.process_statement(stmt,last_vi,cbf_ref_opt);
-    }
-}
-
-
-pub fn
-process_if(&mut self, ls: &'b Vec<(Expression,Block)>, blk_opt: &'b Option<Block>, last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
-{
-  let  base_name = format!("If{}",self.if_id);
-
-  self.if_id += 1;
-
-    for i in 0..ls.len()
-    {
-      let  (e,blk) = &ls[i];
-
-      self.process_expression(e,last_vi,0);
-
-      self.push_brnz(format!("{}_{}",&base_name,i));
-    }
-
-
-    if let Some(blk) = blk_opt
-    {
-      self.process_block(blk,last_vi,cbf_ref_opt);
-    }
-
-
-  self.push_jmp(format!("{}_End",&base_name));
-
-    for i in 0..ls.len()
-    {
-      let  (e,blk) = &ls[i];
-
-      self.push_position(format!("{}_{}",&base_name,i));
-
-      self.process_block(blk,last_vi,cbf_ref_opt);
-
-      self.push_jmp(format!("{}_End",&base_name));
-    }
-
-
-  self.push_position(format!("{}_End",&base_name));
-}
-
-
-pub fn
-process_for(&mut self, fo: &'b For, mut last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
-{
-  let  cbf = ControlBlockFrame::new(&mut self.ctrl_id);
-
-  let  cur_i = fo.current_vi.storage_info.index;
-  let  end_i =     fo.end_vi.storage_info.index;
-
-  self.operation_list.push(Operation::LoadLocRef(cur_i));
-
-  self.operation_list.push(Operation::LoadI(0));
-
-  self.operation_list.push(Operation::Assign(AssignOperator::Nop));
-
-  self.operation_list.push(Operation::Dump);
-
-
-  self.operation_list.push(Operation::LoadLocRef(end_i));
-
-  self.process_expression(fo.get_end_expression(),last_vi,0);
-
-  self.operation_list.push(Operation::Assign(AssignOperator::Nop));
-
-
-  self.operation_list.push(Operation::LoadI(0));
-  self.operation_list.push(Operation::Binary(BinaryOperator::Gt));
-
-  self.push_brz(cbf.get_end_label());
-
-  self.push_position(cbf.get_start_label());
-
-
-  last_vi = &fo.current_vi;
-
-
-  self.process_block(&fo.block,last_vi,Some(&cbf));
-
-  self.push_position(cbf.get_restart_label());
-
-  self.operation_list.push(Operation::LoadLocRef(cur_i));
-  self.operation_list.push(Operation::LoadI(1));
-  self.operation_list.push(Operation::Assign(AssignOperator::Add));
-
-  self.operation_list.push(Operation::LoadLocRef(end_i));
-  self.operation_list.push(Operation::Binary(BinaryOperator::Lt));
-
-  self.push_brnz(cbf.get_start_label());
-
-  self.push_position(cbf.get_end_label());
-}
-
-
-pub fn
-process_print_v(&mut self, s: &str, last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
-{
-    if let Some(vi) = last_vi.find(s)
-    {
-      self.operation_list.push(Operation::PrintLoc(vi.storage_info.index));
-    }
-
-  else
-    if let Some(i) = self.find_parameter(s)
-    {
-      self.operation_list.push(Operation::PrintArg(i));
-    }
-
-  else
-    if let Some(i) = self.find_global(s)
-    {
-      self.operation_list.push(Operation::PrintGlo(i));
-    }
-
-  else
-    {
-      println!("process_statement error: {} not found",s);
-
-      last_vi.print();
-
-      panic!();
-    }
-}
-
-
-pub fn
-process_statement(&mut self, stmt: &'b Statement, mut last_vi: &'b VariableInfo, cbf_ref_opt: Option<&ControlBlockFrame>)
-{
-    match stmt
-    {
-  Statement::Empty=>{}
-  Statement::Let(vi)=>
-        {
-            if let Some(e) = &vi.expression_opt
-            {
-              self.operation_list.push(Operation::LoadLocRef(vi.storage_info.index));
-
-              self.process_expression(e,last_vi,0);
-
-              self.operation_list.push(Operation::Assign(AssignOperator::Nop));
-            }
-
-
-          last_vi = vi;
-        }
-  Statement::Const(vi)=>
-        {
-        }
-  Statement::Expression(e,ass_opt)=>
-        {
-          self.process_expression(e,last_vi,0);
-
-            if let Some((o,re)) = ass_opt
-            {
-              self.process_expression(re,last_vi,0);
-
-              self.operation_list.push(Operation::Assign(o.clone()));
-            }
-
-
-          self.operation_list.push(Operation::Dump);
-        }
-  Statement::If(ls,blk_opt)=>
-        {
-          self.process_if(ls,blk_opt,last_vi,cbf_ref_opt);
-        }
-  Statement::For(fo)=>
-        {
-          self.process_for(fo,last_vi,cbf_ref_opt);
-        }
-  Statement::While(e,blk)=>
-        {
-          let  cbf = ControlBlockFrame::new(&mut self.ctrl_id);
-
-          self.push_jmp(cbf.get_restart_label());
-
-          self.push_position(cbf.get_start_label());
-
-          self.process_block(blk,last_vi,Some(&cbf));
-
-          self.push_position(cbf.get_restart_label());
-
-          self.process_expression(e,last_vi,0);
-
-          self.push_brnz(cbf.get_start_label());
-
-          self.push_position(cbf.get_end_label());
-        }
-  Statement::Loop(blk)=>
-        {
-          let  cbf = ControlBlockFrame::new(&mut self.ctrl_id);
-
-          self.push_position(cbf.get_start_label());
-
-          self.process_block(blk,last_vi,Some(&cbf));
-
-          self.push_position(cbf.get_restart_label());
-
-          self.push_jmp(cbf.get_start_label());
-
-          self.push_position(cbf.get_end_label());
-        }
-  Statement::Block(blk)=>
-        {
-          self.process_block(blk,last_vi,cbf_ref_opt);
-        }
-  Statement::Return(e_opt)=>
-        {
-            if let Some(e) = e_opt
-            {
-              self.process_expression(e,last_vi,0);
-
-              self.operation_list.push(Operation::Ret);
-            }
-
-          else
-            {
-              self.operation_list.push(Operation::RetN);
-            }
-        }
-  Statement::Break=>
-        {
-            if let Some(cbf_ref) = cbf_ref_opt
-            {
-              self.push_jmp(cbf_ref.get_end_label());
-            }
-
-          else
-            {
-              panic!();
-            }
-        }
-  Statement::Continue=>
-        {
-            if let Some(cbf_ref) = cbf_ref_opt
-            {
-              self.push_jmp(cbf_ref.get_start_label());
-            }
-
-          else
-            {
-              panic!();
-            }
-        }
-  Statement::PrintS(s)=>
-        {
-          self.operation_list.push(Operation::PrintS(s.clone()));
-        }
-  Statement::PrintV(s)=>
-        {
-          self.process_print_v(s,last_vi,cbf_ref_opt);
-        }
-    }
-}
-
-
-pub fn
-print_position_lists(&self)
-{
-  println!("posreq{{");
-
-    for posreq in &self.position_request_list
-    {
-      println!("{}: {}",&posreq.name,posreq.value);
-    }
-
-  println!("}} pos{{");
-
-    for pos in &self.position_list
-    {
-      println!("{}: {}",&pos.name,pos.value);
-    }
-
-
-  println!("}}");
-
-}
-
-
-}
-*/
 
 
 

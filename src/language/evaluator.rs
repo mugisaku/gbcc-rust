@@ -1,7 +1,14 @@
 
 
+use super::compile_for_expression::{
+  compile,
+
+};
+
+
 use super::expression::{
   Expression,
+  AssignOperator,
   UnaryOperator,
   BinaryOperator,
 
@@ -13,54 +20,20 @@ use super::memory::{
 
 };
 
+use super::symbol::{
+  SymbolDirectory,
+  SymbolKind,
+
+};
+
 
 use super::type_info::{
-  SymbolNode,
-  SymbolKind,
   TypeInfo,
-  NumberKind,
-  IntKind,
-  FloatKind,
 
 };
 
 
 const WORD_SIZE: usize = 8;
-
-
-pub struct
-CompileResult
-{
-  pub(crate) dst: Destination,
-
-  pub(crate) type_info: TypeInfo,
-
-}
-
-
-impl
-CompileResult
-{
-
-
-pub fn
-new(dst: Destination, type_info: TypeInfo)-> Self
-{
-  Self{
-    dst,
-    type_info,
-  }
-}
-
-
-pub fn
-next_dst(&self)-> Destination
-{
-  self.dst.add(self.type_info.get_size())
-}
-
-
-}
 
 
 
@@ -69,8 +42,10 @@ next_dst(&self)-> Destination
 pub enum
 FieldIndex
 {
-  Global(usize),
-   Local(usize),
+    Global(usize),
+  Argument(usize),
+     Local(usize),
+ Temporary(usize),
 
 }
 
@@ -85,8 +60,10 @@ print(&self)
 {
     match self
     {
-  Self::Global(i)=>{print!("g{}",*i);}
-  Self::Local(i) =>{print!("l{}",*i);}
+  Self::Global(i)   =>{print!("glo{}",*i);}
+  Self::Argument(i) =>{print!("arg{}",*i);}
+  Self::Local(i)    =>{print!("loc{}",*i);}
+  Self::Temporary(i)=>{print!("tmp{}",*i);}
     }
 }
 
@@ -100,7 +77,7 @@ print(&self)
 pub struct
 Destination
 {
-  field_index: FieldIndex,
+  pub(crate) field_index: FieldIndex,
 
 }
 
@@ -111,14 +88,25 @@ Destination
 
 
 pub fn
+new_temporary(pos: usize)-> Self
+{
+  Self{
+    field_index: FieldIndex::Temporary(pos+(WORD_SIZE-1)/WORD_SIZE),
+  }
+}
+
+
+pub fn
 add(&self, sz: usize)-> Self
 {
   let  n = (sz+7)/WORD_SIZE;
 
     match &self.field_index
     {
-  FieldIndex::Global(i)=>{Self{field_index: FieldIndex::Global((*i)+n)}}
-  FieldIndex::Local(i) =>{Self{field_index: FieldIndex::Local( (*i)+n)}}
+  FieldIndex::Global(i)   =>{Self{field_index: FieldIndex::Global(   (*i)+n)}}
+  FieldIndex::Argument(i) =>{Self{field_index: FieldIndex::Argument( (*i)+n)}}
+  FieldIndex::Local(i)    =>{Self{field_index: FieldIndex::Local(    (*i)+n)}}
+  FieldIndex::Temporary(i)=>{Self{field_index: FieldIndex::Temporary((*i)+n)}}
     }
 }
 
@@ -140,9 +128,28 @@ to_src(&self)-> Source
 pub struct
 Source
 {
-  field_index: FieldIndex
+  pub(crate) field_index: FieldIndex
 
 }
+
+
+impl
+Source
+{
+
+
+pub fn
+new_temporary(pos: usize)-> Self
+{
+  Self{
+    field_index: FieldIndex::Temporary(pos+(WORD_SIZE-1)/WORD_SIZE),
+  }
+}
+
+
+}
+
+
 
 
 #[derive(Clone)]
@@ -269,10 +276,6 @@ print(&self)
 }
 
 
-pub enum
-TypeCheckResultA{I, U, F, Char, Bool, Bitwise, Err}
-
-
 #[derive(Clone)]
 pub enum
 Instruction
@@ -285,6 +288,21 @@ Instruction
   LdI(Destination,i64),
   LdU(Destination,u64),
   LdF(Destination,f64),
+
+  Cal(Source,usize,usize),
+
+  Assign(AssignOperator),
+
+  Mvsp(isize),
+  Jmp(isize),
+  Brz(isize),
+  Brnz(isize),
+  Trv(usize),
+  Ret,
+
+  Break,
+  Continue,
+  Exit,
 
 }
 
@@ -322,6 +340,24 @@ print(&self)
   Self::LdI(dst,i)=>{  dst.field_index.print();  print!(" = ldi {}",*i);}
   Self::LdU(dst,u)=>{  dst.field_index.print();  print!(" = ldu {}",*u);}
   Self::LdF(dst,f)=>{  dst.field_index.print();  print!(" = ldf {}",*f);}
+  Self::Cal(src,retval_sz,args_sz)=>
+        {
+          print!("cal ");
+
+          src.field_index.print();
+
+          print!(" {} {}",*retval_sz,*args_sz);
+        }
+  Self::Assign(o)=>{  print!("assign");  o.print();}
+  Self::Mvsp(n)=>{print!("mvsp {}",*n);}
+  Self::Jmp(n)=>{print!("jmp {}",*n);}
+  Self::Brz(n)=>{print!("brz {}",*n);}
+  Self::Brnz(n)=>{print!("brnz {}",*n);}
+  Self::Trv(sz)=>{print!("trv {}",*sz);}
+  Self::Ret=>{print!("ret");}
+  Self::Break=>{print!("break");}
+  Self::Continue=>{print!("continue");}
+  Self::Exit=>{print!("exit");}
     }
 }
 
@@ -366,288 +402,25 @@ new()-> Self
 }
 
 
-pub fn
-compile_unary(o: &UnaryOperator, res: &CompileResult, buf: &mut Vec<Instruction>)-> Result<CompileResult,()>
-{
-  let  (op,ti): (OpcodeB,TypeInfo) = match o
-    {
-  UnaryOperator::Neg=>
-        {
-            if let TypeInfo::Number(nk) = &res.type_info
-            {
-                match nk
-                {
-              NumberKind::SignedInt(_)=>{(OpcodeB::NegI,res.type_info.clone())}
-              NumberKind::Float(_)    =>{(OpcodeB::NegF,res.type_info.clone())}
-              _=>{(OpcodeB::Nop,TypeInfo::Unknown)}
-                }
-            }
-
-          else
-            {
-              (OpcodeB::Nop,TypeInfo::Unknown)
-            }
-        },
-  UnaryOperator::Not=>
-        {
-            if let TypeInfo::Number(nk) = &res.type_info
-            {
-                match nk
-                {
-              NumberKind::SignedInt(_)  =>{(OpcodeB::Not,res.type_info.clone())}
-              NumberKind::UnsignedInt(_)=>{(OpcodeB::Not,res.type_info.clone())}
-              _=>{(OpcodeB::Nop,TypeInfo::Unknown)}
-                }
-            }
-
-          else
-            {
-              (OpcodeB::Nop,TypeInfo::Unknown)
-            }
-        },
-  UnaryOperator::LogicalNot=>{if let TypeInfo::Bool = &res.type_info{(OpcodeB::LogicalNot,TypeInfo::Bool)} else{(OpcodeB::Nop,TypeInfo::Unknown)}},
-  _=>{(OpcodeB::Nop,TypeInfo::Unknown)},
-    };
-
-
-    if let OpcodeB::Nop = op
-    {
-      Err(())
-    }
-
-  else
-    {
-      buf.push(Instruction::OperationB(op,res.next_dst(),res.dst.to_src()));
-
-      Ok(CompileResult::new(res.next_dst(),ti))
-    }
-}
-
-
-fn
-typecheck_n(l: &NumberKind, r: &NumberKind)-> (TypeCheckResultA,TypeInfo)
-{
-    if let NumberKind::SignedInt(l_ik) = l
-    {
-        if let NumberKind::SignedInt(r_ik) = r
-        {
-            if let Some(ik) = IntKind::check(l_ik,r_ik)
-            {
-              let  nk = NumberKind::SignedInt(ik);
-
-              return (TypeCheckResultA::I,TypeInfo::Number(nk));
-            }
-        }
-    }
-
-  else
-    if let NumberKind::UnsignedInt(l_ik) = l
-    {
-        if let NumberKind::UnsignedInt(r_ik) = r
-        {
-            if let Some(ik) = IntKind::check(l_ik,r_ik)
-            {
-              let  nk = NumberKind::UnsignedInt(ik);
-
-              return (TypeCheckResultA::U,TypeInfo::Number(nk));
-            }
-        }
-    }
-
-  else
-    if let NumberKind::Float(l_fk) = l
-    {
-        if let NumberKind::Float(r_fk) = r
-        {
-            if let Some(fk) = FloatKind::check(l_fk,r_fk)
-            {
-              let  nk = NumberKind::Float(fk);
-
-              return (TypeCheckResultA::F,TypeInfo::Number(nk));
-            }
-        }
-    }
-
-
-  (TypeCheckResultA::Err,TypeInfo::Unknown)
-}
-
-
-fn
-typecheck_a(l: &TypeInfo, r: &TypeInfo)-> (TypeCheckResultA,TypeInfo)
-{
-    if let TypeInfo::Number(l_nk) = l
-    {
-        if let TypeInfo::Number(r_nk) = r
-        {
-          return Self::typecheck_n(l_nk,r_nk);
-        }
-    }
-
-  else
-    if let TypeInfo::Char = l
-    {
-        if let TypeInfo::Char = r
-        {
-          return (TypeCheckResultA::Char,TypeInfo::Char);
-        }
-    }
-
-  else
-    if let TypeInfo::Bool = l
-    {
-        if let TypeInfo::Bool = r
-        {
-          return (TypeCheckResultA::Bool,TypeInfo::Bool);
-        }
-    }
-
-
-  (TypeCheckResultA::Err,TypeInfo::Unknown)
-}
-
-
-fn
-get_opcode_a(res: TypeCheckResultA, i: OpcodeA, u: OpcodeA, f: OpcodeA)-> OpcodeA
-{
-    match res
-    {
-  TypeCheckResultA::I=>{i}
-  TypeCheckResultA::U=>{u}
-  TypeCheckResultA::F=>{f}
-  _=>{OpcodeA::Nop}
-    }
-}
 
 
 pub fn
-compile_binary(o: &BinaryOperator, lres: &CompileResult, rres: &CompileResult, buf: &mut Vec<Instruction>)-> Result<CompileResult,()>
+reset(&mut self, e: &Expression, dir: &SymbolDirectory)
 {
-  let  (res,ti) = Self::typecheck_a(&lres.type_info,&rres.type_info);
-
-  let  op = match o
-    {
-  BinaryOperator::Add       =>{Self::get_opcode_a(res,OpcodeA::AddI,OpcodeA::AddU,OpcodeA::AddF)},
-  BinaryOperator::Sub       =>{Self::get_opcode_a(res,OpcodeA::SubI,OpcodeA::SubU,OpcodeA::SubF)},
-  BinaryOperator::Mul       =>{Self::get_opcode_a(res,OpcodeA::MulI,OpcodeA::MulU,OpcodeA::MulF)},
-  BinaryOperator::Div       =>{Self::get_opcode_a(res,OpcodeA::DivI,OpcodeA::DivU,OpcodeA::DivF)},
-  BinaryOperator::Rem       =>{Self::get_opcode_a(res,OpcodeA::RemI,OpcodeA::RemU,OpcodeA::RemF)},
-  BinaryOperator::Shl       =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::Shl} else{OpcodeA::Nop}},
-  BinaryOperator::Shr       =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::Shr} else{OpcodeA::Nop}},
-  BinaryOperator::And       =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::And} else{OpcodeA::Nop}},
-  BinaryOperator::Or        =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::Or } else{OpcodeA::Nop}},
-  BinaryOperator::Xor       =>{if let TypeCheckResultA::Bitwise = res{OpcodeA::Xor} else{OpcodeA::Nop}},
-  BinaryOperator::Eq        =>{Self::get_opcode_a(res,OpcodeA::Eq,   OpcodeA::Eq,   OpcodeA::Eq   )},
-  BinaryOperator::Neq       =>{Self::get_opcode_a(res,OpcodeA::Neq,  OpcodeA::Neq,  OpcodeA::Neq  )},
-  BinaryOperator::Lt        =>{Self::get_opcode_a(res,OpcodeA::LtI,  OpcodeA::LtU,  OpcodeA::LtF  )},
-  BinaryOperator::Lteq      =>{Self::get_opcode_a(res,OpcodeA::LteqI,OpcodeA::LteqU,OpcodeA::LteqF)},
-  BinaryOperator::Gt        =>{Self::get_opcode_a(res,OpcodeA::GtI,  OpcodeA::GtU,  OpcodeA::GtF  )},
-  BinaryOperator::Gteq      =>{Self::get_opcode_a(res,OpcodeA::GteqI,OpcodeA::GteqU,OpcodeA::GteqF)},
-  BinaryOperator::LogicalAnd=>{if let TypeCheckResultA::Bool = res{OpcodeA::LogicalAnd} else{OpcodeA::Nop}},
-  BinaryOperator::LogicalOr =>{if let TypeCheckResultA::Bool = res{OpcodeA::LogicalOr } else{OpcodeA::Nop}},
-    };
-
-
-    if let OpcodeA::Nop = op
-    {
-      Err(())
-    }
-
-  else
-    {
-      buf.push(Instruction::OperationA(op,rres.next_dst(),lres.dst.to_src(),rres.dst.to_src()));
-
-      Ok(CompileResult::new(rres.next_dst(),ti))
-    }
-}
-
-
-pub fn
-compile(e: &Expression, root_nd: &SymbolNode, dst: Destination, buf: &mut Vec<Instruction>)-> Result<CompileResult,()>
-{
-    match e
-    {
-  Expression::Identifier(s)=>
-        {
-               if s ==  "true"{  buf.push(Instruction::LdU(dst.clone(),1));  return Ok(CompileResult::new(dst,TypeInfo::Bool));}
-          else if s == "false"{  buf.push(Instruction::LdU(dst.clone(),0));  return Ok(CompileResult::new(dst,TypeInfo::Bool));}
-          else
-            if let Some(k) = root_nd.find_any(s)
-            {
-                match k
-                {
-              SymbolKind::Type(ti)=>{return Ok(CompileResult::new(dst,TypeInfo::External(ti as *const TypeInfo)));}
-              SymbolKind::Variable(ti,offset)=>{}
-              _=>{}
-                }
-            }
-        },
-  Expression::Boolean(b) =>{  buf.push(Instruction::LdU(dst.clone(),if *b{1} else{0}));  return Ok(CompileResult::new(dst,TypeInfo::Bool));},
-  Expression::Integer(u) =>{  buf.push(Instruction::LdU(dst.clone(),*u));                return Ok(CompileResult::new(dst,TypeInfo::new_uliteral()));},
-  Expression::Floating(f)=>{  buf.push(Instruction::LdF(dst.clone(),*f));                return Ok(CompileResult::new(dst,TypeInfo::new_fliteral()));},
-  Expression::SubExpression(sube)=>
-        {
-          return Self::compile(e,root_nd,dst,buf);
-        },
-  Expression::Unary(o,e)=>
-        {
-            if let Ok(res) = Self::compile(e,root_nd,dst,buf)
-            {
-              return Self::compile_unary(o,&res,buf);
-            }
-        },
-  Expression::Call(f,args)=>
-        {
-          panic!();
-        },
-  Expression::Subscript(target,index)=>
-        {
-          panic!();
-        },
-  Expression::Access(target,name)=>
-        {
-          panic!();
-        },
-  Expression::Binary(o,l,r)=>
-        {
-            if let Ok(lres) = Self::compile(l,root_nd,dst,buf)
-            {
-                if let Ok(rres) = Self::compile(r,root_nd,lres.next_dst(),buf)
-                {
-                  return Self::compile_binary(o,&lres,&rres,buf);
-                }
-            }
-        },
-  _=>{}
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-reset(&mut self, e: &Expression, root_nd: &SymbolNode)
-{
-  self.instruction_list.clear();
   self.pc = 0;
   self.bp = 0;
   self.sp = 0;
 
   self.final_value_type_info = TypeInfo::Unknown;
 
-  let  dst = Destination{field_index: FieldIndex::Local(0)};
+/*
+  let  (ls,ti) = compile(e,dir);
 
-    if let Ok(res) = Self::compile(e,root_nd,dst,&mut self.instruction_list)
-    {
-      self.final_value_dst = res.dst.clone();
-      self.final_value_type_info = res.type_info;
-    }
+  self.instruction_list = ls;
 
-  else
-    {
-      panic!();
-    }
+  self.final_value_dst = Destination{field_index: FieldIndex::Global(0)};
+  self.final_value_type_info = ti;
+*/
 }
 
 
@@ -656,8 +429,10 @@ get_address(&self, fi: &FieldIndex)-> usize
 {
     match fi
     {
-  FieldIndex::Global(v)=>{        (8*(*v))}
-  FieldIndex::Local(v) =>{self.bp+(8*(*v))}
+  FieldIndex::Global(v)   =>{        (WORD_SIZE*(*v))}
+  FieldIndex::Argument(v) =>{self.bp-(WORD_SIZE*(*v))}
+  FieldIndex::Local(v)    =>{self.bp+(WORD_SIZE*(*v))}
+  FieldIndex::Temporary(v)=>{self.sp+(WORD_SIZE*(*v))}
     }
 }
 
@@ -767,6 +542,119 @@ ldf(&mut self, dst: &Destination, f: f64)
 
 
 pub fn
+assign(&mut self, o: &AssignOperator)
+{
+    match o
+    {
+  AssignOperator::Nop=>{},
+  AssignOperator::Add=>{},
+  AssignOperator::Sub=>{},
+  AssignOperator::Mul=>{},
+  AssignOperator::Div=>{},
+  AssignOperator::Rem=>{},
+  AssignOperator::Shl=>{},
+  AssignOperator::Shr=>{},
+  AssignOperator::And=>{},
+  AssignOperator::Or =>{},
+  AssignOperator::Xor=>{},
+    }
+}
+
+
+pub fn
+mvsp(&mut self, v: isize)
+{
+    if v >= 0
+    {
+      self.sp += v as usize;
+    }
+
+  else
+    {
+      self.sp -= (-v) as usize;
+    }
+}
+
+
+pub fn
+jmp(&mut self, v: isize)
+{
+    if v >= 0
+    {
+      self.pc += v as usize;
+    }
+
+  else
+    {
+      self.pc -= (-v) as usize;
+    }
+}
+
+
+pub fn
+brz(&mut self, v: isize)
+{
+    if self.memory.get_u64(self.sp) == 0
+    {
+      self.jmp(v);
+    }
+}
+
+
+pub fn
+brnz(&mut self, v: isize)
+{
+    if self.memory.get_u64(self.sp) != 0
+    {
+      self.jmp(v);
+    }
+}
+
+
+
+
+pub fn
+_size_of_return_value(&self)->usize
+{
+  0
+}
+
+
+pub fn
+cal(&mut self, src: &Source, retval_sz: usize, args_sz: usize)
+{
+  let  src_addr = self.get_address(&src.field_index);
+
+  let  old_pc = self.pc;
+  let  old_bp = self.bp;
+
+  self.pc = self.memory.get_u64(src_addr) as usize;
+}
+
+
+pub fn
+get_address_of_return_value(&self)->usize
+{
+  0
+}
+
+
+pub fn
+trv(&mut self, sz: usize)
+{
+  let  dst_addr = self.get_address_of_return_value();
+
+  self.memory.copy(dst_addr,self.sp,sz);
+}
+
+
+pub fn
+ret(&mut self)
+{
+}
+
+
+pub fn
 step(&mut self)-> Option<()>
 {
     if self.pc < self.instruction_list.len()
@@ -783,6 +671,15 @@ step(&mut self)-> Option<()>
       Instruction::LdI(dst,i)=>{self.ldi(dst,*i);}
       Instruction::LdU(dst,u)=>{self.ldu(dst,*u);}
       Instruction::LdF(dst,f)=>{self.ldf(dst,*f);}
+      Instruction::Cal(src,retval_sz,args_sz)=>{self.cal(src,*retval_sz,*args_sz);}
+      Instruction::Assign(o)=>{self.assign(o);}
+      Instruction::Mvsp(v)=>{self.mvsp((*v)*(WORD_SIZE as isize));}
+      Instruction::Jmp(v)=>{self.jmp(*v);}
+      Instruction::Brz(v)=>{self.brz(*v);}
+      Instruction::Brnz(v)=>{self.brnz(*v);}
+      Instruction::Trv(sz)=>{self.trv(*sz);}
+      Instruction::Ret=>{self.ret();}
+      _=>{panic!();}
         }
 
 
@@ -813,6 +710,19 @@ get_final_value_as_usize(&self)-> usize
   let  addr = self.get_address(&self.final_value_dst.field_index);
 
   self.memory.get_u64(addr) as usize
+}
+
+
+pub fn
+get_final_value_and_type_info(&self)-> (Vec<u8>,TypeInfo)
+{
+  let  sz = self.final_value_type_info.get_size();
+
+  let  addr = self.get_address(&self.final_value_dst.field_index);
+
+  let  b = self.memory.get_str(addr,sz);
+
+  (b,self.final_value_type_info.clone())
 }
 
 
