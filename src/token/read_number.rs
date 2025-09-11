@@ -1,5 +1,11 @@
 
 
+use super::{
+  ParsedNumber,
+
+};
+
+
 use crate::source_file::{
   SourceFile,
   Cursor,
@@ -9,18 +15,15 @@ use crate::source_file::{
 use super::is::*;
 
 
-const CODE_OF_ZERO: u64 = 48;
-
-
 fn
-get_binary_digit(src: &SourceFile, cur: &Cursor)-> Option<u64>
+get_binary_integer(src: &SourceFile, cur: Cursor)-> Option<u64>
 {
     if let Some(c) = src.get_character(cur)
     {
         match c
         {
-      '0'=>{return Some(0);},
-      '1'=>{return Some(1);},
+      '0'=>{return Some(0);}
+      '1'=>{return Some(1);}
       _=>{}
         }
     }
@@ -31,40 +34,33 @@ get_binary_digit(src: &SourceFile, cur: &Cursor)-> Option<u64>
 
 
 pub fn
-read_binary_number(src: &SourceFile, cur: &mut Cursor)-> Result<u64,()>
+read_binary_integer(src: &SourceFile, mut cur: Cursor)-> (u64,Cursor)
 {
-    if let Some(first_d) = get_binary_digit(src,cur)
+  let  mut a = 0u64;
+
+    while let Some(i) = get_binary_integer(src,cur)
     {
-      let  mut n = first_d;
+      a <<= 1;
+      a  |= i;
 
       cur.advance();
-
-        while let Some(d) = get_binary_digit(src,cur)
-        {
-          cur.advance();
-
-          n <<= 1;
-          n  |= d;
-        }
-
-
-      return Ok(n);
     }
 
 
-  Err(())
+  (a,cur)
 }
 
 
 fn
-get_octal_digit(src: &SourceFile, cur: &Cursor)-> Option<u64>
+get_octal_integer(src: &SourceFile, cur: Cursor)-> Option<u64>
 {
     if let Some(c) = src.get_character(cur)
     {
-        if is_octal(c)
-        {
-          return Some(c as u64-CODE_OF_ZERO);
-        }
+       match c
+       {
+     '0'..='7'=>{return Some((c as u64)-('0' as u64));}
+      _=>{}
+       }
     }
 
 
@@ -73,68 +69,33 @@ get_octal_digit(src: &SourceFile, cur: &Cursor)-> Option<u64>
 
 
 pub fn
-read_octal_number(src: &SourceFile, cur: &mut Cursor)-> Result<u64,()>
+read_octal_integer(src: &SourceFile, mut cur: Cursor)-> (u64,Cursor)
 {
-    if let Some(first_d) = get_octal_digit(src,cur)
+  let  mut a = 0u64;
+
+    while let Some(i) = get_octal_integer(src,cur)
     {
-      let  mut n = first_d;
+      a <<= 3;
+      a  |= i;
 
       cur.advance();
-
-        if let Some(d) = get_octal_digit(src,cur)
-        {
-          cur.advance();
-
-          n <<= 3;
-          n  |= d;
-        }
-
-
-      return Ok(n);
     }
 
 
-  Err(())
+  (a,cur)
 }
 
 
 pub fn
-read_fraction_number(src: &SourceFile, cur: &mut Cursor, i: u64)-> Result<f64,()>
-{
-    if let Some(first_d) = get_decimal_digit(src,cur)
-    {
-      let  mut f: f64 = first_d as f64;
-      let  mut w: u64 =              1;
-
-      cur.advance();
-
-        while let Some(d) = get_decimal_digit(src,cur)
-        {
-          cur.advance();
-
-          f *= 10.0;
-          f += d as f64;
-          w *= 10;
-        }
-
-
-      return Ok((i as f64)+(f/w as f64));
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-get_decimal_digit(src: &SourceFile, cur: &Cursor)-> Option<u64>
+get_decimal_integer(src: &SourceFile, cur: Cursor)-> Option<u64>
 {
     if let Some(c) = src.get_character(cur)
     {
-        if is_digit(c)
-        {
-          return Some(c as u64-CODE_OF_ZERO);
-        }
+       match c
+       {
+     '0'..='9'=>{return Some((c as u64)-('0' as u64));}
+      _=>{}
+       }
     }
 
 
@@ -143,46 +104,53 @@ get_decimal_digit(src: &SourceFile, cur: &Cursor)-> Option<u64>
 
 
 pub fn
-read_decimal_number(src: &SourceFile, cur: &mut Cursor)-> Result<u64,()>
+read_decimal_integer(src: &SourceFile, mut cur: Cursor)-> (u64,Cursor)
 {
-    if let Some(first_d) = get_decimal_digit(src,cur)
+  let  mut a = 0u64;
+
+    while let Some(i) = get_decimal_integer(src,cur)
     {
-      let  mut n = first_d;
+      a *= 10;
+      a +=  i;
 
       cur.advance();
-
-        while let Some(d) = get_decimal_digit(src,cur)
-        {
-          cur.advance();
-
-          n *= 10;
-          n +=  d;
-        }
-
-
-      return Ok(n);
     }
 
 
-  Err(())
+  (a,cur)
+}
+
+
+pub fn
+read_decimal_fraction(src: &SourceFile, mut cur: Cursor)-> (f64,Cursor)
+{
+  let  mut f =  0.0f64;
+  let  mut d = 10.0f64;
+
+    while let Some(i) = get_decimal_integer(src,cur)
+    {
+      f += (i as f64)/d;
+      d *= 10.0;
+
+      cur.advance();
+    }
+
+
+  (f,cur)
 }
 
 
 fn
-get_hexadecimal_digit(src: &SourceFile, cur: &Cursor)-> Option<u64>
+get_hexadecimal_integer(src: &SourceFile, cur: Cursor)-> Option<u64>
 {
     if let Some(c) = src.get_character(cur)
     {
-      const CODE_OF_A_UPPER: u64 = 65;
-      const CODE_OF_A_LOWER: u64 = 97;
-
-        match c
-        {
-      '0'..='9'=> {return Some(c as u64-CODE_OF_ZERO);},
-      'a'..='f'=> {return Some(c as u64-(CODE_OF_A_LOWER+10));},
-      'A'..='F'=> {return Some(c as u64-(CODE_OF_A_UPPER+10));},
-      _=>{},
-        }
+       match c
+       {
+     '0'..='9'=>{return Some(   (c as u64)-('0' as u64));}
+     'A'..='F'=>{return Some(10+(c as u64)-('A' as u64));}
+      _=>{}
+       }
     }
 
 
@@ -191,33 +159,25 @@ get_hexadecimal_digit(src: &SourceFile, cur: &Cursor)-> Option<u64>
 
 
 pub fn
-read_hexadecimal_number(src: &SourceFile, cur: &mut Cursor)-> Result<u64,()>
+read_hexadecimal_integer(src: &SourceFile, mut cur: Cursor)-> (u64,Cursor)
 {
-    if let Some(first_d) = get_hexadecimal_digit(src,cur)
+  let  mut a = 0u64;
+
+    while let Some(i) = get_hexadecimal_integer(src,cur)
     {
-      let  mut n = first_d;
+      a <<= 4;
+      a  |= i;
 
       cur.advance();
-
-        while let Some(d) = get_hexadecimal_digit(src,cur)
-        {
-          cur.advance();
-
-          n <<= 4;
-          n  |= d;
-        }
-
-
-      return Ok(n);
     }
 
 
-  Err(())
+  (a,cur)
 }
 
 
 pub fn
-read_number_that_begins_from_zero(src: &SourceFile, cur: &mut Cursor)-> Result<u64,()>
+read_integer_that_begins_from_zero(src: &SourceFile, mut cur: Cursor)-> (u64,Cursor)
 {
     match src.get_character(cur)
     {
@@ -225,37 +185,75 @@ read_number_that_begins_from_zero(src: &SourceFile, cur: &mut Cursor)-> Result<u
         {
           cur.advance();
 
-          return read_binary_number(src,cur);
+          read_binary_integer(src,cur)
         },
   Some('o')=>
         {
           cur.advance();
 
-          return read_octal_number(src,cur);
+          read_octal_integer(src,cur)
         },
   Some('x')=>
         {
           cur.advance();
 
-          return read_hexadecimal_number(src,cur);
+          read_hexadecimal_integer(src,cur)
         },
-  _=>{return Ok(0);},
+  _=>{(0,cur)},
     }
 }
 
 
 pub fn
-read_number(src: &SourceFile, cur: &mut Cursor, first_c: char)-> Result<u64,()>
+read_integer(src: &SourceFile, mut cur: Cursor)-> (u64,Cursor)
 {
-    if first_c == '0'
+    if let Some(first_c) = src.get_character(cur)
     {
-      cur.advance();
+        if first_c == '0'
+        {
+          cur.advance();
 
-      return read_number_that_begins_from_zero(src,cur);
+          read_integer_that_begins_from_zero(src,cur)
+        }
+
+      else
+        {
+          read_decimal_integer(src,cur)
+        }
+    }
+
+  else
+    {
+      panic!();
+    }
+}
+
+
+pub fn
+read_number(src: &SourceFile, cur: Cursor)-> (ParsedNumber,Cursor)
+{
+  let  mut pn = ParsedNumber::new();
+
+  let  (i,mut new_cur) = read_integer(src,cur);
+
+  pn.i_part = i;
+
+    if let Some(c) = src.get_character(new_cur)
+    {
+        if c == '.'
+        {
+          new_cur.advance();
+
+          let  (f,final_cur) = read_decimal_fraction(src,new_cur);
+
+          new_cur = final_cur;
+
+          pn.f_part_opt = Some(f);
+        }
     }
 
 
-  read_decimal_number(src,cur)
+  (pn,new_cur)
 }
 
 

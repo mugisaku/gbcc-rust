@@ -5,12 +5,14 @@ use super::{
   TokenData,
   Token,
   print_string,
+  read_identifier,
+
 };
 
 
 use super::read_number::{
-  read_fraction_number,
   read_number,
+
 };
 
 
@@ -23,7 +25,7 @@ use super::skip::*;
 use crate::source_file::{
   SourceFile,
   Cursor,
-  new_char_string,
+
 };
 
 use super::is::*;
@@ -70,93 +72,45 @@ new(src: &'a SourceFile, out: &'b mut TokenString)-> Tokenizer<'a,'b>
 pub fn
 get_character(&self)-> Option<char>
 {
-  self.input.get_character(&self.cursor)
+  self.input.get_character(self.cursor)
 }
 
 
 pub fn
-read_identifier(src: &SourceFile, cur: &mut Cursor, s: &mut String)
+read_data_that_begins_from_id_head(src: &SourceFile, cur: Cursor, first_c: char)-> (TokenData,Cursor)
 {
-    while let Some(c) = src.get_character(cur)
-    {
-        if is_id_body(c)
-        {
-          s.push(c);
-
-          cur.advance();
-        }
-
-      else
-        {
-          break;
-        }
-    }
-}
-
-
-pub fn
-read_data_that_begins_from_id_head(&mut self, first_c: char)-> Result<(),()>
-{
-  let  mut s = String::new();
-
     if first_c == 'r'
     {
-      let  mut sharps_n :usize = 0;
+      let  mut tmp_cur = cur;
 
-        if let Some(second_c) = self.get_character()
+      tmp_cur.advance();
+
+        if let Some(second_c) = src.get_character(tmp_cur)
         {
             if second_c == '#'
             {
-              sharps_n = read_sharps(&self.input,&mut self.cursor);
+              let  mut st = (String::new(),tmp_cur);
+
+              read_raw_string(src,&mut st);
+
+              return (TokenData::String(st.0),st.1);
             }
         }
-
-
-        if let Some(next_c) = self.get_character()
-        {
-            if next_c == '\"'
-            {
-              self.cursor.advance();
-
-                if let Ok(s) = read_raw_string(&self.input,&mut self.cursor,sharps_n)
-                {
-                  self.push(TokenData::String(s));
-
-                  return Ok(());
-                }
-            }
-        }
-
-
-         if sharps_n != 0
-         {
-           println!("不正な生文字列リテラルの開始");
-
-           return Err(());
-         }
     }
 
 
-  s.push(first_c);
+  let  (s,new_cur) = read_identifier(src,cur);
 
-  Self::read_identifier(&self.input,&mut self.cursor,&mut s);
-
-  self.push(TokenData::Identifier(s));
-
-  Ok(())
+  (TokenData::Identifier(s),new_cur)
 }
 
 
 pub fn
 read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),()>
 {
-  let  mut s = String::new();
+  let  (s,new_cur) = read_identifier(&self.input,self.cursor);
 
-  s.push(c);
-
-  self.cursor.advance();
-
-  Self::read_identifier(&self.input,&mut self.cursor,&mut s);
+  self.cursor = new_cur;
 
     if let Some(last_c) = self.get_character()
     {
@@ -273,44 +227,6 @@ read_data_that_begins_from_single_quote(&mut self)-> Result<(),()>
 
 
 pub fn
-read_data_that_begins_from_digit(&mut self, c: char)-> Result<(),()>
-{
-    if let Ok(n) = read_number(&self.input,&mut self.cursor,c)
-    {
-        if let Some(next_c) = self.get_character()
-        {
-            if next_c == '.'
-            {
-              self.cursor.advance();
-
-                if let Ok(f) = read_fraction_number(&self.input,&mut self.cursor,n)
-                {
-                  self.push(TokenData::Floating(f));
-                }
-
-              else
-                {
-                  self.push(TokenData::Integer(n));
-                  self.push(TokenData::Others('.'));
-                }
-
-
-              return Ok(());
-            }
-        }
-
-
-      self.push(TokenData::Integer(n));
-
-      return Ok(());
-    }
-
-
-  Err(())
-}
-
-
-pub fn
 read_data_that_begins_from_slash(&mut self)-> Result<(),()>
 {
     if let Some(c) = self.get_character()
@@ -414,15 +330,25 @@ step(&mut self, c: char)-> Result<(),()>
   else
     if is_id_head(c)
     {
-      self.cursor.advance();
+      let  (tokdat,new_cur) = Self::read_data_that_begins_from_id_head(&self.input,self.cursor,c);
 
-      return self.read_data_that_begins_from_id_head(c);
+      self.push(tokdat);
+
+      self.cursor = new_cur;
+
+      return Ok(());
     }
 
   else
     if is_digit(c)
     {
-      return self.read_data_that_begins_from_digit(c);
+      let  (pn,cur) = read_number(self.input,self.cursor);
+
+      self.push(TokenData::Number(pn));
+
+      self.cursor = cur;
+
+      return Ok(());
     }
 
   else
@@ -521,7 +447,7 @@ tokenize(src: &SourceFile)-> Result<TokenString,()>
 pub fn
 tokenize_from_string(s: &str)-> Result<TokenString,()>
 {
-  let  src = SourceFile::from(s);
+  let  src = SourceFile::from_string(s);
 
   return tokenize(&src);
 }

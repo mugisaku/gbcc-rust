@@ -8,52 +8,60 @@ use super::{
 use crate::source_file::{
   SourceFile,
   Cursor,
-  new_char_string,
+
 };
 
 
 
 
 pub fn
-read_raw_string(src: &SourceFile, cur: &mut Cursor, n: usize)-> Result<String,()>
+read_raw_string(src: &SourceFile, st: &mut (String,Cursor))
 {
-  let  mut s = String::new();
+  let  begin_n = read_sharps(src,&mut st.1);
 
-    while let Some(c) = src.get_character(cur)
+    if let Some(c) = src.get_character(st.1)
     {
-      cur.advance();
-
         if c == '\"'
         {
-          let  end_n = read_sharps(src,cur);
+          st.1.advance();
 
-            if n == end_n
+            while let Some(next_c) = src.get_character(st.1)
             {
-              break;
-            }
+              st.1.advance();
+
+                if next_c == '\"'
+                {
+                  let  end_n = read_sharps(src,&mut st.1);
+
+                    if end_n == begin_n
+                    {
+                      return;
+                    }
 
 
-          s.push('\"');
+                  st.0.push('\"');
 
-            for _ in 0..end_n
-            {
-              s.push('#');
-            }
-        }
+                    for _ in 0..end_n
+                    {
+                      st.0.push('#');
+                    }
+                }
 
-      else
-        {
-          s.push(c);
+              else
+                {
+                  st.0.push(next_c);
 
-            if c == '\n'
-            {
-              cur.newline();
+                    if next_c == '\n'
+                    {
+                      st.1.newline();
+                    }
+                }
             }
         }
     }
 
 
-  Ok(s)
+  panic!();
 }
 
 
@@ -62,7 +70,7 @@ read_sharps(src: &SourceFile, cur: &mut Cursor)-> usize
 {
   let  mut n: usize = 0;
 
-    while let Some(c) = src.get_character(cur)
+    while let Some(c) = src.get_character(*cur)
     {
         if c == '#'
         {
@@ -144,19 +152,19 @@ to_unicode(a: char, b: char, c: char, d: char)-> Result<char,()>
 pub fn
 read_unicode_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
 {
-    if let Some(a) = src.get_character(cur)
+    if let Some(a) = src.get_character(*cur)
     {
       cur.advance();
 
-        if let Some(b) = src.get_character(cur)
+        if let Some(b) = src.get_character(*cur)
         {
           cur.advance();
 
-            if let Some(c) = src.get_character(cur)
+            if let Some(c) = src.get_character(*cur)
             {
               cur.advance();
 
-                if let Some(d) = src.get_character(cur)
+                if let Some(d) = src.get_character(*cur)
                 {
                   cur.advance();
 
@@ -174,7 +182,7 @@ read_unicode_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,(
 pub fn
 read_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
 {
-    if let Some(c) = src.get_character(cur)
+    if let Some(c) = src.get_character(*cur)
     {
         match c
         {
@@ -208,7 +216,7 @@ read_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
 pub fn
 read_character(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
 {
-    if let Some(c) = src.get_character(cur)
+    if let Some(c) = src.get_character(*cur)
     {
         match c
         {
@@ -241,7 +249,7 @@ read_string(src: &SourceFile, cur: &mut Cursor)-> Result<String,()>
 {
   let  mut s = String::new();
 
-    while let Some(c) = src.get_character(cur)
+    while let Some(c) = src.get_character(*cur)
     {
         if c == '\"'
         {

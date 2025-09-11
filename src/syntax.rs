@@ -5,15 +5,12 @@ pub mod read_dictionary;
 pub mod parse;
 
 
-use crate::source_file::{
-  to_string,
-};
-
-
 use crate::token::{
   Token,
   TokenInfo,
   TokenData,
+  ParsedNumber,
+
 };
 
 
@@ -90,8 +87,7 @@ ObjectData
   Null,
 
   Identifier(String),
-  Integer(u64),
-  Floating(f64),
+  Number(ParsedNumber),
   Character(char),
   String(String),
 
@@ -141,8 +137,7 @@ print(&self, n: usize)
     {
   ObjectData::Null=>{},
 
-  ObjectData::Integer(i)=>{print!("{}",i);},
-  ObjectData::Floating(f)=>{print!("{}",f);},
+  ObjectData::Number(pn)=>{pn.print();},
   ObjectData::String(s)=>{print!("\"{}\"",s);},
   ObjectData::Identifier(s)=>{print!("{}",s);},
   ObjectData::Character(c)=>{print!("\'{}\'",c);},

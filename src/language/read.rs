@@ -1,5 +1,11 @@
 
 
+use crate::token::{
+  ParsedNumber,
+
+};
+
+
 use crate::syntax::{
   Directory,
   Object,
@@ -19,6 +25,7 @@ use crate::language::expression::{
 
 
 use crate::language::statement::{
+  IfBranch,
   Block,
   Statement,
   For,
@@ -26,28 +33,27 @@ use crate::language::statement::{
 };
 
 
-use crate::language::type_info::{
-  TypeKind,
-  Parameter,
+use super::type_kind::*;
+
+
+use crate::language::element::{
+  Element,
+  Function,
+  Symbol,
+  Class,
+  Field,
 
 };
 
 
-use crate::language::space::{
-  TypeDecl,
-  VariableDecl,
-  FunctionDecl,
-  Declaration,
-
-};
 
 
 pub fn
-read_type(dir: &Directory)-> TypeKind
+read_type_kind(dir: &Directory)-> TypeKind
 {
   let  mut cur = Cursor::new(dir);
 
-  let  mut tk = TypeKind::Unknown;
+  let  mut tk = TypeKind::Undefined;
 
   let  mut prefix = String::new();
 
@@ -61,7 +67,7 @@ read_type(dir: &Directory)-> TypeKind
 
     if let Some(s) = cur.get_identifier()
     {
-      tk = TypeKind::External(s.clone());
+      tk = TypeKind::Class(s.clone());
 
            if prefix == "&"{tk = TypeKind::Reference(Box::new(tk));}
       else if prefix == "*"{tk = TypeKind::Pointer(  Box::new(tk));}
@@ -74,12 +80,12 @@ read_type(dir: &Directory)-> TypeKind
 
 
 pub fn
-read_parameter(dir: &Directory)-> Parameter
+read_parameter(dir: &Directory)-> Field
 {
   let  mut cur = Cursor::new(dir);
 
   let  mut name = String::new();
-  let  mut type_kind = TypeKind::Unknown;
+  let  mut type_kind = TypeKind::Undefined;
 
     if let Some(s) = cur.get_identifier()
     {
@@ -91,20 +97,20 @@ read_parameter(dir: &Directory)-> Parameter
 
     if let Some(d) = cur.get_directory()
     {
-      type_kind = read_type(d);
+      type_kind = read_type_kind(d);
     }
 
 
-  Parameter{name, type_kind}
+  Field{name, complete_flag: false, offset: 0, type_kind, type_code: TypeCode::new()}
 }
 
 
 pub fn
-read_parameter_list(dir: &Directory)-> Vec<Parameter>
+read_parameter_list(dir: &Directory)-> Vec<Field>
 {
   let  mut cur = Cursor::new(dir);
 
-  let  mut ls: Vec<Parameter> = Vec::new();
+  let  mut ls = Vec::<Field>::new();
 
   cur.advance(1);
 
@@ -123,7 +129,7 @@ read_parameter_list(dir: &Directory)-> Vec<Parameter>
 
  
 pub fn
-read_fn(dir: &Directory)-> FunctionDecl
+read_fn(dir: &Directory)-> Function
 {
   let  mut cur = Cursor::new(dir);
 
@@ -139,7 +145,7 @@ read_fn(dir: &Directory)-> FunctionDecl
         {
           let  parameter_list = read_parameter_list(parals_d);
 
-          let  mut return_type_kind = TypeKind::Void;
+          let  mut return_type_kind = TypeKind::Undefined;
 
           cur.advance(1);
 
@@ -149,7 +155,7 @@ read_fn(dir: &Directory)-> FunctionDecl
 
                 if let Some(ty_d) = cur.get_directory()
                 {
-                  return_type_kind = read_type(ty_d);
+                  return_type_kind = read_type_kind(ty_d);
 
                   cur.advance(1);
                 }
@@ -160,7 +166,7 @@ read_fn(dir: &Directory)-> FunctionDecl
             {
               let  block = read_block(stmts_d);
 
-              return FunctionDecl{name, parameter_list, return_type_kind, block};
+              return Function::new(name,parameter_list,return_type_kind,block);
             }
         }
     }
@@ -171,7 +177,7 @@ read_fn(dir: &Directory)-> FunctionDecl
 
 
 pub fn
-read_variable(dir: &Directory)-> VariableDecl
+read_variable(dir: &Directory)-> Symbol
 {
   let  mut cur = Cursor::new(dir);
 
@@ -181,7 +187,7 @@ read_variable(dir: &Directory)-> VariableDecl
     {
       let  name = id_s.clone();
 
-      let  mut type_kind = TypeKind::Unknown;
+      let  mut type_kind = TypeKind::Undefined;
 
       cur.advance(1);
 
@@ -191,19 +197,22 @@ read_variable(dir: &Directory)-> VariableDecl
 
             if let Some(ty_d) = cur.get_directory()
             {
-              type_kind = read_type(ty_d);
+              type_kind = read_type_kind(ty_d);
 
               cur.advance(1);
             }
         }
 
 
+      let  mut expression_opt: Option<Expression> = None;
+
         if let Some(e_d) = cur.seek_directory_with_name("expression")
         {
-          let  expression = read_expression(e_d);
-
-          return VariableDecl{name, type_kind, expression};
+          expression_opt = Some(read_expression(e_d));
         }
+
+
+      return Symbol{name, complete_flag: false, flags: 0, offset: 0, type_kind, type_code: TypeCode::new(), expression_opt, initial_value_opt: None};
     }
 
 
@@ -212,7 +221,7 @@ read_variable(dir: &Directory)-> VariableDecl
 
 
 pub fn
-read_declaration(dir: &Directory)-> Declaration
+read_element(dir: &Directory)-> Element
 {
   let  mut cur = Cursor::new(dir);
 
@@ -222,25 +231,27 @@ read_declaration(dir: &Directory)-> Declaration
 
         if d_name == "fn"
         {
-          let  f = read_fn(d);
-
-          return Declaration::Fn(f);
-        }
-
-      else
-        if d_name == "let"
-        {
-          let  v = read_variable(d);
-
-          return Declaration::Let(v);
+          return Element::Function(read_fn(d));
         }
 
       else
         if d_name == "const"
         {
-          let  v = read_variable(d);
+          let  mut sym = read_variable(d);
 
-          return Declaration::Const(v);
+          sym.set_const_flag();
+
+          return Element::Symbol(sym);
+        }
+
+      else
+        if d_name == "static"
+        {
+          let  mut sym = read_variable(d);
+
+          sym.set_static_flag();
+
+          return Element::Symbol(sym);
         }
     }
 
@@ -334,51 +345,41 @@ read_if(dir: &Directory)-> Statement
 {
   let  mut cur = Cursor::new(dir);
 
-  let  mut cond_blk_ls: Vec<(Expression,Block)> = Vec::new();
-
-  let  mut else_blk_opt: Option<Block> = None;
-
   cur.advance(1);
 
     while let Some(expr_d) = cur.get_directory_with_name("expression")
     {
-      let  condition = read_expression(expr_d);
+      let  expression = read_expression(expr_d);
+      let  mut  first_stmt = Statement::Empty;
+      let  mut second_stmt = Statement::Empty;
 
       cur.advance(1);
 
-        if let Some(ls_d) = cur.get_directory_with_name("statement_list")
+        if let Some(first_stmt_d) = cur.get_directory_with_name("statement")
         {
-          let  blk = read_block(ls_d);
+          first_stmt = read_statement(first_stmt_d);
 
           cur.advance(1);
 
-          cond_blk_ls.push((condition,blk));
-        }
-
-
-        if cur.test_keyword("else")
-        {
-          cur.advance(1);
-
-            if cur.test_keyword("if")
+            if cur.test_keyword("else")
             {
               cur.advance(1);
+
+                if let Some(second_stmt_d) = cur.get_directory_with_name("statement")
+                {
+                  second_stmt = read_statement(second_stmt_d);
+                }
             }
 
-          else
-            if let Some(else_d) = cur.get_directory_with_name("statement_list")
-            {
-              let  else_blk = read_block(else_d);
 
-              else_blk_opt = Some(else_blk);
+          let  br = IfBranch{expression, on_true: Box::new(first_stmt), on_false: Box::new(second_stmt)};
 
-              break;
-            }
+          return Statement::If(br);
         }
     }
 
 
-  Statement::If(cond_blk_ls,else_blk_opt)
+  panic!();
 }
 
 
@@ -501,6 +502,8 @@ read_block(dir: &Directory)-> Block
 {
   let  mut cur = Cursor::new(dir);
 
+  let  mut name = String::new();
+
   let  mut statement_list: Vec<Statement> = Vec::new();
 
   cur.advance(1);
@@ -515,7 +518,7 @@ read_block(dir: &Directory)-> Block
     }
 
 
-  Block::new(statement_list)
+  Block::new(name,statement_list)
 }
 
 
@@ -537,7 +540,7 @@ read_statement(dir: &Directory)-> Statement
     {
       let  d_name = d.get_name();
 
-        if d_name == "statement_list"
+        if d_name == "block"
         {
           let  blk = read_block(d);
 
@@ -589,17 +592,25 @@ read_statement(dir: &Directory)-> Statement
       else
         if d_name == "let"
         {
-          let  v = read_variable(d);
+          let  sym = read_variable(d);
 
-          return Statement::Let(v);
+          return Statement::Let(sym);
         }
 
       else
         if d_name == "const"
         {
-          let  v = read_variable(d);
+          let  sym = read_variable(d);
 
-          return Statement::Const(v);
+          return Statement::Const(sym);
+        }
+
+      else
+        if d_name == "static"
+        {
+          let  sym = read_variable(d);
+
+          return Statement::Static(sym);
         }
 
       else
@@ -890,9 +901,19 @@ read_operand_core(dir: &Directory)-> Expression
     {
         match o.get_data()
         {
-      ObjectData::Integer(i)=>   {return Expression::Integer(*i);},
-      ObjectData::Floating(f)=>  {return Expression::Floating(*f);},
-      ObjectData::String(s)=>    {return Expression::String(s.clone());},
+      ObjectData::Number(pn)=>
+        {
+            if let Some(f) = pn.get_float()
+            {
+              return Expression::Float(f);
+            }
+
+          else
+            {
+              return Expression::Int(pn.i_part);
+            }
+        }
+      ObjectData::String(s)=>{return Expression::String(s.clone());},
       ObjectData::OthersString(s)=>
           {
               if s == "("

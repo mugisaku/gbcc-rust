@@ -8,14 +8,14 @@ r##"
 #dynamic
 
 
-type: ["*" | "&"] & .Identifier;
+class_ano: ["*" | "&"] & .Identifier;
 
 
 table_element: .Identifier & ":" & expression;
 
 table: "[" & [table_element & {"," & table_element}] & "]";
 
-operand_core: .Identifier | .Integer | .Floating | .Character | .String | table | ("(" & expression & ")");
+operand_core: .Identifier | .Number | .Character | .String | table | ("(" & expression & ")");
 
 unary_operator: "!" | "++" | "--" | "-" | "~";
 
@@ -75,10 +75,11 @@ statement: ";"
   | while
   | for
   | loop
-  | statement_list
+  | block
   | return
   | let
   | const
+  | static
   | print_s
   | print_v
   | expression_or_assign
@@ -90,25 +91,26 @@ continue: 'continue;
 return  : 'return -> [expression];
 
 
-if: 'if -> expression & statement_list & [{'else & 'if & expression & statement_list}] & ['else & statement_list];
+if: 'if -> expression & statement & ['else & statement];
 
-statement_list: "{" & [{statement}] & "}";
+block: "{" & [{statement}] & "}";
 
 loop : 'loop -> statement_list;
 while: 'while -> expression & statement_list;
 for  : 'for -> .Identifier & 'in -> expression & statement_list;
 
 
-parameter: .Identifier & ":" & type;
+parameter: .Identifier & ":" & class_ano;
 parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
 
-fn   : 'fn    -> .Identifier & parameter_list & ["->" & type] & statement_list;
-let  : 'let   -> .Identifier & [":" & type] & "=" & expression;;
-const: 'const -> .Identifier & [":" & type] & "=" & expression;;
+fn   : 'fn    -> .Identifier & parameter_list & ["->" & class_ano] & statement_list;
+let  : 'let   -> .Identifier & [":" & class_ano] & "=" & expression;;
+const: 'const -> .Identifier & [":" & class_ano] & "=" & expression;;
+static: 'static -> .Identifier & [":" & class_ano] & "=" & expression;;
 print_s: 'print & .String;
 print_v: 'print & .Identifier;
 
-declaration: fn | let | const;
+declaration: fn | static | const;
 
 
 

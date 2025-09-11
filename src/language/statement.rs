@@ -7,37 +7,8 @@ use super::expression::{
 };
 
 
-use super::space::{
-  VariableDecl,
-
-};
-
-
-use super::memory::{
-  Memory,
-
-};
-
-
-use super::evaluator::{
-  Instruction,
-
-};
-
-
-use super::symbol::{
+use super::element::{
   Symbol,
-  SymbolDirectory,
-
-};
-
-
-use super::type_info::{
-  Align,
-  Parameter,
-  TypeKind,
-  TypeInfo,
-  StorageInfo,
 
 };
 
@@ -48,10 +19,11 @@ pub enum
 Statement
 {
   Empty,
-  Let(VariableDecl),
-  Const(VariableDecl),
+  Let(Symbol),
+  Const(Symbol),
+  Static(Symbol),
   Expression(Expression,Option<(AssignOperator,Expression)>),
-  If(Vec<(Expression,Block)>,Option<Block>),
+  If(IfBranch),
   While(Expression,Block),
   For(For),
   Loop(Block),
@@ -87,6 +59,12 @@ print(&self)
 
           v.print();
         }
+  Statement::Static(v)=>
+        {
+          print!("static  ");
+
+          v.print();
+        }
   Statement::Expression(e,ass_opt)=>
         {
           e.print();
@@ -98,45 +76,32 @@ print(&self)
               r.print();
             }
         }
-  Statement::If(ls,blk_opt)=>
+  Statement::If(br)=>
        {
-            if let Some((first_e,first_blk)) = ls.first()
-            {
-              print!("if ");
+         print!("if ");
 
-              first_e.print();
+         br.expression.print();
 
-              first_blk.print();
+         print!(" ");
 
-              print!("\n");
+         br.on_true.print();
 
-                for i in 1..ls.len()
-                {
-                  let  (e,blk) = &ls[i];
+           if let Statement::Empty = &*br.on_false
+           {
+           }
 
-                  print!("else if ");
+         else
+           {
+             print!("else");
 
-                  e.print();
-
-                  blk.print();
-
-                  print!("\n");
-                }
-            }
-
-
-            if let Some(blk) = blk_opt
-            {
-              print!("else");
-
-              blk.print();
-            }
+             br.on_false.print();
+           }
         }
   Statement::For(fo)=>
         {
-          print!("for {} in ",&fo.current_var.name);
+          print!("for {} in ",&fo.var_name);
 
-          fo.get_end_expression().print();
+          fo.expression.print();
 
           fo.block.print();
         }
@@ -185,6 +150,8 @@ print(&self)
 pub struct
 Block
 {
+  pub(crate) name: String,
+
   pub(crate) statement_list: Vec<Statement>,
 
 }
@@ -196,9 +163,10 @@ Block
 
 
 pub fn
-new(statement_list: Vec<Statement>)-> Self
+new(name: String, statement_list: Vec<Statement>)-> Self
 {
   Self{
+    name,
     statement_list,
   }
 }
@@ -227,10 +195,21 @@ print(&self)
 
 
 pub struct
+IfBranch
+{
+  pub(crate) expression: Expression,
+
+  pub(crate)   on_true: Box<Statement>,
+  pub(crate)  on_false: Box<Statement>,
+
+}
+
+
+pub struct
 For
 {
-  pub(crate) current_var: VariableDecl,
-  pub(crate)     end_var: VariableDecl,
+  pub(crate) var_name: String,
+  pub(crate) expression: Expression,
 
   pub(crate) block: Block,
 
@@ -243,20 +222,13 @@ For
 
 
 pub fn
-new(name: String, expression: Expression, block: Block)-> Self
+new(var_name: String, expression: Expression, block: Block)-> Self
 {
   Self{
-    current_var: VariableDecl{name, type_kind: TypeKind::Unknown, expression: Expression::Void},
-        end_var: VariableDecl{name: "**FOR_END_VAR**".to_string(), type_kind: TypeKind::Unknown, expression},
+    var_name,
+    expression,
     block,
   }
-}
-
-
-pub fn
-get_end_expression(&self)-> &Expression
-{
-  &self.end_var.expression
 }
 
 

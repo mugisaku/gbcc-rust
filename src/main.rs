@@ -2,6 +2,7 @@ mod token;
 mod source_file;
 mod syntax;
 mod language;
+mod asm;
 mod debug;
 
 use std::env;
@@ -16,13 +17,16 @@ open_and_print_tokens()
     {
       let  arg = &args[i];
 
-        if let Ok(src) = crate::source_file::SourceFile::open(&arg)
+        if let Ok(src) = crate::source_file::SourceFile::from_file(&arg)
         {
           println!("{} is opened",&arg);
 
             if let Ok(toks) = crate::token::tokenize::tokenize(&src)
             {
-//              crate::token::print_token_string(&toks);
+              crate::token::print_token_string(&toks);
+
+              println!("\n--");
+
               crate::token::restore_token_string(&toks);
             }
 
@@ -38,222 +42,88 @@ open_and_print_tokens()
 
 
 fn
-print_help()
-{
-  println!("e <expression> -- evaluate <expression> and print its result.");
-  println!("x <statement> -- execute <statement>.");
-  println!("t <...> -- make type from <...>.");
-  println!("h -- print this text.");
-  println!("q -- quit this program.");
-}
-
-
-fn
-divide(s: &str)-> (&str,&str)
-{
-  let  mut  it = s.chars();
-  let  mut pos = 0;
-
-    while let Some(c) = it.next()
-    {
-        if ((c >= 'a') && (c <= 'z'))
-        || ((c >= 'A') && (c <= 'Z'))
-        ||  (c >= '_')
-        {
-          pos += 1;
-
-          continue;
-        }
-
-
-      break;
-    }
-
-
-  (&s[0..pos],&s[pos..])
-}
-
-
-fn
-evaluate()
-{
-  use crate::language::expression::Expression;
-  use crate::language::evaluator::ExpressionEvaluator;
-
-  use std::io::Read;
-
-    if let Ok(mut f) = std::fs::File::open("test.g")
-    {
-      let  mut s = String::new();
-
-      let  _ = f.read_to_string(&mut s);
-
-      let  e = Expression::read(&s);
-    }
-}
-
-
-fn
-execute(s: &str)
-{
-//    if let Ok(st) = Statement::make_from_string(s)
-    {
-//      st.print(0);
-
-      print!("\n");
-    }
-}
-
-
-fn
-execute_program(s: &str)
-{
-//    if let Ok(lib) = Library::make_from_string(s)
-    {
-//      lib.print();
-
-      print!("\n");
-    }
-}
-
-
-fn
-load()
-{
-  use crate::language::space::{
-    Space, FunctionDecl
-  };
-
-/*
-  use crate::language::dynamic_machine::{
-    Machine,
-    StepResult,
-  };
-
-  let  mut sp = Space::new();
-
-  use std::io::Read;
-
-    if let Ok(mut f) = std::fs::File::open("test.g")
-    {
-      let  mut s = String::new();
-
-      let  _ = f.read_to_string(&mut s);
-
-      sp.read(&s);
-
-//      sp.print();
-
-      print!("\n--\n");
-
-//      sp.compile();
-
-      print!("\n");
-
-      let  mut m = Machine::new();
-
-      m.setup(&sp.symbol_list);
-      m.run(Some(10000));
-
-      println!("finished");
-    }
-*/
-}
-
-
-fn
-type_make(s: &str)
-{
-//    if let Ok(t) = TypeItem::make_from_string(s)
-    {
-//      t.print();
-
-      print!("\n");
-    }
-}
-
-
-fn
 main()
 {
-evaluate();
+  let  mut src = Vec::<asm::instruction::Instruction>::new();
+  let  mut m = asm::machine::Machine::new();
 
-return; 
-/*
-  println!("--GBCC Interactive Interpreter--");
-  println!("type <h>, list command.");
+  use asm::instruction::*;
 
-  let  mut buf = String::new();
+    if let Ok(ximg) = crate::asm::execution_image::ExecutionImage::try_from(
+r#"
 
-    loop
+data s "";
+data x 4 9 7 4 5;
+space z 255;
+
+
+routine
+start a b c | tmp cnt
+{
+  pushglo x;
+  dup;
+  dup;
+  ldu8;
+  pri;
+  pop;
+  push1;
+  addu;
+  ldu8;
+  pri;
+  pop;
+  push2;
+  addu;
+  ldi8;
+  pri;
+  pop;
+  hlt;
+loop:
+  pushglo z;
+  ld64;
+  push 3;
+  ltu;
+  brz;
+  pushdst end;
+  pushglo z;
+  pushglo add;
+  prcal;
+  pushglo z;
+  ld64;
+  push1;
+  cal;
+  st64;
+  jmp;
+  pushdst loop;
+end:
+  pushglo z;
+  ld64;
+  hlt;
+}
+
+
+routine
+add a b |
+{
+  pusharg a;
+  ld64;
+  pusharg b;
+  ld64;
+  addu;
+  ret;
+}
+
+"#)
     {
-      use std::io;
+//      print_binary(&ximg);
 
-        if let Ok(sz) = io::stdin().read_line(&mut buf)
-        {
-            if (sz != 0) && (buf != "\n")
-            {
-              let  (cmd,arg) = divide(buf.trim());
+      m.reset();
+      m.install(&ximg);
 
-                if cmd == "q"
-                {
-                  println!("");
-
-                  return;
-                }
-
-
-              println!("\n\n** result **");
-
-                if cmd == "e"
-                {
-                  evaluate(arg);
-                }
-
-              else
-                if cmd == "t"
-                {
-                  type_make(arg);
-                }
-
-              else
-                if cmd == "x"
-                {
-                  execute(arg);
-                }
-
-              else
-                if cmd == "p"
-                {
-                  execute_program(arg);
-                }
-
-              else
-                if cmd == "l"
-                {
-                  load();
-                }
-
-              else
-                if cmd == "h"
-                {
-                  print_help();
-                }
-
-              else
-                {
-                  println!("{} is unknown command.",cmd);
-                }
-
-
-              println!("** end of result **\n\n");
-            }
-
-
-          buf.clear();
-        }
+      m.run(Some(8));
     }
-*/
+
+
+//  open_and_print_tokens();
 }
 
 

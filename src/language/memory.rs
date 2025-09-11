@@ -3,6 +3,8 @@
 const WORD_SIZE: usize = 8;
 
 
+
+
 pub struct
 Memory
 {
@@ -57,18 +59,7 @@ reduce(&mut self, sz: usize)
 }
 
 
-pub fn  put_bool(&mut self, off: usize, val: bool){unsafe{*self.core.as_mut_ptr().add(off) = if val{1} else{0}};}
-
-pub fn   put_i8(&mut self, off: usize, val:  i8){unsafe{*(self.core.as_mut_ptr().add(off) as *mut  i8) = val};}
-pub fn  put_i16(&mut self, off: usize, val: i16){unsafe{*(self.core.as_mut_ptr().add(off) as *mut i16) = val};}
-pub fn  put_i32(&mut self, off: usize, val: i32){unsafe{*(self.core.as_mut_ptr().add(off) as *mut i32) = val};}
-pub fn  put_i64(&mut self, off: usize, val: i64){unsafe{*(self.core.as_mut_ptr().add(off) as *mut i64) = val};}
-pub fn   put_u8(&mut self, off: usize, val:  u8){unsafe{*(self.core.as_mut_ptr().add(off) as *mut  u8) = val};}
-pub fn  put_u16(&mut self, off: usize, val: u16){unsafe{*(self.core.as_mut_ptr().add(off) as *mut u16) = val};}
-pub fn  put_u32(&mut self, off: usize, val: u32){unsafe{*(self.core.as_mut_ptr().add(off) as *mut u32) = val};}
-pub fn  put_u64(&mut self, off: usize, val: u64){unsafe{*(self.core.as_mut_ptr().add(off) as *mut u64) = val};}
-pub fn  put_f32(&mut self, off: usize, val: f32){unsafe{*(self.core.as_mut_ptr().add(off) as *mut f32) = val};}
-pub fn  put_f64(&mut self, off: usize, val: f64){unsafe{*(self.core.as_mut_ptr().add(off) as *mut f64) = val};}
+pub fn  put<T>(&mut self, off: usize, val: T){unsafe{*(self.core.as_mut_ptr().add(off) as *mut T) = val};}
 
 pub fn
 put_str(&mut self, base: usize, buf: &Vec<u8>)
@@ -83,18 +74,9 @@ put_str(&mut self, base: usize, buf: &Vec<u8>)
     }
 }
 
-pub fn  get_bool(&self, off: usize)-> bool{if unsafe{*self.core.as_ptr().add(off)} != 0{true} else{false}}
 
-pub fn   get_i8(&self, off: usize)->  i8{unsafe{*(self.core.as_ptr().add(off) as *const  i8)}}
-pub fn  get_i16(&self, off: usize)-> i16{unsafe{*(self.core.as_ptr().add(off) as *const i16)}}
-pub fn  get_i32(&self, off: usize)-> i32{unsafe{*(self.core.as_ptr().add(off) as *const i32)}}
-pub fn  get_i64(&self, off: usize)-> i64{unsafe{*(self.core.as_ptr().add(off) as *const i64)}}
-pub fn   get_u8(&self, off: usize)->  u8{unsafe{*(self.core.as_ptr().add(off) as *const  u8)}}
-pub fn  get_u16(&self, off: usize)-> u16{unsafe{*(self.core.as_ptr().add(off) as *const u16)}}
-pub fn  get_u32(&self, off: usize)-> u32{unsafe{*(self.core.as_ptr().add(off) as *const u32)}}
-pub fn  get_u64(&self, off: usize)-> u64{unsafe{*(self.core.as_ptr().add(off) as *const u64)}}
-pub fn  get_f32(&self, off: usize)-> f32{unsafe{*(self.core.as_ptr().add(off) as *const f32)}}
-pub fn  get_f64(&self, off: usize)-> f64{unsafe{*(self.core.as_ptr().add(off) as *const f64)}}
+
+pub fn  get<T: std::clone::Clone>(&self, off: usize)-> T{unsafe{(*(self.core.as_ptr().add(off) as *const T)).clone()}}
 
 pub fn
 get_str(&self, base: usize, sz: usize)-> Vec<u8>
@@ -114,391 +96,203 @@ get_str(&self, base: usize, sz: usize)-> Vec<u8>
 
 
 pub fn
-addi(&mut self, dst: usize, src1: usize, src2: usize)
+add<T: std::clone::Clone+std::ops::Add>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_i64(dst,o1+o2);
+  self.put(sp,lo+ro);
 }
 
 pub fn
-subi(&mut self, dst: usize, src1: usize, src2: usize)
+sub<T: std::clone::Clone+std::ops::Sub>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_i64(dst,o1-o2);
+  self.put(sp,lo-ro);
 }
 
 pub fn
-muli(&mut self, dst: usize, src1: usize, src2: usize)
+mul<T: std::clone::Clone+std::ops::Mul>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_i64(dst,o1*o2);
+  self.put(sp,lo*ro);
 }
 
 pub fn
-divi(&mut self, dst: usize, src1: usize, src2: usize)
+div<T: std::clone::Clone+std::ops::Div>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_i64(dst,o1/o2);
+  self.put(sp,lo/ro);
 }
 
 pub fn
-remi(&mut self, dst: usize, src1: usize, src2: usize)
+rem<T: std::clone::Clone+std::ops::Rem>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_i64(dst,o1%o2);
+  self.put(sp,lo%ro);
 }
 
 pub fn
-addu(&mut self, dst: usize, src1: usize, src2: usize)
+shl<T: std::clone::Clone+std::ops::Shl>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_u64(dst,o1+o2);
+  self.put(sp,lo<<ro);
 }
 
 pub fn
-subu(&mut self, dst: usize, src1: usize, src2: usize)
+shr<T: std::clone::Clone+std::ops::Shr>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_u64(dst,o1-o2);
+  self.put(sp,lo>>ro);
 }
 
 pub fn
-mulu(&mut self, dst: usize, src1: usize, src2: usize)
+and<T: std::clone::Clone+std::ops::BitAnd>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_u64(dst,o1*o2);
+  self.put(sp,lo&ro);
 }
 
 pub fn
-divu(&mut self, dst: usize, src1: usize, src2: usize)
+or<T: std::clone::Clone+std::ops::BitOr>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_u64(dst,o1/o2);
+  self.put(sp,lo|ro);
 }
 
 pub fn
-remu(&mut self, dst: usize, src1: usize, src2: usize)
+xor<T: std::clone::Clone+std::ops::BitXor>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_u64(dst,o1%o2);
+  self.put(sp,lo^ro);
 }
 
 pub fn
-addf(&mut self, dst: usize, src1: usize, src2: usize)
+eq<T: std::clone::Clone+std::cmp::PartialOrd>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_f64(dst,o1+o2);
+  self.put(sp,lo == ro);
 }
 
 pub fn
-subf(&mut self, dst: usize, src1: usize, src2: usize)
+neq<T: std::clone::Clone+std::cmp::PartialOrd>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_f64(dst,o1-o2);
+  self.put(sp,lo != ro);
 }
 
 pub fn
-mulf(&mut self, dst: usize, src1: usize, src2: usize)
+lt<T: std::clone::Clone+std::cmp::PartialOrd>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_f64(dst,o1*o2);
+  self.put(sp,lo < ro);
 }
 
 pub fn
-divf(&mut self, dst: usize, src1: usize, src2: usize)
+lteq<T: std::clone::Clone+std::cmp::PartialOrd>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_f64(dst,o1/o2);
+  self.put(sp,lo <= ro);
 }
 
 pub fn
-remf(&mut self, dst: usize, src1: usize, src2: usize)
+gt<T: std::clone::Clone+std::cmp::PartialOrd>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_f64(dst,o1%o2);
+  self.put(sp,lo > ro);
 }
 
 pub fn
-shl(&mut self, dst: usize, src1: usize, src2: usize)
+gteq<T: std::clone::Clone+std::cmp::PartialOrd>(&mut self, sp: usize, ro: T)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  lo = self.get::<T>(sp);
 
-  self.put_u64(dst,o1<<o2);
+  self.put(sp,lo >= ro);
 }
 
 pub fn
-shr(&mut self, dst: usize, src1: usize, src2: usize)
+logical_and(&mut self, sp: usize, ro: bool)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  lo = self.get::<bool>(sp);
 
-  self.put_u64(dst,o1>>o2);
+  self.put(sp,lo && ro);
 }
 
 pub fn
-and(&mut self, dst: usize, src1: usize, src2: usize)
+logical_or(&mut self, sp: usize, ro: bool)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  lo = self.get::<bool>(sp);
 
-  self.put_u64(dst,o1&o2);
+  self.put(sp,lo || ro);
 }
 
 pub fn
-or(&mut self, dst: usize, src1: usize, src2: usize)
+logical_not(&mut self, sp: usize)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  o = self.get::<bool>(sp);
 
-  self.put_u64(dst,o1|o2);
+  self.put(sp,!o);
 }
 
 pub fn
-xor(&mut self, dst: usize, src1: usize, src2: usize)
+not<T: std::clone::Clone+std::ops::Not>(&mut self, sp: usize)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  o = self.get::<T>(sp);
 
-  self.put_u64(dst,o1^o2);
+  self.put(sp,!o);
 }
 
 pub fn
-eq(&mut self, dst: usize, src1: usize, src2: usize)
+neg<T: std::clone::Clone+std::ops::Neg>(&mut self, sp: usize)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  o = self.get::<T>(sp);
 
-  self.put_bool(dst,o1 == o2);
+  self.put(sp,-o);
 }
 
 pub fn
-neq(&mut self, dst: usize, src1: usize, src2: usize)
+itou(&mut self, sp: usize)
 {
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
+  let  o = self.get::<i64>(sp);
 
-  self.put_bool(dst,o1 != o2);
+  self.put(sp,o as u64);
 }
 
 pub fn
-lti(&mut self, dst: usize, src1: usize, src2: usize)
+utoi(&mut self, sp: usize)
 {
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
+  let  o = self.get::<u64>(sp);
 
-  self.put_bool(dst,o1 < o2);
+  self.put(sp,o as i64);
 }
 
 pub fn
-lteqi(&mut self, dst: usize, src1: usize, src2: usize)
+ftoi(&mut self, sp: usize)
 {
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
+  let  o = self.get::<f64>(sp);
 
-  self.put_bool(dst,o1 <= o2);
+  self.put(sp,o as i64);
 }
 
 pub fn
-gti(&mut self, dst: usize, src1: usize, src2: usize)
+itof(&mut self, sp: usize)
 {
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
+  let  o = self.get::<i64>(sp);
 
-  self.put_bool(dst,o1 > o2);
-}
-
-pub fn
-gteqi(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_i64(src1);
-  let  o2 = self.get_i64(src2);
-
-  self.put_bool(dst,o1 >= o2);
-}
-
-pub fn
-ltu(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
-
-  self.put_bool(dst,o1 < o2);
-}
-
-pub fn
-ltequ(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
-
-  self.put_bool(dst,o1 <= o2);
-}
-
-pub fn
-gtu(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
-
-  self.put_bool(dst,o1 > o2);
-}
-
-pub fn
-gtequ(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_u64(src1);
-  let  o2 = self.get_u64(src2);
-
-  self.put_bool(dst,o1 >= o2);
-}
-
-pub fn
-ltf(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
-
-  self.put_bool(dst,o1 < o2);
-}
-
-pub fn
-lteqf(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
-
-  self.put_bool(dst,o1 <= o2);
-}
-
-pub fn
-gtf(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
-
-  self.put_bool(dst,o1 > o2);
-}
-
-pub fn
-gteqf(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_f64(src1);
-  let  o2 = self.get_f64(src2);
-
-  self.put_bool(dst,o1 >= o2);
-}
-
-pub fn
-logical_and(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_bool(src1);
-  let  o2 = self.get_bool(src2);
-
-  self.put_bool(dst,o1 && o2);
-}
-
-pub fn
-logical_or(&mut self, dst: usize, src1: usize, src2: usize)
-{
-  let  o1 = self.get_bool(src1);
-  let  o2 = self.get_bool(src2);
-
-  self.put_bool(dst,o1 || o2);
-}
-
-pub fn
-logical_not(&mut self, dst: usize, src: usize)
-{
-  let  o = self.get_bool(src);
-
-  self.put_bool(dst,!o);
-}
-
-pub fn
-not(&mut self, dst: usize, src: usize)
-{
-  let  o = self.get_u64(src);
-
-  self.put_u64(dst,!o);
-}
-
-pub fn
-negi(&mut self, dst: usize, src: usize)
-{
-  let  o = self.get_i64(src);
-
-  self.put_i64(dst,-o);
-}
-
-pub fn
-negf(&mut self, dst: usize, src: usize)
-{
-  let  o = self.get_f64(src);
-
-  self.put_f64(dst,-o);
-}
-
-pub fn
-itou(&mut self, dst: usize, src: usize)
-{
-  let  o = self.get_i64(src);
-
-  self.put_u64(dst,o as u64);
-}
-
-pub fn
-utoi(&mut self, dst: usize, src: usize)
-{
-  let  o = self.get_u64(src);
-
-  self.put_i64(dst,o as i64);
-}
-
-pub fn
-ftoi(&mut self, dst: usize, src: usize)
-{
-  let  o = self.get_f64(src);
-
-  self.put_i64(dst,o as i64);
-}
-
-pub fn
-itof(&mut self, dst: usize, src: usize)
-{
-  let  o = self.get_i64(src);
-
-  self.put_f64(dst,o as f64);
+  self.put(sp,o as f64);
 }
 
 

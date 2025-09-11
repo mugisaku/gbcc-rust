@@ -4,9 +4,9 @@ use crate::token::{
   Token,
   TokenInfo,
   TokenData,
+  ParsedNumber,
   get_token,
-  get_integer,
-  get_floating,
+  get_number,
   get_character,
   get_string,
   get_identifier,
@@ -252,22 +252,11 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
               return Some(vec![o]);
             }
         },
-  Operand::IntegerLiteral=>
+  Operand::NumberLiteral=>
         {
-            if let Some(i) = get_integer(&self.token_string,self.position)
+            if let Some(pn) = get_number(&self.token_string,self.position)
             {
-              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Integer(i)};
-
-              self.advance();
-
-              return Some(vec![o]);
-            }
-        },
-  Operand::FloatingLiteral=>
-        {
-            if let Some(f) = get_floating(&self.token_string,self.position)
-            {
-              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Floating(f)};
+              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Number(pn.clone())};
 
               self.advance();
 

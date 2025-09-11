@@ -1,11 +1,5 @@
 
 
-use super::compile_for_expression::{
-  compile,
-
-};
-
-
 use super::expression::{
   Expression,
   AssignOperator,
@@ -20,364 +14,18 @@ use super::memory::{
 
 };
 
-use super::symbol::{
-  SymbolDirectory,
-  SymbolKind,
-
-};
-
-
-use super::type_info::{
-  TypeInfo,
-
-};
-
 
 const WORD_SIZE: usize = 8;
-
-
-
-
-#[derive(Clone)]
-pub enum
-FieldIndex
-{
-    Global(usize),
-  Argument(usize),
-     Local(usize),
- Temporary(usize),
-
-}
-
-
-impl
-FieldIndex
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  Self::Global(i)   =>{print!("glo{}",*i);}
-  Self::Argument(i) =>{print!("arg{}",*i);}
-  Self::Local(i)    =>{print!("loc{}",*i);}
-  Self::Temporary(i)=>{print!("tmp{}",*i);}
-    }
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-Destination
-{
-  pub(crate) field_index: FieldIndex,
-
-}
-
-
-impl
-Destination
-{
-
-
-pub fn
-new_temporary(pos: usize)-> Self
-{
-  Self{
-    field_index: FieldIndex::Temporary(pos+(WORD_SIZE-1)/WORD_SIZE),
-  }
-}
-
-
-pub fn
-add(&self, sz: usize)-> Self
-{
-  let  n = (sz+7)/WORD_SIZE;
-
-    match &self.field_index
-    {
-  FieldIndex::Global(i)   =>{Self{field_index: FieldIndex::Global(   (*i)+n)}}
-  FieldIndex::Argument(i) =>{Self{field_index: FieldIndex::Argument( (*i)+n)}}
-  FieldIndex::Local(i)    =>{Self{field_index: FieldIndex::Local(    (*i)+n)}}
-  FieldIndex::Temporary(i)=>{Self{field_index: FieldIndex::Temporary((*i)+n)}}
-    }
-}
-
-
-pub fn
-to_src(&self)-> Source
-{
-  Source{field_index: self.field_index.clone()}
-}
-
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-Source
-{
-  pub(crate) field_index: FieldIndex
-
-}
-
-
-impl
-Source
-{
-
-
-pub fn
-new_temporary(pos: usize)-> Self
-{
-  Self{
-    field_index: FieldIndex::Temporary(pos+(WORD_SIZE-1)/WORD_SIZE),
-  }
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub enum
-OpcodeA
-{
-  Nop,
-
-  AddI, SubI, MulI, DivI, RemI,
-  AddU, SubU, MulU, DivU, RemU,
-  AddF, SubF, MulF, DivF, RemF,
-
-  Shl, Shr, And, Or, Xor,
-
-  Eq, Neq,
-
-  LtI, LteqI, GtI, GteqI,
-  LtU, LteqU, GtU, GteqU,
-  LtF, LteqF, GtF, GteqF,
-
-  LogicalAnd, LogicalOr,
-
-}
-
-
-impl
-OpcodeA
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  Self::Nop=>{print!("nop");},
-
-  Self::AddI=>{print!("addi");},
-  Self::SubI=>{print!("subi");},
-  Self::MulI=>{print!("muli");},
-  Self::DivI=>{print!("divi");},
-  Self::RemI=>{print!("remi");},
-  Self::AddU=>{print!("addu");},
-  Self::SubU=>{print!("subu");},
-  Self::MulU=>{print!("mulu");},
-  Self::DivU=>{print!("divu");},
-  Self::RemU=>{print!("remu");},
-  Self::AddF=>{print!("addf");},
-  Self::SubF=>{print!("subf");},
-  Self::MulF=>{print!("mulf");},
-  Self::DivF=>{print!("divf");},
-  Self::RemF=>{print!("remf");},
-
-  Self::Shl=>{print!("shl");},
-  Self::Shr=>{print!("shr");},
-  Self::And=>{print!("and");},
-  Self::Or =>{print!("or");},
-  Self::Xor=>{print!("xor");},
-
-  Self::Eq =>{print!("eq");},
-  Self::Neq=>{print!("neq");},
-
-  Self::LtI  =>{print!("lti");},
-  Self::LteqI=>{print!("lteqi");},
-  Self::GtI  =>{print!("gti");},
-  Self::GteqI=>{print!("gteqi");},
-  Self::LtU  =>{print!("ltu");},
-  Self::LteqU=>{print!("ltequ");},
-  Self::GtU  =>{print!("gtu");},
-  Self::GteqU=>{print!("gtequ");},
-  Self::LtF  =>{print!("ltf");},
-  Self::LteqF=>{print!("lteqf");},
-  Self::GtF  =>{print!("gtf");},
-  Self::GteqF=>{print!("gteqf");},
-
-  Self::LogicalAnd=>{print!("logical_and");},
-  Self::LogicalOr =>{print!("logical_or");},
-    }
-}
-
-
-}
-
-
-
-#[derive(Clone)]
-pub enum
-OpcodeB
-{
-  Nop,
-
-  NegI, NegF,
-  Not,
-  LogicalNot,
-  ItoU, UtoI, ItoF, FtoI,
-
-}
-
-
-impl
-OpcodeB
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  Self::Nop=>{print!("nop");},
-
-  Self::NegI      =>{print!("negi");},
-  Self::NegF      =>{print!("negf");},
-  Self::Not       =>{print!("not");},
-  Self::LogicalNot=>{print!("logical_not");},
-  Self::ItoU      =>{print!("itou");},
-  Self::UtoI      =>{print!("utoi");},
-  Self::ItoF      =>{print!("itof");},
-  Self::FtoI      =>{print!("ftoi");},
-    }
-}
-
-
-}
-
-
-#[derive(Clone)]
-pub enum
-Instruction
-{
-  Nop,
-
-  OperationA(OpcodeA,Destination,Source,Source),
-  OperationB(OpcodeB,Destination,Source       ),
-
-  LdI(Destination,i64),
-  LdU(Destination,u64),
-  LdF(Destination,f64),
-
-  Cal(Source,usize,usize),
-
-  Assign(AssignOperator),
-
-  Mvsp(isize),
-  Jmp(isize),
-  Brz(isize),
-  Brnz(isize),
-  Trv(usize),
-  Ret,
-
-  Break,
-  Continue,
-  Exit,
-
-}
-
-
-impl
-Instruction
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  Self::Nop=>{print!("nop");}
-
-  Self::OperationA(op,dst,src1,src2)=>
-        {
-          dst.field_index.print();
-          print!(" = ");
-          op.print();
-          print!(" ");
-          src1.field_index.print();
-          print!(" ");
-          src2.field_index.print();
-        }
-  Self::OperationB(op,dst,src)=>
-        {
-          dst.field_index.print();
-          print!(" = ");
-          op.print();
-          print!(" ");
-          src.field_index.print();
-        }
-  Self::LdI(dst,i)=>{  dst.field_index.print();  print!(" = ldi {}",*i);}
-  Self::LdU(dst,u)=>{  dst.field_index.print();  print!(" = ldu {}",*u);}
-  Self::LdF(dst,f)=>{  dst.field_index.print();  print!(" = ldf {}",*f);}
-  Self::Cal(src,retval_sz,args_sz)=>
-        {
-          print!("cal ");
-
-          src.field_index.print();
-
-          print!(" {} {}",*retval_sz,*args_sz);
-        }
-  Self::Assign(o)=>{  print!("assign");  o.print();}
-  Self::Mvsp(n)=>{print!("mvsp {}",*n);}
-  Self::Jmp(n)=>{print!("jmp {}",*n);}
-  Self::Brz(n)=>{print!("brz {}",*n);}
-  Self::Brnz(n)=>{print!("brnz {}",*n);}
-  Self::Trv(sz)=>{print!("trv {}",*sz);}
-  Self::Ret=>{print!("ret");}
-  Self::Break=>{print!("break");}
-  Self::Continue=>{print!("continue");}
-  Self::Exit=>{print!("exit");}
-    }
-}
-
-
-}
-
-
 
 
 pub struct
 ExpressionEvaluator
 {
   pub(crate) memory: Memory,
-  pub(crate) instruction_list: Vec<Instruction>,
+  pub(crate) code_string: Vec<u8>,
   pub(crate) pc: usize,
   pub(crate) bp: usize,
   pub(crate) sp: usize,
-
-  pub(crate) final_value_dst: Destination,
-  pub(crate) final_value_type_info: TypeInfo,
 
 }
 
@@ -392,12 +40,10 @@ new()-> Self
 {
   Self{
     memory: Memory::new_with_size(256),
-    instruction_list: Vec::new(),
+    code_string: Vec::new(),
     pc: 0,
     bp: 0,
     sp: 0,
-    final_value_dst: Destination{field_index: FieldIndex::Local(0)},
-    final_value_type_info: TypeInfo::Unknown,
   }
 }
 
@@ -405,208 +51,298 @@ new()-> Self
 
 
 pub fn
-reset(&mut self, e: &Expression, dir: &SymbolDirectory)
+reset(&mut self, e: &Expression)
 {
   self.pc = 0;
   self.bp = 0;
   self.sp = 0;
-
-  self.final_value_type_info = TypeInfo::Unknown;
 
 /*
   let  (ls,ti) = compile(e,dir);
 
   self.instruction_list = ls;
 
-  self.final_value_dst = Destination{field_index: FieldIndex::Global(0)};
+  self.final_value_dst = Destination{address_source: FieldIndex::Global(0)};
   self.final_value_type_info = ti;
 */
 }
 
 
-fn
-get_address(&self, fi: &FieldIndex)-> usize
+pub fn
+read_imm8(&mut self)-> u8
 {
-    match fi
+    if self.pc < self.code_string.len()
     {
-  FieldIndex::Global(v)   =>{        (WORD_SIZE*(*v))}
-  FieldIndex::Argument(v) =>{self.bp-(WORD_SIZE*(*v))}
-  FieldIndex::Local(v)    =>{self.bp+(WORD_SIZE*(*v))}
-  FieldIndex::Temporary(v)=>{self.sp+(WORD_SIZE*(*v))}
-    }
-}
+      let  t = self.code_string[self.pc];
 
+      self.pc += 1;
 
-pub fn
-operate_a(&mut self, op: &OpcodeA, dst: &Destination, src1: &Source, src2: &Source)
-{
-  let   dst_addr = self.get_address(&dst.field_index);
-  let  src1_addr = self.get_address(&src1.field_index);
-  let  src2_addr = self.get_address(&src2.field_index);
-
-    match op
-    {
-  OpcodeA::Nop=>{}
-
-  OpcodeA::AddI=>{self.memory.addi(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::SubI=>{self.memory.subi(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::MulI=>{self.memory.muli(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::DivI=>{self.memory.divi(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::RemI=>{self.memory.remi(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::AddU=>{self.memory.addu(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::SubU=>{self.memory.subu(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::MulU=>{self.memory.mulu(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::DivU=>{self.memory.divu(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::RemU=>{self.memory.remu(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::AddF=>{self.memory.addf(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::SubF=>{self.memory.subf(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::MulF=>{self.memory.mulf(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::DivF=>{self.memory.divf(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::RemF=>{self.memory.remf(dst_addr,src1_addr,src2_addr);}
-
-  OpcodeA::Shl=>{self.memory.shl(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::Shr=>{self.memory.shr(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::And=>{self.memory.and(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::Or =>{self.memory.or( dst_addr,src1_addr,src2_addr);}
-  OpcodeA::Xor=>{self.memory.xor(dst_addr,src1_addr,src2_addr);}
-
-  OpcodeA::Eq =>{self.memory.eq( dst_addr,src1_addr,src2_addr);}
-  OpcodeA::Neq=>{self.memory.neq(dst_addr,src1_addr,src2_addr);}
-
-  OpcodeA::LtI  =>{self.memory.lti(  dst_addr,src1_addr,src2_addr);}
-  OpcodeA::LteqI=>{self.memory.lteqi(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::GtI  =>{self.memory.gti(  dst_addr,src1_addr,src2_addr);}
-  OpcodeA::GteqI=>{self.memory.gteqi(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::LtU  =>{self.memory.ltu(  dst_addr,src1_addr,src2_addr);}
-  OpcodeA::LteqU=>{self.memory.ltequ(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::GtU  =>{self.memory.gtu(  dst_addr,src1_addr,src2_addr);}
-  OpcodeA::GteqU=>{self.memory.gtequ(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::LtF  =>{self.memory.ltf(  dst_addr,src1_addr,src2_addr);}
-  OpcodeA::LteqF=>{self.memory.lteqf(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::GtF  =>{self.memory.gtf(  dst_addr,src1_addr,src2_addr);}
-  OpcodeA::GteqF=>{self.memory.gteqf(dst_addr,src1_addr,src2_addr);}
-
-  OpcodeA::LogicalAnd=>{self.memory.logical_and(dst_addr,src1_addr,src2_addr);}
-  OpcodeA::LogicalOr =>{self.memory.logical_or( dst_addr,src1_addr,src2_addr);}
-    }
-}
-
-
-pub fn
-operate_b(&mut self, op: &OpcodeB, dst: &Destination, src: &Source)
-{
-  let  dst_addr = self.get_address(&dst.field_index);
-  let  src_addr = self.get_address(&src.field_index);
-
-    match op
-    {
-  OpcodeB::Nop=>{}
-
-  OpcodeB::NegI      =>{self.memory.negi(dst_addr,src_addr);}
-  OpcodeB::NegF      =>{self.memory.negf(dst_addr,src_addr);}
-  OpcodeB::Not       =>{self.memory.not( dst_addr,src_addr);}
-  OpcodeB::LogicalNot=>{self.memory.logical_not( dst_addr,src_addr);}
-  OpcodeB::ItoU      =>{self.memory.itou(dst_addr,src_addr);}
-  OpcodeB::UtoI      =>{self.memory.utoi(dst_addr,src_addr);}
-  OpcodeB::ItoF      =>{self.memory.itof(dst_addr,src_addr);}
-  OpcodeB::FtoI      =>{self.memory.ftoi(dst_addr,src_addr);}
-    }
-}
-
-
-pub fn
-ldi(&mut self, dst: &Destination, i: i64)
-{
-  let  dst_addr = self.get_address(&dst.field_index);
-
-  self.memory.put_i64(dst_addr,i);
-}
-
-
-pub fn
-ldu(&mut self, dst: &Destination, u: u64)
-{
-  let  dst_addr = self.get_address(&dst.field_index);
-
-  self.memory.put_u64(dst_addr,u);
-}
-
-
-pub fn
-ldf(&mut self, dst: &Destination, f: f64)
-{
-  let  dst_addr = self.get_address(&dst.field_index);
-
-  self.memory.put_f64(dst_addr,f);
-}
-
-
-pub fn
-assign(&mut self, o: &AssignOperator)
-{
-    match o
-    {
-  AssignOperator::Nop=>{},
-  AssignOperator::Add=>{},
-  AssignOperator::Sub=>{},
-  AssignOperator::Mul=>{},
-  AssignOperator::Div=>{},
-  AssignOperator::Rem=>{},
-  AssignOperator::Shl=>{},
-  AssignOperator::Shr=>{},
-  AssignOperator::And=>{},
-  AssignOperator::Or =>{},
-  AssignOperator::Xor=>{},
-    }
-}
-
-
-pub fn
-mvsp(&mut self, v: isize)
-{
-    if v >= 0
-    {
-      self.sp += v as usize;
+      return t;
     }
 
   else
     {
-      self.sp -= (-v) as usize;
+      panic!();
     }
 }
 
 
 pub fn
-jmp(&mut self, v: isize)
+read_imm16(&mut self)-> u16
 {
-    if v >= 0
-    {
-      self.pc += v as usize;
-    }
+  let  mut t = (self.read_imm8() as u16)<<8;
 
-  else
+  t |= self.read_imm8() as u16;
+
+  u16::from_be(t)
+}
+
+
+pub fn
+read_imm32(&mut self)-> u32
+{
+  let  mut t = (self.read_imm8() as u32)<<24;
+
+  t |= (self.read_imm8() as u32)<<16;
+  t |= (self.read_imm8() as u32)<< 8;
+  t |= (self.read_imm8() as u32)    ;
+
+  u32::from_be(t)
+}
+
+
+pub fn
+read_imm64(&mut self)-> u64
+{
+  let  mut t = (self.read_imm8() as u64)<<56;
+
+  t |= (self.read_imm8() as u64)<<48;
+  t |= (self.read_imm8() as u64)<<40;
+  t |= (self.read_imm8() as u64)<<32;
+  t |= (self.read_imm8() as u64)<<24;
+  t |= (self.read_imm8() as u64)<<16;
+  t |= (self.read_imm8() as u64)<< 8;
+  t |= (self.read_imm8() as u64)    ;
+
+  u64::from_be(t)
+}
+
+
+pub fn
+push<T: std::clone::Clone>(&mut self, v: T)
+{
+  self.sp += WORD_SIZE;
+
+  self.memory.put::<T>(self.sp,v);
+}
+
+
+pub fn
+pop<T: std::clone::Clone>(&mut self)-> T
+{
+  let  v = self.memory.get::<T>(self.sp);
+
+  self.sp -= WORD_SIZE;
+
+  v
+}
+
+
+pub fn
+top<T: std::clone::Clone>(&self)-> T
+{
+  self.memory.get::<T>(self.sp)
+}
+
+
+pub fn
+ldi8(&mut self)
+{
+  let  addr = self.pop::<usize>();
+
+  let  v = self.memory.get::<i8>(addr);
+
+  self.push(v as i64);
+}
+
+
+pub fn
+ldi16(&mut self)
+{
+  let  addr = self.pop::<usize>();
+
+  let  v = self.memory.get::<i16>(addr);
+
+  self.push(v as i64);
+}
+
+
+pub fn
+ldi32(&mut self)
+{
+  let  addr = self.pop::<usize>();
+
+  let  v = self.memory.get::<i32>(addr);
+
+  self.push(v as i64);
+}
+
+
+pub fn
+ldu8(&mut self)
+{
+  let  addr = self.pop::<usize>();
+
+  let  v = self.memory.get::<u8>(addr);
+
+  self.push(v as u64);
+}
+
+
+pub fn
+ldu16(&mut self)
+{
+  let  addr = self.pop::<usize>();
+
+  let  v = self.memory.get::<u16>(addr);
+
+  self.push(v as u64);
+}
+
+
+pub fn
+ldu32(&mut self)
+{
+  let  addr = self.pop::<usize>();
+
+  let  v = self.memory.get::<u32>(addr);
+
+  self.push(v as u64);
+}
+
+
+pub fn
+ld64(&mut self)
+{
+  let  addr = self.pop::<usize>();
+
+  let  v = self.memory.get::<u64>(addr);
+
+  self.push(v);
+}
+
+
+pub fn
+ldf32(&mut self)
+{
+  let  addr = self.pop::<usize>();
+
+  let  v = self.memory.get::<f32>(addr);
+
+  self.push(v as f64);
+}
+
+
+pub fn
+sti8(&mut self)
+{
+  let     v = self.pop::<i64>();
+  let  addr = self.pop::<usize>();
+
+  self.memory.put(addr,v as i8);
+}
+
+
+pub fn
+sti16(&mut self)
+{
+  let     v = self.pop::<i64>();
+  let  addr = self.pop::<usize>();
+
+  self.memory.put(addr,v as i16);
+}
+
+
+pub fn
+sti32(&mut self)
+{
+  let     v = self.pop::<i64>();
+  let  addr = self.pop::<usize>();
+
+  self.memory.put(addr,v as i32);
+}
+
+
+pub fn
+stu8(&mut self)
+{
+  let     v = self.pop::<u64>();
+  let  addr = self.pop::<usize>();
+
+  self.memory.put(addr,v as u8);
+}
+
+
+pub fn
+stu16(&mut self)
+{
+  let     v = self.pop::<u64>();
+  let  addr = self.pop::<usize>();
+
+  self.memory.put(addr,v as u16);
+}
+
+
+pub fn
+stu32(&mut self)
+{
+  let     v = self.pop::<u64>();
+  let  addr = self.pop::<usize>();
+
+  self.memory.put(addr,v as u32);
+}
+
+
+pub fn
+st64(&mut self)
+{
+  let     v = self.pop::<u64>();
+  let  addr = self.pop::<usize>();
+
+  self.memory.put(addr,v);
+}
+
+
+pub fn
+stf32(&mut self)
+{
+  let     v = self.pop::<f64>();
+  let  addr = self.pop::<usize>();
+
+  self.memory.put(addr,v as f32);
+}
+
+
+pub fn
+brz(&mut self)
+{
+  let  v = self.pop::<u64>();
+
+    if v == 0
     {
-      self.pc -= (-v) as usize;
+      self.pc = ((self.pc as isize)+self.pop::<isize>()) as usize;
     }
 }
 
 
 pub fn
-brz(&mut self, v: isize)
+brnz(&mut self)
 {
-    if self.memory.get_u64(self.sp) == 0
-    {
-      self.jmp(v);
-    }
-}
+  let  v = self.pop::<u64>();
 
-
-pub fn
-brnz(&mut self, v: isize)
-{
-    if self.memory.get_u64(self.sp) != 0
+    if v != 0
     {
-      self.jmp(v);
+      self.pc = ((self.pc as isize)+self.pop::<isize>()) as usize;
     }
 }
 
@@ -621,14 +357,16 @@ _size_of_return_value(&self)->usize
 
 
 pub fn
-cal(&mut self, src: &Source, retval_sz: usize, args_sz: usize)
+cal(&mut self)
 {
-  let  src_addr = self.get_address(&src.field_index);
+/*
+  let  src_addr = self.get_address(&src.address_source);
 
   let  old_pc = self.pc;
   let  old_bp = self.bp;
 
-  self.pc = self.memory.get_u64(src_addr) as usize;
+  self.pc = self.memory.get::<u64>(src_addr) as usize;
+*/
 }
 
 
@@ -636,15 +374,6 @@ pub fn
 get_address_of_return_value(&self)->usize
 {
   0
-}
-
-
-pub fn
-trv(&mut self, sz: usize)
-{
-  let  dst_addr = self.get_address_of_return_value();
-
-  self.memory.copy(dst_addr,self.sp,sz);
 }
 
 
@@ -657,28 +386,108 @@ ret(&mut self)
 pub fn
 step(&mut self)-> Option<()>
 {
-    if self.pc < self.instruction_list.len()
+    if self.pc < self.code_string.len()
     {
-      let  instr = self.instruction_list[self.pc].clone();
+      let  instr = self.code_string[self.pc];
 
       self.pc += 1;
 
-        match &instr
+        match instr
         {
-      Instruction::Nop=>{}
-      Instruction::OperationA(op,dst,src1,src2)=>{self.operate_a(op,dst,src1,src2);}
-      Instruction::OperationB(op,dst,src      )=>{self.operate_b(op,dst,src      );}
-      Instruction::LdI(dst,i)=>{self.ldi(dst,*i);}
-      Instruction::LdU(dst,u)=>{self.ldu(dst,*u);}
-      Instruction::LdF(dst,f)=>{self.ldf(dst,*f);}
-      Instruction::Cal(src,retval_sz,args_sz)=>{self.cal(src,*retval_sz,*args_sz);}
-      Instruction::Assign(o)=>{self.assign(o);}
-      Instruction::Mvsp(v)=>{self.mvsp((*v)*(WORD_SIZE as isize));}
-      Instruction::Jmp(v)=>{self.jmp(*v);}
-      Instruction::Brz(v)=>{self.brz(*v);}
-      Instruction::Brnz(v)=>{self.brnz(*v);}
-      Instruction::Trv(sz)=>{self.trv(*sz);}
-      Instruction::Ret=>{self.ret();}
+      opcode::NOP=>{}
+      opcode::ADDI=>{  let  ro = self.pop::<i64>();  self.memory.add(self.sp,ro);}
+      opcode::SUBI=>{  let  ro = self.pop::<i64>();  self.memory.sub(self.sp,ro);}
+      opcode::MULI=>{  let  ro = self.pop::<i64>();  self.memory.mul(self.sp,ro);}
+      opcode::DIVI=>{  let  ro = self.pop::<i64>();  self.memory.div(self.sp,ro);}
+      opcode::REMI=>{  let  ro = self.pop::<i64>();  self.memory.rem(self.sp,ro);}
+      opcode::ADDU=>{  let  ro = self.pop::<u64>();  self.memory.add(self.sp,ro);}
+      opcode::SUBU=>{  let  ro = self.pop::<u64>();  self.memory.sub(self.sp,ro);}
+      opcode::MULU=>{  let  ro = self.pop::<u64>();  self.memory.mul(self.sp,ro);}
+      opcode::DIVU=>{  let  ro = self.pop::<u64>();  self.memory.div(self.sp,ro);}
+      opcode::REMU=>{  let  ro = self.pop::<u64>();  self.memory.rem(self.sp,ro);}
+      opcode::ADDF=>{  let  ro = self.pop::<f64>();  self.memory.add(self.sp,ro);}
+      opcode::SUBF=>{  let  ro = self.pop::<f64>();  self.memory.sub(self.sp,ro);}
+      opcode::MULF=>{  let  ro = self.pop::<f64>();  self.memory.mul(self.sp,ro);}
+      opcode::DIVF=>{  let  ro = self.pop::<f64>();  self.memory.div(self.sp,ro);}
+      opcode::REMF=>{  let  ro = self.pop::<f64>();  self.memory.rem(self.sp,ro);}
+
+      opcode::SHL=>{  let  ro = self.pop::<u64>();  self.memory.shl(self.sp,ro);}
+      opcode::SHR=>{  let  ro = self.pop::<u64>();  self.memory.shr(self.sp,ro);}
+      opcode::AND=>{  let  ro = self.pop::<u64>();  self.memory.and(self.sp,ro);}
+      opcode::OR =>{  let  ro = self.pop::<u64>();  self.memory.or( self.sp,ro);}
+      opcode::XOR=>{  let  ro = self.pop::<u64>();  self.memory.xor(self.sp,ro);}
+
+      opcode::EQ =>{  let  ro = self.pop::<u64>();  self.memory.eq( self.sp,ro);}
+      opcode::NEQ=>{  let  ro = self.pop::<u64>();  self.memory.neq(self.sp,ro);}
+
+      opcode::EQF =>{  let  ro = self.pop::<f64>();  self.memory.eq( self.sp,ro);}
+      opcode::NEQF=>{  let  ro = self.pop::<f64>();  self.memory.neq(self.sp,ro);}
+
+      opcode::LTI  =>{  let  ro = self.pop::<i64>();  self.memory.lt(  self.sp,ro);}
+      opcode::LTEQI=>{  let  ro = self.pop::<i64>();  self.memory.lteq(self.sp,ro);}
+      opcode::GTI  =>{  let  ro = self.pop::<i64>();  self.memory.gt(  self.sp,ro);}
+      opcode::GTEQI=>{  let  ro = self.pop::<i64>();  self.memory.gteq(self.sp,ro);}
+      opcode::LTU  =>{  let  ro = self.pop::<u64>();  self.memory.lt(  self.sp,ro);}
+      opcode::LTEQU=>{  let  ro = self.pop::<u64>();  self.memory.lteq(self.sp,ro);}
+      opcode::GTU  =>{  let  ro = self.pop::<u64>();  self.memory.gt(  self.sp,ro);}
+      opcode::GTEQU=>{  let  ro = self.pop::<u64>();  self.memory.gteq(self.sp,ro);}
+      opcode::LTF  =>{  let  ro = self.pop::<f64>();  self.memory.lt(  self.sp,ro);}
+      opcode::LTEQF=>{  let  ro = self.pop::<f64>();  self.memory.lteq(self.sp,ro);}
+      opcode::GTF  =>{  let  ro = self.pop::<f64>();  self.memory.gt(  self.sp,ro);}
+      opcode::GTEQF=>{  let  ro = self.pop::<f64>();  self.memory.gteq(self.sp,ro);}
+
+      opcode::LAND=>{  let  ro = self.pop::<bool>();  self.memory.logical_and(self.sp,ro);}
+      opcode::LOR =>{  let  ro = self.pop::<bool>();  self.memory.logical_or( self.sp,ro);}
+
+      opcode::NEG =>{self.memory.neg::<i64>(self.sp);}
+      opcode::NEGF=>{self.memory.neg::<f64>(self.sp);}
+      opcode::NOT =>{self.memory.not::<u64>(self.sp);}
+      opcode::LNOT=>{self.memory.logical_not( self.sp);}
+      opcode::ITOU=>{self.memory.itou(self.sp);}
+      opcode::UTOI=>{self.memory.utoi(self.sp);}
+      opcode::ITOF=>{self.memory.itof(self.sp);}
+      opcode::FTOI=>{self.memory.ftoi(self.sp);}
+
+      opcode::PUSH0  =>{self.push::<u64>(0);}
+      opcode::PUSH1  =>{self.push::<u64>(1);}
+      opcode::PUSHI8 =>{  let  imm = self.read_imm8()  as  i8;  self.push(imm as i64);}
+      opcode::PUSHI16=>{  let  imm = self.read_imm16() as i16;  self.push(imm as i64);}
+      opcode::PUSHI32=>{  let  imm = self.read_imm32() as i32;  self.push(imm as i64);}
+      opcode::PUSHU8 =>{  let  imm = self.read_imm8() ;         self.push(imm as u64);}
+      opcode::PUSHU16=>{  let  imm = self.read_imm16();         self.push(imm as u64);}
+      opcode::PUSHU32=>{  let  imm = self.read_imm32();         self.push(imm as u64);}
+      opcode::PUSHF32=>{  let  imm = self.read_imm32();         self.push(f32::from_bits(imm) as f64);}
+      opcode::PUSH64 =>{  let  imm = self.read_imm64();         self.push(imm);}
+      opcode::DUP    =>{  let  v = self.top::<u64>();  self.push(v);}
+
+      opcode::LDI8 =>{self.ldi8();},
+      opcode::LDI16=>{self.ldi16();},
+      opcode::LDI32=>{self.ldi32();},
+      opcode::LDU8 =>{self.ldu8();},
+      opcode::LDU16=>{self.ldu16();},
+      opcode::LDU32=>{self.ldu32();},
+      opcode::LDF32=>{self.ldf32();},
+      opcode::LD64 =>{self.ld64();},
+      opcode::LDPC =>{self.push(self.pc);},
+      opcode::LDBP =>{self.push(self.bp);},
+      opcode::LDSP =>{self.push(self.sp);},
+
+      opcode::STI8 =>{self.sti8();},
+      opcode::STI16=>{self.sti16();},
+      opcode::STI32=>{self.sti32();},
+      opcode::STU8 =>{self.stu8();},
+      opcode::STU16=>{self.stu16();},
+      opcode::STU32=>{self.stu32();},
+      opcode::STF32=>{self.stf32();},
+      opcode::ST64 =>{self.st64();},
+      opcode::STPC =>{self.pc = self.pop::<usize>();},
+      opcode::STBP =>{self.bp = self.pop::<usize>();},
+      opcode::STSP =>{self.sp = self.pop::<usize>();},
+
+      opcode::CAL =>{self.cal();}
+      opcode::BRZ =>{self.brz();}
+      opcode::BRNZ=>{self.brnz();}
+      opcode::RET =>{self.ret();}
       _=>{panic!();}
         }
 
@@ -707,51 +516,28 @@ run(&mut self)
 pub fn
 get_final_value_as_usize(&self)-> usize
 {
-  let  addr = self.get_address(&self.final_value_dst.field_index);
+//  let  addr = self.get_address(&self.final_value_dst.address_source);
 
-  self.memory.get_u64(addr) as usize
-}
-
-
-pub fn
-get_final_value_and_type_info(&self)-> (Vec<u8>,TypeInfo)
-{
-  let  sz = self.final_value_type_info.get_size();
-
-  let  addr = self.get_address(&self.final_value_dst.field_index);
-
-  let  b = self.memory.get_str(addr,sz);
-
-  (b,self.final_value_type_info.clone())
+  self.memory.get::<u64>(0) as usize
 }
 
 
 pub fn
 print_final_value(&self)
 {
-    for instr in &self.instruction_list
-    {
-      instr.print();
-
-      println!("");
-    }
-
-
   print!("return value index is ");
 
-  self.final_value_dst.field_index.print();
+//  self.final_value_dst.address_source.print();
 
   println!("");
 
   print!("return value type is ");
 
-  self.final_value_type_info.print();
-
   println!("");
 
-  let  addr = self.get_address(&self.final_value_dst.field_index);
+//  let  addr = self.get_address(&self.final_value_dst.address_source);
 
-  print!(" = {}({})",self.memory.get_u64(addr),addr);
+//  print!(" = {}({})",self.memory.get::<u64>(addr),addr);
 }
 
 

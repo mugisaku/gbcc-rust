@@ -16,8 +16,7 @@ Operand
   String(String),
 
   IdentifierLiteral,
-  IntegerLiteral,
-  FloatingLiteral,
+  NumberLiteral,
   CharacterLiteral,
   StringLiteral,
 
@@ -55,8 +54,7 @@ test(&self, dic: &Dictionary)-> Result<(),()>
   Operand::Keyword(_)=>{Ok(())},
   Operand::String(_)=>{Ok(())},
   Operand::IdentifierLiteral=>{Ok(())},
-  Operand::IntegerLiteral=>{Ok(())},
-  Operand::FloatingLiteral=>{Ok(())},
+  Operand::NumberLiteral=>{Ok(())},
   Operand::CharacterLiteral=>{Ok(())},
   Operand::StringLiteral=>{Ok(())},
     }
@@ -108,8 +106,7 @@ print(&self)
           print!("\"");
         },
   Operand::IdentifierLiteral=>{print!(".Identifier");},
-  Operand::IntegerLiteral=>{print!(".Integer");},
-  Operand::FloatingLiteral=>{print!(".Floating");},
+  Operand::NumberLiteral=>{print!(".Number");},
   Operand::CharacterLiteral=>{print!(".Character");},
   Operand::StringLiteral=>{print!(".String");},
     }
@@ -429,7 +426,7 @@ new(name: &str)-> Dictionary
 pub fn
 make_from_string(s: &str)-> Result<Dictionary,()>
 {
-  let  src = crate::source_file::SourceFile::from(s);
+  let  src = crate::source_file::SourceFile::from_string(s);
 
   return super::read_dictionary::read_dictionary(&src);
 }

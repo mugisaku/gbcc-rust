@@ -2,7 +2,7 @@
 
 use crate::source_file::{
   SourceFile,
-  to_string,
+
 };
 
 use crate::token::{
@@ -37,8 +37,7 @@ pub fn
 to_literal_operand(s: &str)-> Result<Operand,()>
 {
        if s == "Identifier"{return Ok(Operand::IdentifierLiteral);}
-  else if s ==    "Integer"{return Ok(Operand::IntegerLiteral   );}
-  else if s ==   "Floating"{return Ok(Operand::FloatingLiteral  );}
+  else if s ==     "Number"{return Ok(Operand::NumberLiteral    );}
   else if s ==  "Character"{return Ok(Operand::CharacterLiteral );}
   else if s ==     "String"{return Ok(Operand::StringLiteral    );}
 

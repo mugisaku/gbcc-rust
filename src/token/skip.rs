@@ -11,7 +11,7 @@ use super::is::*;
 pub fn
 skip_until_appears_newline(src: &SourceFile, cur: &mut Cursor)-> Result<(),()>
 {
-    while let Some(c) = src.get_character(cur)
+    while let Some(c) = src.get_character(*cur)
     {
       cur.advance();
 
@@ -33,7 +33,7 @@ skip_until_appears_newline(src: &SourceFile, cur: &mut Cursor)-> Result<(),()>
 pub fn
 skip_until_appears_end_of_comment_block(src: &SourceFile, cur: &mut Cursor)-> Result<(),()>
 {
-    while let Some(first) = src.get_character(cur)
+    while let Some(first) = src.get_character(*cur)
     {
       cur.advance();
 
@@ -45,7 +45,7 @@ skip_until_appears_end_of_comment_block(src: &SourceFile, cur: &mut Cursor)-> Re
       else
         if first == '*'
         {
-            if let Some(second) = src.get_character(cur)
+            if let Some(second) = src.get_character(*cur)
             {
               cur.advance();
 
@@ -67,7 +67,7 @@ skip_until_appears_end_of_comment_block(src: &SourceFile, cur: &mut Cursor)-> Re
 pub fn
 skip_spaces(src: &SourceFile, cur: &mut Cursor)
 {
-    while let Some(c) = src.get_character(cur)
+    while let Some(c) = src.get_character(*cur)
     {
         if is_space(c)
         {

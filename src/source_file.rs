@@ -73,7 +73,37 @@ SourceFile
 
 
 pub fn
-open(path: &str)-> Result<SourceFile,()>
+from_string(s: &str)-> SourceFile
+{
+  let  mut srcf = SourceFile{ path: String::new(), lines: Vec::new()};
+
+  let  mut buf: Vec<char> = Vec::new();
+
+    for c in s.chars()
+    {
+      buf.push(c);
+
+        if c == '\n'
+        {
+          srcf.lines.push(buf);
+
+          buf = Vec::new();
+        }
+    }
+
+
+    if buf.len() != 0
+    {
+      srcf.lines.push(buf);
+    }
+
+
+  srcf
+}
+
+
+pub fn
+from_file(path: &str)-> Result<SourceFile,()>
 {
     if let Ok(mut f) = File::open(path)
     {
@@ -81,9 +111,9 @@ open(path: &str)-> Result<SourceFile,()>
 
       let  _ = f.read_to_string(&mut s);
 
-      let  mut srcf = SourceFile::from(s.as_str());
+      let  mut srcf = SourceFile::from_string(s.as_str());
 
-      srcf.path = String::from(path);
+      srcf.path = path.to_string();
 
       return Ok(srcf);
     }
@@ -101,7 +131,7 @@ get_path(&self)-> &String
 
 
 pub fn
-get_character(&self, cur: &Cursor)-> Option<char>
+get_character(&self, cur: Cursor)-> Option<char>
 {
     if cur.y < self.lines.len()
     {
@@ -135,68 +165,6 @@ print(&self)
 }
 
 
-}
-
-
-
-
-impl
-From<&str> for SourceFile
-{
-
-
-fn
-from(s: &str)-> SourceFile
-{
-  let  mut srcf = SourceFile{ path: String::new(), lines: Vec::new()};
-
-  let  mut buf: Vec<char> = Vec::new();
-
-    for c in s.chars()
-    {
-      buf.push(c);
-
-        if c == '\n'
-        {
-          srcf.lines.push(buf.clone());
-
-          buf.clear();
-        }
-    }
-
-
-    if buf.len() != 0
-    {
-      srcf.lines.push(buf);
-    }
-
-
-  srcf
-}
-
-
-}
-
-
-pub fn
-new_char_string()-> Vec<char>
-{
-  Vec::new()
-}
-
-
-pub fn
-to_string(src: &Vec<char>)-> String
-{
-  let  mut s = String::new();
-
-    for c in src
-    {
-      s.push(*c);
-    }
-
-
-  s
 }
 
 
