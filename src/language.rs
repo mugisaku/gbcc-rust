@@ -1,16 +1,11 @@
 
 
-pub mod constant;
 pub mod expression;
+pub mod declaration;
 pub mod statement;
-pub mod opcode;
-pub mod compile;
-pub mod memory;
+pub mod ty;
 pub mod dictionary;
-pub mod read;
-pub mod element;
-pub mod library;
-pub mod type_kind;
+//pub mod read;
 
 
 /*

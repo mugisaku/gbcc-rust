@@ -27,10 +27,11 @@ use super::dictionary::{
   Operand,
 };
 
-use super::{
-  Directory,
-  Object,
-  ObjectData,
+use crate::node::{
+  Node,
+  Value,
+  Cursor,
+
 };
 
 
@@ -122,15 +123,15 @@ get_token_info(&self)-> TokenInfo
 
 
 fn
-read_by_string(&mut self, s: &str)-> Option<Vec<Object>>
+read_by_string(&mut self, s: &str)-> Option<Vec<Value>>
 {
   let  old_pos = self.position;
 
     if read_string_of_others(&self.token_string,&mut self.position,s)
     {
-      let  o = Object{token_info: Some(self.token_string[old_pos].get_info().clone()), data: ObjectData::OthersString(String::from(s))};
+      let  v = Value::SemiString(s.to_string());
 
-      return Some(vec![o]);
+      return Some(vec![v]);
     }
 
 
@@ -141,7 +142,7 @@ read_by_string(&mut self, s: &str)-> Option<Vec<Object>>
 
 
 fn
-read_by_identifier(&mut self, id: &str, d_name_opt: &Option<String>)-> Option<Vec<Object>>
+read_by_identifier(&mut self, id: &str, d_name_opt: &Option<String>)-> Option<Vec<Value>>
 {
    if let Some(d_name) = d_name_opt
    {
@@ -152,11 +153,11 @@ read_by_identifier(&mut self, id: &str, d_name_opt: &Option<String>)-> Option<Ve
    }
 
 
-  let  mut objs_opt: Option<Vec<Object>> = None;
+  let  mut vals_opt: Option<Vec<Value>> = None;
 
-   if let Some(objs) = self.read_by_name(id)
+   if let Some(vals) = self.read_by_name(id)
    {
-     objs_opt = Some(objs);
+     vals_opt = Some(vals);
    }
 
 
@@ -169,12 +170,12 @@ read_by_identifier(&mut self, id: &str, d_name_opt: &Option<String>)-> Option<Ve
    }
 
 
-  objs_opt
+  vals_opt
 }
 
 
 fn
-read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
+read_by_operand(&mut self, o: &Operand)-> Option<Vec<Value>>
 {
   let  old_pos = self.position;
 
@@ -182,16 +183,16 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
     {
   Operand::One(e)=>
         {
-            if let Some(objs) = self.read_by_expression(e)
+            if let Some(vals) = self.read_by_expression(e)
             {
-              return Some(objs);
+              return Some(vals);
             }
         },
   Operand::Option(e)=>
         {
-            if let Some(objs) = self.read_by_expression(e)
+            if let Some(vals) = self.read_by_expression(e)
             {
-              return Some(objs);
+              return Some(vals);
             }
 
 
@@ -202,17 +203,17 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         },
   Operand::Repetition(e)=>
         {
-            if let Some(mut first_objs) = self.read_by_expression(e)
+            if let Some(mut first_vals) = self.read_by_expression(e)
             {
-                while let Some(mut objs) = self.read_by_expression(e)
+                while let Some(mut vals) = self.read_by_expression(e)
                 {
-                  first_objs.append(&mut objs);
+                  first_vals.append(&mut vals);
                 }
 
 
                 if !self.interruption
                 {
-                  return Some(first_objs);
+                  return Some(first_vals);
                 }
             }
         },
@@ -222,9 +223,9 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         },
   Operand::String(s)=>
         {
-            if let Some(objs) = self.read_by_string(s)
+            if let Some(vals) = self.read_by_string(s)
             {
-              return Some(objs);
+              return Some(vals);
             }
         },
   Operand::Keyword(kw)=>
@@ -233,11 +234,11 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
             {
                 if kw == id
                 {
-                  let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Keyword(kw.clone())};
+                  let  v = Value::Keyword(kw.clone());
 
                   self.position += 1;
 
-                  return Some(vec![o]);
+                  return Some(vec![v]);
                 }
             }
         },
@@ -245,44 +246,44 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
         {
             if let Some(s) = get_identifier(&self.token_string,self.position)
             {
-              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Identifier(s.clone())};
+              let  v = Value::Identifier(s.clone());
 
               self.advance();
 
-              return Some(vec![o]);
+              return Some(vec![v]);
             }
         },
   Operand::NumberLiteral=>
         {
             if let Some(pn) = get_number(&self.token_string,self.position)
             {
-              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Number(pn.clone())};
+              let  v = if pn.is_float(){Value::Float(pn.get_float().unwrap())} else{Value::Uint(pn.get_int())};
 
               self.advance();
 
-              return Some(vec![o]);
+              return Some(vec![v]);
             }
         },
   Operand::CharacterLiteral=>
         {
             if let Some(c) = get_character(&self.token_string,self.position)
             {
-              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::Character(c)};
+              let  v = Value::Char(c);
 
               self.advance();
 
-              return Some(vec![o]);
+              return Some(vec![v]);
             }
         },
   Operand::StringLiteral=>
         {
             if let Some(s) = get_string(&self.token_string,self.position)
             {
-              let  o = Object{token_info: Some(self.get_token_info()), data: ObjectData::String(s.clone())};
+              let  v = Value::String(s.clone());
 
               self.advance();
 
-              return Some(vec![o]);
+              return Some(vec![v]);
             }
         },
     }
@@ -295,7 +296,7 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Object>>
 
 
 fn
-read_by_binary_operation(&mut self, op: &BinaryOperation)-> Option<Vec<Object>>
+read_by_binary_operation(&mut self, op: &BinaryOperation)-> Option<Vec<Value>>
 {
   let  old_pos = self.position;
 
@@ -303,13 +304,13 @@ read_by_binary_operation(&mut self, op: &BinaryOperation)-> Option<Vec<Object>>
     {
   BinaryOperator::And=>
         {
-            if let Some(mut l_objs) = self.read_by_operand(op.get_left())
+            if let Some(mut l_vals) = self.read_by_operand(op.get_left())
             {
-                if let Some(mut r_objs) = self.read_by_operand(op.get_right())
+                if let Some(mut r_vals) = self.read_by_operand(op.get_right())
                 {
-                  l_objs.append(&mut r_objs);
+                  l_vals.append(&mut r_vals);
 
-                  return Some(l_objs);
+                  return Some(l_vals);
                 }
             }
         },
@@ -333,13 +334,13 @@ read_by_binary_operation(&mut self, op: &BinaryOperation)-> Option<Vec<Object>>
         },
   BinaryOperator::Arrow=>
         {
-            if let Some(mut l_objs) = self.read_by_operand(op.get_left())
+            if let Some(mut l_vals) = self.read_by_operand(op.get_left())
             {
-                if let Some(mut r_objs) = self.read_by_operand(op.get_right())
+                if let Some(mut r_vals) = self.read_by_operand(op.get_right())
                 {
-                  l_objs.append(&mut r_objs);
+                  l_vals.append(&mut r_vals);
 
-                  return Some(l_objs);
+                  return Some(l_vals);
                 }
 
 
@@ -358,7 +359,7 @@ read_by_binary_operation(&mut self, op: &BinaryOperation)-> Option<Vec<Object>>
 
 
 pub fn
-read_by_expression(&mut self, e: &Expression)-> Option<Vec<Object>>
+read_by_expression(&mut self, e: &Expression)-> Option<Vec<Value>>
 {
   let  old_pos = self.position;
 
@@ -367,23 +368,23 @@ read_by_expression(&mut self, e: &Expression)-> Option<Vec<Object>>
   Expression::Empty=>{},
   Expression::UnaryOperation(op)=>
         {
-            if let Some(objs) = self.read_by_operand(&op.operand)
+            if let Some(vals) = self.read_by_operand(&op.operand)
             {
-              return Some(objs);
+              return Some(vals);
             }
         },
   Expression::BinaryOperation(op)=>
         {
-            if let Some(objs) = self.read_by_binary_operation(op)
+            if let Some(vals) = self.read_by_binary_operation(op)
             {
-              return Some(objs);
+              return Some(vals);
             }
         },
   Expression::Operand(o)=>
         {
-            if let Some(objs) = self.read_by_operand(o)
+            if let Some(vals) = self.read_by_operand(o)
             {
-              return Some(objs);
+              return Some(vals);
             }
         },
     }
@@ -396,7 +397,7 @@ read_by_expression(&mut self, e: &Expression)-> Option<Vec<Object>>
 
 
 fn
-read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
+read_by_definition(&mut self, def: &Definition)-> Option<Vec<Value>>
 {
     if let Some(tok) = get_token(&self.token_string,self.position)
     {
@@ -408,11 +409,13 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
 
       self.depth += 1;
 
-        if let Some(objs) = self.read_by_expression(def.get_expression())
+        if let Some(vals) = self.read_by_expression(def.get_expression())
         {
-          let  dir = Directory{ name: def.name.clone(), object_list: objs};
+          let  mut nd = Node::new(&def.name);
 
-          let  obj = Object{ token_info: None, data: ObjectData::Directory(dir)};
+          nd.add_value_list(vals);
+
+          let  val = Value::Node(Box::new(nd));
 
           self.depth -= 1;
 
@@ -420,7 +423,7 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
 
 //          println!("{}としての解析に成功",&def.name);
 
-          return Some(vec![obj]);
+          return Some(vec![val]);
         }
 
 
@@ -439,7 +442,7 @@ read_by_definition(&mut self, def: &Definition)-> Option<Vec<Object>>
 
 
 fn
-read_by_name(&mut self, name: &str)-> Option<Vec<Object>>
+read_by_name(&mut self, name: &str)-> Option<Vec<Value>>
 {
     if let Some(dic) = self.dictionary_stack.last()
     {
@@ -468,9 +471,9 @@ read_by_name(&mut self, name: &str)-> Option<Vec<Object>>
 
 
 pub fn
-parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Directory,()>
+parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Box<Node>,()>
 {
-  let  mut dir = Directory::new("/");
+  let  mut nd = Box::new(Node::new(""));
 
     if let Some(main_def) = dic.find(main_def_name) 
     {
@@ -496,9 +499,9 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt:
 
       let  mut prev_pos: usize = 0;
 
-        while let Some(mut objs) = st.read_by_definition(main_def)
+        while let Some(vals) = st.read_by_definition(main_def)
         {
-          dir.object_list.append(&mut objs);
+          nd.add_value_list(vals);
 
             if st.position == prev_pos
             {
@@ -538,7 +541,7 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt:
            }
 
 
-          println!("{} parsed",dir.object_list.len());
+          println!("{} parsed",nd.get_length());
 
           return Err(());
         }
@@ -552,12 +555,14 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt:
     }
 
 
-  Ok(dir)
+  nd.correct();
+
+  Ok(nd)
 }
 
 
 pub fn
-parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Directory,()>
+parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Box<Node>,()>
 {
     if let Ok(toks) = tokenize_from_string(s)
     {

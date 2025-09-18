@@ -75,6 +75,13 @@ get_float(&self)-> Option<f64>
 
 
 pub fn
+get_int(&self)-> u64
+{
+  self.i_part
+}
+
+
+pub fn
 print(&self)
 {
     if let Some(f) = self.f_part_opt

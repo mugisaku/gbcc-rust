@@ -2,6 +2,7 @@ mod token;
 mod source_file;
 mod syntax;
 mod language;
+mod node;
 mod asm;
 mod debug;
 
@@ -44,6 +45,18 @@ open_and_print_tokens()
 fn
 main()
 {
+  use crate::language::*;
+  use crate::language::declaration::*;
+
+  let  decls = Declaration::read_multi(
+r#"
+function test()-> i32
+{
+  return 1+6;
+}
+"#);
+
+/*
   let  mut src = Vec::<asm::instruction::Instruction>::new();
   let  mut m = asm::machine::Machine::new();
 
@@ -124,6 +137,7 @@ add a b |
 
 
 //  open_and_print_tokens();
+*/
 }
 
 

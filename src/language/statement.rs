@@ -1,14 +1,20 @@
 
 
 use super::expression::{
+  OpId,
   Expression,
-  AssignOperator,
 
 };
 
 
-use super::element::{
-  Symbol,
+use super::ty::{
+  Type,
+
+};
+
+
+use super::declaration::{
+  Declaration,
 
 };
 
@@ -19,11 +25,10 @@ pub enum
 Statement
 {
   Empty,
-  Let(Symbol),
-  Const(Symbol),
-  Static(Symbol),
-  Expression(Expression,Option<(AssignOperator,Expression)>),
-  If(IfBranch),
+  Declaration(Declaration),
+  Expression(Expression),
+  Assign(OpId,Expression,Expression),
+  If(Branch),
   While(Expression,Block),
   For(For),
   Loop(Block),
@@ -42,98 +47,95 @@ Statement
 {
 
 
+
+
+/*
+pub fn
+read(s: &str)-> Self
+{
+  use crate::syntax::dictionary::Dictionary;
+
+  let  dic = super::dictionary::get_dictionary();
+
+  let  dics: Vec<&Dictionary> = vec![];
+
+    if let Ok(dir) = crate::syntax::parse::parse_from_string(s,dic,"statement",Some(dics))
+    {
+      let  mut cur = crate::syntax::Cursor::new(&dir);
+
+        if let Some(d_dir) = cur.get_directory_with_name("statement")
+        {
+          return super::read::read_statement(d_dir);
+        }
+    }
+
+
+  panic!();
+}
+*/
+
+
 pub fn
 print(&self)
 {
     match self
     {
   Statement::Empty=>{print!(";");}
-  Statement::Let(v)=>
-        {
-          print!("let  ");
-          v.print();
-        }
-  Statement::Const(v)=>
-        {
-          print!("const  ");
-
-          v.print();
-        }
-  Statement::Static(v)=>
-        {
-          print!("static  ");
-
-          v.print();
-        }
-  Statement::Expression(e,ass_opt)=>
-        {
-          e.print();
-
-            if let Some((ass_op,r)) = ass_opt
-            {
-              ass_op.print();
-
-              r.print();
-            }
-        }
+  Statement::Declaration(decl)=>
+    {
+      decl.print();
+    }
+  Statement::Expression(e)=>
+    {
+      e.print();
+    }
+  Statement::Assign(o,l,r)=>
+    {
+      l.print();
+      o.print();
+      r.print();
+    }
   Statement::If(br)=>
-       {
-         print!("if ");
-
-         br.expression.print();
-
-         print!(" ");
-
-         br.on_true.print();
-
-           if let Statement::Empty = &*br.on_false
-           {
-           }
-
-         else
-           {
-             print!("else");
-
-             br.on_false.print();
-           }
-        }
+    {
+      br.print();
+    }
   Statement::For(fo)=>
-        {
-          print!("for {} in ",&fo.var_name);
+    {
+      print!("for {} in ",&fo.var_name);
 
-          fo.expression.print();
+      fo.expression.print();
 
-          fo.block.print();
-        }
+      fo.block.print();
+    }
   Statement::While(e,blk)=>
-        {
-          print!("while ");
+    {
+      print!("while ");
 
-          e.print();
+      e.print();
 
-          blk.print();
-        }
+      blk.print();
+    }
   Statement::Loop(blk)=>
-        {
-          print!("loop");
+    {
+      print!("loop");
 
-          blk.print();
-        }
+      blk.print();
+    }
   Statement::Block(blk)=>
-        {
-          print!("//plain block");
+    {
+      print!("//plain block");
 
-          blk.print();
-        }
+      blk.print();
+    }
   Statement::Return(e_opt)=>
-        {
-          print!("return ");
+    {
+      print!("return ");
 
-            if let Some(e) = e_opt
-            {
-              e.print();
-            }
+        if let Some(e) = e_opt
+        {
+          e.print();
         }
+    }
   Statement::Break=>{print!("break");}
   Statement::Continue=>{print!("continue");}
   Statement::PrintS(s)=>{print!("print \"{}\"",s);}
@@ -195,14 +197,46 @@ print(&self)
 
 
 pub struct
-IfBranch
+Branch
 {
-  pub(crate) expression: Expression,
+  pub(crate) expression_opt: Option<Expression>,
 
-  pub(crate)   on_true: Box<Statement>,
-  pub(crate)  on_false: Box<Statement>,
+  pub(crate) block: Block,
+
+  pub(crate) sub_branch_opt: Option<Box<Branch>>,
 
 }
+
+
+impl
+Branch
+{
+
+
+pub fn
+print(&self)
+{
+    if let Some(e) = &self.expression_opt
+    {
+      print!("if ");
+
+      e.print();
+
+      self.block.print();
+
+        if let Some(br) = &self.sub_branch_opt
+        {
+          print!("else");
+
+          br.print();
+        }
+    }
+}
+
+
+}
+
+
 
 
 pub struct
