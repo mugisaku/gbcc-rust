@@ -1,35 +1,41 @@
 
 
-pub mod expression;
-pub mod declaration;
-pub mod statement;
+pub mod opcode;
+pub mod expr;
+pub mod stmt;
 pub mod ty;
+pub mod evaluate;
+pub mod evaluate_unary;
+pub mod evaluate_binary;
+pub mod decl;
+pub mod symbol_table;
+pub mod execute;
 pub mod dictionary;
-//pub mod read;
 
 
-/*
+
+
+pub const WORD_SIZE: usize = 8;
+
 pub fn
-get_default_aligned_size(sz: usize)-> usize
+get_word_aligned(off: usize)-> usize
 {
-  (sz+(WORD_SIZE-1))/WORD_SIZE*WORD_SIZE
+  (off+(WORD_SIZE-1))/WORD_SIZE*WORD_SIZE
+}
+
+pub fn
+get_aligned(al: usize, off: usize)-> usize
+{
+  if al != 0{(off+(al-1))/al*al} else{off}
 }
 
 
 pub fn
-get_aligned_size(sz: usize, al: usize)-> usize
+to_u64_from_bool(b: bool)-> u64
 {
-    if al != 0
-    {
-      (sz+(al-1))/al*al
-    }
-
-  else
-    {
-      sz
-    }
+  if b{1} else{0}
 }
-*/
+
 
 
 

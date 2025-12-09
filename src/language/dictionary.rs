@@ -41,9 +41,9 @@ call           : "(" & [expression & [{"," & expression}]] & ")";
 increment      : "++";
 decrement      : "++";
 
-postfix_operator: access | subscript | call | increment | decrement;
+postfix_op: access | subscript | call | increment | decrement;
 
-operand: [{unary_operator}] & operand_core & [{postfix_operator}];
+operand: [{unary_operator}] & operand_core & [{postfix_op}];
 
 expression: operand & [{binary_operator & operand}];
 
@@ -78,8 +78,7 @@ statement: ";"
   | block
   | return
   | declaration
-  | print_s
-  | print_v
+  | print
   | assign
   | expression
   ;
@@ -109,8 +108,7 @@ function: 'function -> .Identifier & parameter_list & ["->" & type] & block;
 let  : 'let   -> .Identifier & [":" & type] & "=" & expression;
 const: 'const -> .Identifier & [":" & type] & "=" & expression;
 static: 'static -> .Identifier & [":" & type] & "=" & expression;
-print_s: 'print & .String;
-print_v: 'print & .Identifier;
+print: 'print & expression;
 
 declaration: function | let | static | const;
 

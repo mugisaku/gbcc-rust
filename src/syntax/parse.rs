@@ -471,9 +471,9 @@ read_by_name(&mut self, name: &str)-> Option<Vec<Value>>
 
 
 pub fn
-parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Box<Node>,()>
+parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Node,()>
 {
-  let  mut nd = Box::new(Node::new(""));
+  let  mut nd = Node::new("");
 
     if let Some(main_def) = dic.find(main_def_name) 
     {
@@ -555,14 +555,12 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt:
     }
 
 
-  nd.correct();
-
   Ok(nd)
 }
 
 
 pub fn
-parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Box<Node>,()>
+parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Node,()>
 {
     if let Ok(toks) = tokenize_from_string(s)
     {

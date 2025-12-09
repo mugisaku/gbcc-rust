@@ -46,15 +46,36 @@ fn
 main()
 {
   use crate::language::*;
-  use crate::language::declaration::*;
+  use crate::language::decl::*;
+  use crate::language::symbol_table::*;
 
-  let  decls = Declaration::read_multi(
+    if let Ok(root) = decl::Decl::read_as_root(
 r#"
 function test()-> i32
 {
-  return 1+6;
+for x in 3
+{
+print x;
 }
-"#);
+
+  return true;
+}
+"#)
+{
+  let  mut tbl = SymbolTable::from(root);
+
+    if tbl.complete().is_ok()
+    {
+      tbl.allocate_objects(0);
+
+      tbl.print();
+
+        if tbl.build_function_codes().is_ok()
+        {
+          println!("\nok");
+        }
+    }
+}
 
 /*
   let  mut src = Vec::<asm::instruction::Instruction>::new();
