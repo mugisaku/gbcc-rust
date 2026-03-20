@@ -90,7 +90,7 @@ return  : 'return -> [expression];
 
 
 else: 'else -> block;
-else_if: 'else -> 'if -> expression & block;
+else_if: 'else & 'if -> expression & block;
 
 if: 'if -> expression & block & [{else_if}] & [else];
 
@@ -104,13 +104,13 @@ for  : 'for -> .Identifier & 'in -> expression & block;
 parameter: .Identifier & ":" & type;
 parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
 
-function: 'function -> .Identifier & parameter_list & ["->" & type] & block;
-let  : 'let   -> .Identifier & [":" & type] & "=" & expression;
-const: 'const -> .Identifier & [":" & type] & "=" & expression;
-static: 'static -> .Identifier & [":" & type] & "=" & expression;
+fn: 'fn -> .Identifier & parameter_list & ["->" & type] & block;
+var  : 'var   -> .Identifier & "=" & expression;
+const: 'const -> .Identifier & "=" & expression;
+static: 'static -> .Identifier & "=" & expression;
 print: 'print & expression;
 
-declaration: function | let | static | const;
+declaration: fn | var | static | const | ";";
 
 
 

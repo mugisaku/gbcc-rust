@@ -1,337 +1,15 @@
 
 
+use super::*;
 use super::decl::*;
 use super::expr::*;
+use super::stmt::*;
 use super::ty::*;
-use super::opcode::*;
+use super::asm::*;
+use super::scope::*;
+use super::program::*;
 use super::evaluate::*;
-use super::execute::*;
-
-
-
-
-pub struct
-FunctionDef
-{
-  parameter_list: Vec<SizedField>,
-
-  return_ty: SizedTy,
-
-  opcode_list: Vec<Opcode>,
-
-  offset: usize,
-
-}
-
-
-impl
-FunctionDef
-{
-
-
-pub fn
-new()-> Self
-{
-  Self{
-    parameter_list: Vec::new(),
-    return_ty: SizedTy::Void,
-    opcode_list: Vec::new(),
-    offset: 0,
-  }
-}
-
-
-}
-
-
-
-
-pub struct
-TempVar
-{
-  ty: SizedTy,
-
-  offset: usize,
-
-}
-
-
-impl
-TempVar
-{
-
-
-pub fn
-new()-> Self
-{
-  Self{
-    ty: SizedTy::Void,
-    offset: 0,
-  }
-}
-
-
-pub fn
-new_with_ty(ty: SizedTy)-> Self
-{
-  Self{
-    ty,
-    offset: 0,
-  }
-}
-
-
-pub fn
-get_ty(&self)-> &SizedTy
-{
-  &self.ty
-}
-
-
-pub fn
-get_offset(&self)-> usize
-{
-  self.offset
-}
-
-
-pub fn
-set_offset(&mut self, off: usize)
-{
-  self.offset = off;
-}
-
-
-}
-
-
-
-pub struct
-PermVar
-{
-  ty: SizedTy,
-
-  data_opt: Option<Vec<u8>>,
-
-  offset: usize,
-
-}
-
-
-impl
-PermVar
-{
-
-
-pub fn
-new()-> Self
-{
-  Self{
-    ty: SizedTy::Void,
-    data_opt: None,
-    offset: 0,
-  }
-}
-
-
-pub fn
-new_void()-> Self
-{
-  Self{
-    ty: SizedTy::Void,
-    data_opt: None,
-    offset: 0,
-  }
-}
-
-
-pub fn
-from_8bits(ty: SizedTy, bits: u8)-> Self
-{
-  Self{
-    ty,
-    data_opt: Some(vec![bits]),
-    offset: 0,
-  }
-}
-
-
-pub fn
-from_16bits(ty: SizedTy, bits: u16)-> Self
-{
-  Self{
-    ty,
-    data_opt: Some(bits.to_be_bytes().to_vec()),
-    offset: 0,
-  }
-}
-
-
-pub fn
-from_32bits(ty: SizedTy, bits: u32)-> Self
-{
-  Self{
-    ty,
-    data_opt: Some(bits.to_be_bytes().to_vec()),
-    offset: 0,
-  }
-}
-
-
-pub fn
-from_64bits(ty: SizedTy, bits: u64)-> Self
-{
-  Self{
-    ty,
-    data_opt: Some(bits.to_be_bytes().to_vec()),
-    offset: 0,
-  }
-}
-
-
-pub fn  from_bool(b: bool)-> Self{Self::from_8bits(SizedTy::Bool,if b{1} else{0})}
-pub fn     from_i8(i: i8)->    Self{Self::from_8bits( SizedTy::I8   ,i as u8)}
-pub fn    from_i16(i: i16)->   Self{Self::from_16bits(SizedTy::I16  ,i as u16)}
-pub fn    from_i32(i: i32)->   Self{Self::from_32bits(SizedTy::I32  ,i as u32)}
-pub fn    from_i64(i: i64)->   Self{Self::from_64bits(SizedTy::I64  ,i as u64)}
-pub fn  from_isize(i: isize)-> Self{Self::from_64bits(SizedTy::ISize,i as u64)}
-
-pub fn     from_u8(u: u8)->    Self{Self::from_8bits( SizedTy::U8   ,u)}
-pub fn    from_u16(u: u16)->   Self{Self::from_16bits(SizedTy::U16  ,u)}
-pub fn    from_u32(u: u32)->   Self{Self::from_32bits(SizedTy::U32  ,u)}
-pub fn    from_u64(u: u64)->   Self{Self::from_64bits(SizedTy::U64  ,u)}
-pub fn  from_usize(u: usize)-> Self{Self::from_64bits(SizedTy::USize,u as u64)}
-
-pub fn  from_f32(f: f32)-> Self{Self::from_32bits(SizedTy::F32,f.to_bits())}
-pub fn  from_f64(f: f64)-> Self{Self::from_64bits(SizedTy::F64,f.to_bits())}
-
-
-pub fn
-get_ty(&self)-> &SizedTy
-{
-  &self.ty
-}
-
-
-pub fn
-get_offset(&self)-> usize
-{
-  self.offset
-}
-
-
-pub fn
-set_offset(&mut self, off: usize)
-{
-  self.offset = off;
-}
-
-
-pub fn
-try_from_eval_result_with_ty(res: EvalResult, ty: &SizedTy)-> Result<Self,()>
-{
-    match res
-    {
-  EvalResult::Int(i)=>
-    {
-        match ty
-        {
-      SizedTy::I8   =>{if let Ok(new_i) =    i8::try_from(i){return Ok(PermVar::from_i8(   new_i));}}
-      SizedTy::I16  =>{if let Ok(new_i) =   i16::try_from(i){return Ok(PermVar::from_i16(  new_i));}}
-      SizedTy::I32  =>{if let Ok(new_i) =   i32::try_from(i){return Ok(PermVar::from_i32(  new_i));}}
-      SizedTy::I64  =>{if let Ok(new_i) =   i64::try_from(i){return Ok(PermVar::from_i64(  new_i));}}
-      SizedTy::ISize=>{if let Ok(new_i) = isize::try_from(i){return Ok(PermVar::from_isize(new_i));}}
-      _=>{}
-        }
-    }
-  EvalResult::Uint(u)=>
-    {
-        match ty
-        {
-      SizedTy::U8   =>{if let Ok(new_u) =    u8::try_from(u){return Ok(PermVar::from_u8(   new_u));}}
-      SizedTy::U16  =>{if let Ok(new_u) =   u16::try_from(u){return Ok(PermVar::from_u16(  new_u));}}
-      SizedTy::U32  =>{if let Ok(new_u) =   u32::try_from(u){return Ok(PermVar::from_u32(  new_u));}}
-      SizedTy::U64  =>{                                      return Ok(PermVar::from_u64(      u)); }
-      SizedTy::USize=>{if let Ok(new_u) = usize::try_from(u){return Ok(PermVar::from_usize(new_u));}}
-      _=>{}
-        }
-    }
-  EvalResult::Float(f)=>
-    {
-        match ty
-        {
-      SizedTy::F32=>{if f.abs() <= (f32::MAX as f64){return Ok(PermVar::from_f32(f as f32));}}
-      SizedTy::F64=>{return Ok(PermVar::from_f64(f));}
-      _=>{}
-        }
-    }
-  EvalResult::Void=>{if let SizedTy::Void = ty{return Ok(Self::new_void());}}
-  EvalResult::Bool(b)=>{if let SizedTy::Bool = ty{return Ok(PermVar::from_bool(b));}}
-
-  EvalResult::I8(i)   =>{if let SizedTy::I8    = ty{return Ok(PermVar::from_i8( i));}}
-  EvalResult::I16(i)  =>{if let SizedTy::I16   = ty{return Ok(PermVar::from_i16(i));}}
-  EvalResult::I32(i)  =>{if let SizedTy::I32   = ty{return Ok(PermVar::from_i32(i));}}
-  EvalResult::I64(i)  =>{if let SizedTy::I64   = ty{return Ok(PermVar::from_i64(i));}}
-  EvalResult::ISize(i)=>{if let SizedTy::ISize = ty{return Ok(PermVar::from_isize(i));}}
-
-  EvalResult::U8(u)   =>{if let SizedTy::U8    = ty{return Ok(PermVar::from_u8( u));}}
-  EvalResult::U16(u)  =>{if let SizedTy::U16   = ty{return Ok(PermVar::from_u16(u));}}
-  EvalResult::U32(u)  =>{if let SizedTy::U32   = ty{return Ok(PermVar::from_u32(u));}}
-  EvalResult::U64(u)  =>{if let SizedTy::U64   = ty{return Ok(PermVar::from_u64(u));}}
-  EvalResult::USize(u)=>{if let SizedTy::USize = ty{return Ok(PermVar::from_usize(u));}}
-
-  EvalResult::F32(f)=>{if let SizedTy::F32 = ty{return Ok(PermVar::from_f32(f));}}
-  EvalResult::F64(f)=>{if let SizedTy::F64 = ty{return Ok(PermVar::from_f64(f));}}
-  _=>{}
-    }
-
-
-  Err(())
-}
-
-
-}
-
-
-impl
-std::convert::TryFrom<EvalResult> for PermVar
-{
-
-
-type Error = ();
-
-
-fn
-try_from(res: EvalResult)-> Result<PermVar,Self::Error>
-{
-    match res
-    {
-  EvalResult::Int(i)  =>{Ok(PermVar::from_i64(i))}
-  EvalResult::Uint(u) =>{Ok(PermVar::from_u64(u))}
-  EvalResult::Float(f)=>{Ok(PermVar::from_f64(f))}
-
-  EvalResult::Void=>{Ok(PermVar::new_void())}
-  EvalResult::Bool(b)=>{Ok(PermVar::from_bool(b))}
-
-  EvalResult::I8(i)   =>{Ok(PermVar::from_i8( i))}
-  EvalResult::I16(i)  =>{Ok(PermVar::from_i16(i))}
-  EvalResult::I32(i)  =>{Ok(PermVar::from_i32(i))}
-  EvalResult::I64(i)  =>{Ok(PermVar::from_i64(i))}
-  EvalResult::ISize(i)=>{Ok(PermVar::from_isize(i))}
-
-  EvalResult::U8(u)   =>{Ok(PermVar::from_u8( u))}
-  EvalResult::U16(u)  =>{Ok(PermVar::from_u16(u))}
-  EvalResult::U32(u)  =>{Ok(PermVar::from_u32(u))}
-  EvalResult::U64(u)  =>{Ok(PermVar::from_u64(u))}
-  EvalResult::USize(u)=>{Ok(PermVar::from_usize(u))}
-
-  EvalResult::F32(f)=>{Ok(PermVar::from_f32(f))}
-  EvalResult::F64(f)=>{Ok(PermVar::from_f64(f))}
-  _=>{Err(())}
-    }
-}
-
-}
+use super::tplg_sort::*;
 
 
 
@@ -339,30 +17,73 @@ try_from(res: EvalResult)-> Result<PermVar,Self::Error>
 pub enum
 SymbolKind
 {
-  Null,
-  None,
+      Const(Expr),
+  GlobalVar(Expr),
 
-  Type(SizedTy),
-  ConstVar(EvalResult),
-  TempVar(TempVar),
-  PermVar(PermVar),
-  Function(FunctionDef),
+  Fn{parameter_name_list: Vec<String>, block: Block},
 
 }
+
+
+pub enum
+SymbolValue
+{
+  Void,
+
+  Bool(bool),
+    Int(i64),
+    IntV(std::cell::Cell<i64>),
+   Uint(u64),
+  Float(f64),
+
+  Bytes(Vec<u8>),
+
+  ProgramIndex(usize),
+
+}
+
+
+impl
+SymbolValue
+{
+
+
+pub fn get_bool(&self)-> bool{if let Self::Bool(b)  = self{*b} else{false}}
+pub fn get_int(&self)->   i64{if let Self::Int(i)   = self{*i} else{0}}
+pub fn get_int_v(&self)-> i64{if let Self::IntV(i)  = self{i.get()} else{0}}
+pub fn get_uint(&self)->  u64{if let Self::Uint(u)  = self{*u} else{0}}
+pub fn get_float(&self)-> f64{if let Self::Float(f) = self{*f} else{0.0}}
+pub fn get_bytes(&self)-> &Vec<u8>
+{
+  static DUMMY: Vec<u8> = Vec::new();
+
+  if let Self::Bytes(s) = self{s} else{&DUMMY}
+}
+
+
+}
+
+
 
 
 pub struct
 Symbol
 {
-  index: usize,
+  key: SymbolKey,
 
   name: String,
 
-  decl_kind: DeclKind,
-
   kind: SymbolKind,
 
-  namespace: String,
+  value: SymbolValue,
+
+  ty: Ty,
+
+  offset: usize,
+    size: usize,
+
+  deps_parent_list: Vec<SymbolKey>,
+   deps_child_list: Vec<SymbolKey>,
 
 }
 
@@ -373,15 +94,60 @@ Symbol
 
 
 pub fn
-new(name: &str, kind: SymbolKind)-> Self
+new_const(key: SymbolKey, name: String, e: Expr)-> Self
 {
   Self{
-    index: 0,
-    name: name.to_string(),
-    decl_kind: DeclKind::Undef,
-    kind,
-    namespace: String::new(),
+    key,
+    name,
+    kind: SymbolKind::Const(e),
+    value: SymbolValue::Void,
+    ty: Ty::Undef,
+    offset: 0,
+      size: 0,
+    deps_parent_list: Vec::new(),
+     deps_child_list: Vec::new(),
   }
+}
+
+
+pub fn
+new_global(key: SymbolKey, name: String, e: Expr)-> Self
+{
+  Self{
+    key,
+    name,
+    kind: SymbolKind::GlobalVar(e),
+    value: SymbolValue::Void,
+    ty: Ty::Undef,
+    offset: 0,
+      size: 0,
+    deps_parent_list: Vec::new(),
+     deps_child_list: Vec::new(),
+  }
+}
+
+
+pub fn
+new_fn(key: SymbolKey, name: String, parameter_name_list: Vec<String>, ty: Ty, block: Block)-> Self
+{
+  Self{
+    key,
+    name,
+    kind: SymbolKind::Fn{parameter_name_list, block},
+    value: SymbolValue::Void,
+    ty,
+    offset: 0,
+      size: 0,
+    deps_parent_list: Vec::new(),
+     deps_child_list: Vec::new(),
+  }
+}
+
+
+pub fn
+get_key(&self)-> SymbolKey
+{
+  self.key
 }
 
 
@@ -393,13 +159,6 @@ get_name(&self)-> &String
 
 
 pub fn
-get_index(&self)-> usize
-{
-  self.index
-}
-
-
-pub fn
 get_kind(&self)-> &SymbolKind
 {
   &self.kind
@@ -407,126 +166,129 @@ get_kind(&self)-> &SymbolKind
 
 
 pub fn
-get_kind_mut(&mut self)-> &mut SymbolKind
+get_value(&self)-> &SymbolValue
 {
-  &mut self.kind
+  &self.value
 }
 
 
 pub fn
-get_decl_Kind(&self)-> &DeclKind
+get_value_mut(&mut self)-> &mut SymbolValue
 {
-  &self.decl_kind
+  &mut self.value
 }
 
 
 pub fn
-release_decl_kind(&mut self)-> DeclKind
+get_ty(&self)-> &Ty
 {
-  let  mut k = DeclKind::Undef;
-
-  std::mem::swap(&mut self.decl_kind,&mut k);
-
-  k
+  &self.ty
 }
 
 
 pub fn
-reset_decl_kind(&mut self, k: DeclKind)
+get_offset(&self)-> usize
 {
-  self.decl_kind = k;
+  self.offset
 }
 
 
 pub fn
-get_namespace(&self)-> &String
+get_size(&self)-> usize
 {
-  &self.namespace
+  self.size
 }
 
 
 pub fn
-print(&self)
+get_reference_count(&self)-> usize
 {
-  println!("namespace: {}",&self.namespace);
-
-  self.decl_kind.print();
-}
-
-
-}
-
-
-
-
-struct
-Node
-{
-  symbol_index: usize,
-
-  reference_count: std::cell::Cell<usize>,
-  is_alive: std::cell::Cell<bool>,
-
-  required_index_list: Vec<usize>,
-
-}
-
-
-impl
-Node
-{
-
-
-pub fn
-new(symbol_index: usize)-> Self
-{
-  Self{
-    symbol_index,
-    reference_count: std::cell::Cell::new(0),
-    is_alive: std::cell::Cell::new(true),
-    required_index_list: Vec::new(),
-  }
+  self.deps_child_list.len()
 }
 
 
 pub fn
-is_alive(&self)-> bool
+print(&self, progs: &Vec<Program>)
 {
-  self.is_alive.get()
+    match &self.kind
+    {
+  SymbolKind::Const(_)    =>{print!("const");}
+  SymbolKind::GlobalVar(_)=>{print!("(g)var");}
+  SymbolKind::Fn{..}      =>{print!("fn");}
+    }
+
+
+  print!(" {}({}i): ",&self.name,self.key.0);
+
+    match &self.kind
+    {
+  SymbolKind::Const(e)    =>{e.print();}
+  SymbolKind::GlobalVar(e)=>{e.print();}
+  SymbolKind::Fn{ parameter_name_list, block}=>{block.print();}
+    }
+
+
+  print!(" -> ");
+
+  self.ty.print();
+
+  print!(" ");
+
+    match &self.ty
+    {
+  Ty::Bool =>{print!("{}",self.value.get_bool()) ;}
+  Ty::Int  =>{print!("{}",self.value.get_int())  ;}
+  Ty::Float=>{print!("{}",self.value.get_float());}
+  _=>{}
+    }
+
+
+  println!("");
+  println!("offset: {}",self.offset);
+  println!("  size: {}",self.size);
+
+  println!("");
+
+    for key in &self.deps_parent_list
+    {
+      println!("this requires {}",key.0);
+    }
+
+
+    for key in &self.deps_child_list
+    {
+      println!("this is required by {}",key.0);
+    }
+
+
+  println!("reference count: {}",self.get_reference_count());
+
+    if let SymbolValue::ProgramIndex(i) = &self.value
+    {
+      progs[*i].print_lines();
+      progs[*i].print_bytes();
+    }
+
+
+  println!("");
 }
 
 
-pub fn
-kill(&self)
-{
-  self.is_alive.set(false)
 }
 
 
-pub fn
-get_count(&self)-> usize
+
+
+#[derive(Clone,Copy,PartialEq)]
+pub struct SymbolKey(usize);
+impl SymbolKey{pub fn to_number(self)-> usize{self.0}}
+
+
+pub enum
+Embedded
 {
-  self.reference_count.get()
-}
-
-
-pub fn
-increase(&self)
-{
-  let  n = self.reference_count.get();
-
-  self.reference_count.set(n+1);
-}
-
-
-pub fn
-decrease(&self)
-{
-  let  n = self.reference_count.get();
-
-  self.reference_count.set(n-1);
-}
-
+  Key(SymbolKey,SymbolKey),
+  String(String),
 
 }
 
@@ -536,12 +298,11 @@ decrease(&self)
 pub struct
 SymbolTable
 {
-  core: Vec<Symbol>,
+  symbols: Vec<Symbol>,
 
-   type_index_list: Vec<usize>,
-  const_index_list: Vec<usize>,
-   perm_index_list: Vec<usize>,
-  function_index_list: Vec<usize>,
+  string_table: Vec<(String,usize)>,
+
+  programs: Vec<Program>,
 
 }
 
@@ -554,192 +315,201 @@ SymbolTable
 pub fn
 new()-> Self
 {
-  let  mut tbl = Self{
-    core: Vec::new(),
-      type_index_list: Vec::new(),
-     const_index_list: Vec::new(),
-      perm_index_list: Vec::new(),
-  function_index_list: Vec::new(),
-  };
-
-
-  tbl.add("",Decl::new_primitive_type("void",SizedTy::Void));
-
-  tbl
+  Self{
+    symbols: Vec::new(),
+    string_table: Vec::new(),
+    programs: Vec::new(),
+  }
 }
 
 
 pub fn
-add(&mut self, namespace: &str, decl: Decl)
+add_string_literal(&mut self, new_s: String)
 {
-  let  (decl_name,decl_kind) = decl.decompose();
-
-    if let DeclKind::Space(mut sp) = decl_kind
+    for (s,_) in &self.string_table
     {
-      let  mut new_namespace = namespace.to_string();
-
-        if decl_name.len() != 0
+        if &new_s == s
         {
-          new_namespace.push_str("::");
-
-          new_namespace.push_str(&decl_name);
-        }
-
-
-        for child in sp.get_decl_list_mut()
-        {
-          let  mut tmp = Decl::new();
-
-          std::mem::swap(child,&mut tmp);
-
-          self.add(&new_namespace,tmp);
+          return;
         }
     }
 
-  else
-    {
-      let  index = self.core.len();
 
-        match &decl_kind
-        {
-      DeclKind::Type(_)    =>{self.type_index_list.push(index);}
-      DeclKind::Var(_)     =>{self.perm_index_list.push(index);}
-      DeclKind::Static(_)  =>{self.perm_index_list.push(index);}
-      DeclKind::Const(_)   =>{self.const_index_list.push(index);}
-      DeclKind::Function(_)=>{self.function_index_list.push(index);}
-      _=>{}
-        }
-
-
-      let  sym = Symbol{
-        index,
-        name: decl_name,
-        decl_kind,
-        kind: SymbolKind::Null,
-        namespace: namespace.to_string(),
-      };
-
-
-      self.core.push(sym);
-    }
+  self.string_table.push((new_s,0));
 }
 
 
 pub fn
-search_required_for_sized_ty(&self, ty: &SizedTy, buf: &mut Vec<usize>)
+find_string_offset(&self, s: &str)-> Option<usize>
 {
-    match ty
+    for (stored_s,off) in &self.string_table
     {
-  SizedTy::Pointer(ty)  =>{self.search_required_for_ty(ty,buf);}
-  SizedTy::Reference(ty)=>{self.search_required_for_ty(ty,buf);}
-  SizedTy::Function(ls,ret_ty)=>
-    {
-      self.search_required_for_ty(ret_ty,buf);
-
-        for ty in ls
+        if stored_s == s
         {
-          self.search_required_for_ty(ty,buf);
+          return Some(*off);
         }
     }
-  _=>{}
-    }
+
+
+  None
 }
 
 
 pub fn
-search_required_for_ty(&self, ty: &Ty, buf: &mut Vec<usize>)
+find_symbol(&self, name: &str)-> Option<&Symbol>
 {
-    match ty
+    for sym in &self.symbols
     {
-  Ty::Tuple(ls)=>
-    {
-        for f in ls
+        if &sym.name == name
         {
-          self.search_required_for_ty(f.get_ty(),buf);
+          return Some(sym);
         }
     }
-  Ty::Struct(ls)=>
+
+
+  None
+}
+
+
+pub fn
+find_symbol_mut(&mut self, name: &str)-> Option<&mut Symbol>
+{
+    for sym in &mut self.symbols
     {
-        for f in ls
+        if &sym.name == name
         {
-          self.search_required_for_ty(f.get_ty(),buf);
+          return Some(sym);
         }
     }
-  Ty::Union(ls)=>
+
+
+  None
+}
+
+
+pub fn
+add_fn(&mut self, name: &str, fd: FnDecl)-> Result<SymbolKey,()>
+{
+  let  (parameter_name_list,ty,mut block) = fd.decompose();
+
+  block.terminate();
+
+  let  new_key = SymbolKey(self.symbols.len());
+
+  let  sym = Symbol::new_fn(new_key,name.to_string(),parameter_name_list,ty,block);
+
+  self.symbols.push(sym);
+
+  Ok(new_key)
+}
+
+
+pub fn
+add_const(&mut self, name: &str, e: Expr)-> Result<SymbolKey,()>
+{
+  let  new_key = SymbolKey(self.symbols.len());
+
+  let  sym = Symbol::new_const(new_key,name.to_string(),e);
+
+  self.symbols.push(sym);
+
+  Ok(new_key)
+}
+
+
+pub fn
+add_global(&mut self, name: &str, e: Expr)-> Result<SymbolKey,()>
+{
+  let  new_key = SymbolKey(self.symbols.len());
+
+  let  sym = Symbol::new_global(new_key,name.to_string(),e);
+
+  self.symbols.push(sym);
+
+  Ok(new_key)
+}
+
+
+pub fn
+add(&mut self, mut decl: Decl)-> Result<SymbolKey,()>
+{
+  let  decl_name = decl.release_name();
+  let  decl_k    = decl.release_kind();
+
+    match decl_k
     {
-        for f in ls
-        {
-          self.search_required_for_ty(f.get_ty(),buf);
-        }
-    }
-  Ty::Enum(ls)=>
+  DeclKind::Undef=>{Err(())}
+  DeclKind::Const(e)=>
     {
-        for e in ls
-        {
-        }
+      self.add_const(&decl_name,e)
     }
-  Ty::Alias(s)=>
+  DeclKind::Var(e)=>
     {
-        if let Some(sym) = self.find(s)
-        {
-          buf.push(sym.get_index());
-        }
+      self.add_global(&decl_name,e)
     }
-  Ty::Array(ty,e)=>
+  DeclKind::Static(e)=>
     {
-      self.search_required_for_ty(ty,buf);
+      self.add_global(&decl_name,e)
     }
-  Ty::Sized(ty)=>
+  DeclKind::Fn(fd)=>
     {
-      self.search_required_for_sized_ty(ty,buf);
+      self.add_fn(&decl_name,fd)
     }
-  _=>{}
     }
 }
 
 
 pub fn
-search_required_for_expr(&self, e: &Expr, buf: &mut Vec<usize>)
+collect_embedded_for_expr(&self, key: SymbolKey, e: &Expr, buf: &mut Vec<Embedded>)
 {
     match e
     {
   Expr::Identifier(s)=>
     {
-        if let Some(sym) = self.find(s)
+        if let Some(sym) = self.find_symbol(s)
         {
-          buf.push(sym.get_index());
+          buf.push(Embedded::Key(sym.key,key));
         }
+
+      else
+        {
+          println!("{} is not found",s);
+        }
+    }
+  Expr::String(s)=>
+    {
+      buf.push(Embedded::String(s.clone()));
     }
   Expr::AccessOp(e,_)=>
     {
-      self.search_required_for_expr(e,buf);
+      self.collect_embedded_for_expr(key,e,buf);
     }
   Expr::SubscriptOp(e,i_e)=>
     {
-      self.search_required_for_expr(  e,buf);
-      self.search_required_for_expr(i_e,buf);
+      self.collect_embedded_for_expr(key,  e,buf);
+      self.collect_embedded_for_expr(key,i_e,buf);
     }
   Expr::CallOp(f,args)=>
     {
-      self.search_required_for_expr(f,buf);
+      self.collect_embedded_for_expr(key,f,buf);
 
         for a in args
         {
-          self.search_required_for_expr(a,buf);
+          self.collect_embedded_for_expr(key,a,buf);
         }
     }
   Expr::Expr(e)=>
     {
-      self.search_required_for_expr(e,buf);
+      self.collect_embedded_for_expr(key,e,buf);
     }
   Expr::UnaryOp(o,_)=>
     {
-      self.search_required_for_expr(o,buf);
+      self.collect_embedded_for_expr(key,o,buf);
     }
   Expr::BinaryOp(l,r,_)=>
     {
-      self.search_required_for_expr(l,buf);
-      self.search_required_for_expr(r,buf);
+      self.collect_embedded_for_expr(key,l,buf);
+      self.collect_embedded_for_expr(key,r,buf);
     }
   _=>{}
     }
@@ -747,266 +517,158 @@ search_required_for_expr(&self, e: &Expr, buf: &mut Vec<usize>)
 
 
 fn
-make_node_list(&self)-> Vec<Node>
+link_deps(&mut self, parent_key: SymbolKey, child_key: SymbolKey)
 {
-  let  mut node_ls = Vec::<Node>::new();
+  self.get_mut(parent_key).deps_child_list.push(  child_key);
+  self.get_mut( child_key).deps_parent_list.push(parent_key);
+}
 
-    for sym in &self.core
+
+fn
+process_embedded(&mut self)
+{
+  let  mut emb_ls = Vec::<Embedded>::new();
+
+    for sym in &mut self.symbols
     {
-      let  mut nd = Node::new(sym.index);
+      sym.deps_parent_list.clear();
+      sym.deps_child_list.clear();
+    }
 
-      let  ls = &mut nd.required_index_list;
 
-        match &sym.decl_kind
+    for sym in &self.symbols
+    {
+        match &sym.kind
         {
-      DeclKind::Type(ty)=>{self.search_required_for_ty(ty,ls);}
-      DeclKind::Var(o)=>
+      SymbolKind::Const(e)    =>{self.collect_embedded_for_expr(sym.key,e,&mut emb_ls);}
+      SymbolKind::GlobalVar(e)=>{self.collect_embedded_for_expr(sym.key,e,&mut emb_ls);}
+      SymbolKind::Fn{..}=>
         {
-          self.search_required_for_ty(o.get_ty(),ls);
-          self.search_required_for_expr(o.get_expr(),ls);
-        }
-      DeclKind::Const(o)=>
-        {
-          self.search_required_for_ty(o.get_ty(),ls);
-          self.search_required_for_expr(o.get_expr(),ls);
-        }
-      DeclKind::Static(o)=>
-        {
-          self.search_required_for_ty(o.get_ty(),ls);
-          self.search_required_for_expr(o.get_expr(),ls);
-        }
-      DeclKind::Function(f)=>
-        {
-          self.search_required_for_ty(f.get_return_ty(),ls);
-
-            for para in f.get_parameter_list()
-            {
-              self.search_required_for_ty(para.get_ty(),ls);
-            }
         }
       _=>{panic!();}
         }
-
-
-      node_ls.push(nd);
     }
 
 
-  node_ls
-}
-
-
-fn
-initialize_node_list(node_ls: &Vec<Node>)
-{
-    for nd in node_ls
+    for emb in emb_ls
     {
-        for req_i in &nd.required_index_list
+        match emb
         {
-          &node_ls[*req_i].increase();
+      Embedded::Key(parent,child)=>{self.link_deps(parent,child);}
+      Embedded::String(s)        =>{self.add_string_literal(s);}
         }
     }
-}
-
-
-fn
-collect_noref(node_ls: &Vec<Node>, stack: &mut Vec<usize>)-> Result<(),()>
-{
-  let  mut buf = Vec::<&Node>::new();
-
-    for nd in node_ls
-    {
-        if nd.is_alive()
-        {
-            if nd.get_count() == 0
-            {
-              buf.push(nd);
-            }
-        }
-    }
-
-
-    if buf.is_empty()
-    {
-      return Err(());
-    }
-
-
-    for nd in buf
-    {
-        for i in &nd.required_index_list
-        {
-          node_ls[*i].decrease();
-        }
-
-
-      stack.push(nd.symbol_index);
-
-      nd.kill();
-    }
-
-
-  Ok(())
-}
-
-
-fn
-get_topological_sorted_index_list(&self)-> Result<Vec<usize>,()>
-{
-  let  mut stack = Vec::<usize>::new();
-  let  mut node_ls = self.make_node_list();
-
-  Self::initialize_node_list(&node_ls);
-
-    while stack.len() != node_ls.len()
-    {
-        if Self::collect_noref(&node_ls,&mut stack).is_err()
-        {
-          println!("循環参照を検出");
-
-          return Err(());
-        }
-    }
-
-
-  Ok(stack)
-}
-
-
-fn
-make_kind_from_ty(&self, ty: &Ty)-> Result<SymbolKind,()>
-{
-  let  ctx = ExecContext::new_with_symbol_table(self);
-
-    if let Ok(sized) = ty.get_sized(&ctx)
-    {
-      return Ok(SymbolKind::Type(sized));
-    }
-
-
-  Err(())
-}
-
-
-
-
-fn
-make_const_var_from_object(&self, obj: &Object)-> Result<SymbolKind,()>
-{
-  let  ctx = ExecContext::new_with_symbol_table(self);
-
-  let  res = evaluate(obj.get_expr(),&ctx);
-
-    if let Ty::Undef = obj.get_ty()
-    {
-    }
-
-  else
-    if let Ok(sized) = obj.get_ty().get_sized(&ctx)
-    {
-    }
-
-
-  Err(())
-}
-
-
-fn
-make_perm_var_from_object(&self, obj: &Object)-> Result<SymbolKind,()>
-{
-  let  ctx = ExecContext::new_with_symbol_table(self);
-
-  let  res = evaluate(obj.get_expr(),&ctx);
-
-    if let Ty::Undef = obj.get_ty()
-    {
-        if let Ok(pv) = PermVar::try_from(res)
-        {
-          return Ok(SymbolKind::PermVar(pv));
-        }
-    }
-
-  else
-    if let Ok(sized) = obj.get_ty().get_sized(&ctx)
-    {
-        if let Ok(pv) = PermVar::try_from_eval_result_with_ty(res,&sized)
-        {
-          return Ok(SymbolKind::PermVar(pv));
-        }
-    }
-
-
-  Err(())
-}
-
-
-fn
-make_kind_from_function(&self, f: &Function)-> Result<SymbolKind,()>
-{
-  let  ctx = ExecContext::new_with_symbol_table(self);
-
-    if let Ok(sized_ty) = f.get_return_ty().get_sized(&ctx)
-    {
-      let  mut parameter_list = Vec::<SizedField>::new();
-
-      let  mut offset = 0usize;
-
-      let  ctx = ExecContext::new_with_symbol_table(self);
-
-        for p in f.get_parameter_list()
-        {
-            if let Ok(mut sized_field) = p.get_sized(&ctx)
-            {
-              offset = super::get_word_aligned(offset+sized_field.get_ty().get_info().get_size());
-
-              sized_field.set_offset(offset);
-
-              parameter_list.push(sized_field);
-            }
-
-          else
-            {
-              return Err(());
-            }
-        }
-
-
-      let  fd = FunctionDef{parameter_list, return_ty: sized_ty, opcode_list: Vec::new(), offset: 0};
-
-      return Ok(SymbolKind::Function(fd));
-    }
-
-
-  Err(())
 }
 
 
 pub fn
-complete(&mut self)-> Result<(),()>
+make_tplg_node_list(&self)-> Vec<TplgNode>
 {
-    if let Ok(ls) = self.get_topological_sorted_index_list()
+  let  mut buf = Vec::<TplgNode>::new();
+
+    for sym in &self.symbols
     {
-        for i in ls
+      let  nd = TplgNode::new(sym.key,sym.deps_child_list.clone(),sym.deps_parent_list.len());
+
+      buf.push(nd);
+    }
+
+
+  buf
+}
+
+
+pub fn
+build_value(&mut self, key: SymbolKey, alloc_off: &mut usize)-> Result<(),()>
+{
+  println!("building {}...",&self.get(key).name);
+
+    match &self.get(key).kind
+    {
+  SymbolKind::Const(e)=>
+    {
+      let  res = evaluate(e,self,None);
+
+      let  sym = self.get_mut(key);
+
+        match res
         {
-          let  res = match &self.core[i].decl_kind
-            {
-          DeclKind::Type(ty)   =>{self.make_kind_from_ty(ty)}
-          DeclKind::Static(o)  =>{self.make_perm_var_from_object(o)}
-          DeclKind::Const(o)   =>{self.make_const_var_from_object(o)}
-          DeclKind::Function(f)=>{self.make_kind_from_function(f)}
-          _=>{return Err(());}
-            };
-
-
-            if let Ok(symk) = res
-            {
-              self.core[i].kind = symk;
-            }
+      EvalResult::Void   =>{sym.ty = Ty::Void;}
+      EvalResult::Bool(b)=>
+        {
+          sym.value = SymbolValue::Bool(b);
+          sym.ty = Ty::Bool;
+          sym.size = WORD_SIZE;
+        }
+      EvalResult::Int(i)=>
+        {
+          sym.value = SymbolValue::Int(i);
+          sym.ty = Ty::Int;
+          sym.size = WORD_SIZE;
+        }
+      EvalResult::Float(f)=>
+        {
+          sym.value = SymbolValue::Float(f);
+          sym.ty = Ty::Float;
+          sym.size = WORD_SIZE;
+        }
+      _=>{println!("build const errorx");  res.print();  return Err(());}
         }
 
 
       return Ok(());
     }
+  SymbolKind::GlobalVar(e)=>
+    {
+      let  res = evaluate(e,self,None);
+
+      let  sym = self.get_mut(key);
+
+      sym.offset = *alloc_off;
+
+        match res
+        {
+      EvalResult::Void   =>{sym.ty = Ty::Void;}
+      EvalResult::Bool(b)=>
+        {
+          sym.value = SymbolValue::Bool(b);
+          sym.ty = Ty::Bool;
+          sym.size = WORD_SIZE;
+        }
+      EvalResult::Int(i)=>
+        {
+          sym.value = SymbolValue::Int(i);
+          sym.ty = Ty::Int;
+          sym.size = WORD_SIZE;
+        }
+      EvalResult::Float(f)=>
+        {
+          sym.value = SymbolValue::Float(f);
+          sym.ty = Ty::Float;
+          sym.size = WORD_SIZE;
+        }
+      _=>{return Err(());}
+        }
+
+
+      *alloc_off = get_word_aligned(*alloc_off+sym.size);
+
+      return Ok(());
+    }
+  SymbolKind::Fn{..}=>
+    {
+      let  sym = self.get_mut(key);
+
+      sym.offset = *alloc_off;
+
+      sym.size = WORD_SIZE;
+
+      *alloc_off = get_word_aligned(*alloc_off+sym.size);
+
+      return Ok(());
+    }
+  _=>{}
+    }
 
 
   Err(())
@@ -1014,59 +676,108 @@ complete(&mut self)-> Result<(),()>
 
 
 pub fn
-allocate_objects(&mut self, mut offset: usize)
+allocate_strings(&mut self)-> usize
 {
-    for i in &self.perm_index_list
+  let  mut pos = 0usize;
+
+    for (s,off) in &mut self.string_table
     {
-        if let SymbolKind::PermVar(pv) = &mut self.core[*i].kind
-        {
-          offset = super::get_word_aligned(offset);
-
-          pv.offset = offset;
-
-          offset += pv.ty.get_info().get_size();
-        }
+      *off = pos           ;
+             pos += s.len();
     }
+
+
+  pos
 }
 
 
 pub fn
-build_function_codes(&mut self)-> Result<(),()>
+allocate_global_vars(&mut self, mut pos: usize)-> usize
 {
-    for i in &self.function_index_list
+  let  nodes = self.make_tplg_node_list();
+
+    if let Ok(sorted_keys) = tplg_sort(nodes)
     {
-        if let DeclKind::Function(fdecl) = &self.core[*i].decl_kind
+      let  gval_start = pos;
+
+        for key in sorted_keys
         {
-          let  mut ctx = ExecContext::new_with_symbol_table(self);
-
-          match execute_block_as_const(fdecl.get_block(),&mut ctx)
-          {
-        ExecResult::Return(opt)=>
-          {
-              if let Some(eval_res) = opt
-              {
-                eval_res.print();
-println!();
-              }
-          }
-        _=>{}
-          }
-
-/*
-            if let Ok(ls) = fdecl.get_block().codify(self)
+            if self.build_value(key,&mut pos).is_err()
             {
-                if let SymbolKind::Function(fdef) = &mut self.core[*i].kind
-                {
-                  fdef.opcode_list = ls;
+              println!("build_symbol is failed");
 
-                  continue;
-                }
+              panic!();
             }
-*/
         }
 
 
-      return Err(());
+println!("global values are allocated on {} - {}",gval_start,pos);
+
+        for i in 0..self.symbols.len()
+        {
+            if self.build_fn(i).is_err()
+            {
+              println!("build_fn is failed");
+
+              panic!();
+            }
+        }
+
+
+      let  prog_start = pos;
+
+        for prog in &mut self.programs
+        {
+            if prog.build(pos).is_err()
+            {
+              println!("build_fn is failed");
+
+              panic!();
+            }
+
+
+          pos += prog.get_bytes().len();
+        }
+
+
+println!("progs are allocated on {} - {}",prog_start,pos);
+    }
+
+  else
+    {
+      panic!();
+    }
+
+
+  pos
+}
+
+
+pub fn
+build_fn(&mut self, i: usize)-> Result<(),()>
+{
+  let  sym = &self.symbols[i];
+
+    if let SymbolKind::Fn{parameter_name_list, block} = &sym.kind
+    {
+        if let Ty::Function{parameter_ty_list, return_ty} = &sym.ty
+        {
+          let  ret_ty_s = return_ty.get_canonical_name();
+
+          let  mut lid = LabelID::new();
+
+          let  scp = Scope::new_root(parameter_name_list,parameter_ty_list);
+
+          let  mut output = AsmTable::new();
+
+          block.process(self,&ret_ty_s,&mut lid,None,&scp,&mut output);
+
+          let  index = self.programs.len();
+
+          self.symbols[i].value = SymbolValue::ProgramIndex(index);
+
+          self.programs.push(Program::new(index,scp.get_offset_max(),output));
+        }
     }
 
 
@@ -1075,94 +786,201 @@ println!();
 
 
 pub fn
-get(&self, i: usize)-> &Symbol
+build(&mut self)-> Result<ExecImage,()>
 {
-  &self.core[i]
-}
+  self.process_embedded();
 
+  let  first_pos = self.allocate_strings();
+  let   last_pos = self.allocate_global_vars(first_pos);
 
-pub fn
-find(&self, name: &str)-> Option<&Symbol>
-{
-    for sym in &self.core
+  let  mut img = ExecImage::new();
+
+  img.bytes.resize(last_pos,0);
+
+    for sym in &self.symbols
     {
-        if &sym.name == name
+        match &sym.value
         {
-          return Some(sym);
+      SymbolValue::Bool(b)=>
+        {
+          img.write_u64(sym.offset,if *b{1} else{0});
+        }
+      SymbolValue::Int(i)=>
+        {
+          img.write_u64(sym.offset,*i as u64);
+        }
+      SymbolValue::Float(f)=>
+        {
+          img.write_u64(sym.offset,f.to_bits());
+        }
+      SymbolValue::ProgramIndex(i)=>
+        {
+          let  prog = self.get_program(*i);
+
+          img.write_u64(sym.offset,prog.get_offset() as u64);
+
+          img.entry_point = prog.get_offset();
+
+          println!("entry_point: {}",img.entry_point);
+        }
+      _=>{}
         }
     }
 
 
-  None
-}
-
-
-pub fn
-find_mut(&mut self, name: &str)-> Option<&mut Symbol>
-{
-    for sym in &mut self.core
+    for prog in &self.programs
     {
-        if &sym.name == name
+        for i in 0..prog.get_bytes().len()
         {
-          return Some(sym);
+          img.bytes[prog.get_offset()+i] = prog.get_bytes()[i];
         }
     }
 
 
-  None
+  Ok(img)
+}
+
+
+pub fn
+get(&self, key: SymbolKey)-> &Symbol
+{
+  &self.symbols[key.0]
+}
+
+
+pub fn
+get_program(&self, i: usize)-> &Program
+{
+  &self.programs[i]
+}
+
+
+pub fn
+get_mut(&mut self, key: SymbolKey)-> &mut Symbol
+{
+  &mut self.symbols[key.0]
 }
 
 
 pub fn
 print(&self)
 {
-  println!("const objects{{");
+  println!("string literals{{");
 
-    for i in &self.const_index_list
+    for (s,off) in &self.string_table
     {
-      self.core[*i].print();
-
-      println!("\n");
+      println!("{} {}",s,off);
     }
 
 
-  println!("}}\n\nstatic objects{{");
+  println!("}}\nglobal symbols{{");
 
-    for i in &self.perm_index_list
+    for sym in &self.symbols
     {
-      self.core[*i].print();
+      sym.print(&self.programs);
 
-      println!("\n");
-    }
-
-
-  println!("}}\n\nfunction objects{{");
-
-    for i in &self.function_index_list
-    {
-      self.core[*i].print();
-
-      println!("\n");
+      println!("");
     }
 
 
   println!("}}");
 }
 
+
 }
 
 
-impl<'a>
-std::convert::From<Decl> for SymbolTable
+
+
+pub struct
+ExecImage
+{
+  bytes: Vec<u8>,
+
+  entry_point: usize,
+
+}
+
+
+impl
+ExecImage
+{
+
+
+pub fn
+new()-> Self
+{
+  Self{
+    bytes: Vec::new(),
+    entry_point: 0,
+  }
+}
+
+
+pub fn
+get_bytes(&self)-> &Vec<u8>
+{
+  &self.bytes
+}
+
+
+pub fn
+get_entry_point(&self)-> usize
+{
+  self.entry_point
+}
+
+
+pub fn
+write_u64(&mut self, offset: usize, v: u64)
+{
+  let  src_bytes = v.to_ne_bytes();
+
+  let  mut ptr = unsafe{self.bytes.as_mut_ptr().add(offset)};
+
+    for b in src_bytes
+    {
+      unsafe{*ptr = b};
+
+      ptr = unsafe{ptr.add(1)};
+    }
+}
+
+
+pub fn
+write_str(&mut self, offset: usize, s: &str)
+{
+  let  mut ptr = unsafe{self.bytes.as_mut_ptr().add(offset)};
+
+    for b in s.as_bytes()
+    {
+      unsafe{*ptr = *b};
+
+      ptr = unsafe{ptr.add(1)};
+    }
+}
+
+
+}
+
+
+
+
+impl
+std::convert::From<Vec<Decl>> for SymbolTable
 {
 
 
 fn
-from(decl: Decl)-> SymbolTable
+from(ls: Vec<Decl>)-> SymbolTable
 {
   let  mut tbl = SymbolTable::new();
 
-  let  _ = tbl.add("",decl);
+    for decl in ls
+    {
+      tbl.add(decl);
+    }
+
 
   tbl
 }

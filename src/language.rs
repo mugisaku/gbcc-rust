@@ -1,6 +1,7 @@
 
 
-pub mod opcode;
+pub mod machine;
+pub mod asm;
 pub mod expr;
 pub mod stmt;
 pub mod ty;
@@ -8,8 +9,12 @@ pub mod evaluate;
 pub mod evaluate_unary;
 pub mod evaluate_binary;
 pub mod decl;
+pub mod program;
+pub mod scope;
 pub mod symbol_table;
+pub mod tplg_sort;
 pub mod execute;
+//pub mod codify;
 pub mod dictionary;
 
 

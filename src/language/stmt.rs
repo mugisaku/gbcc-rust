@@ -4,8 +4,138 @@ use crate::node::*;
 use super::expr::*;
 use super::decl::*;
 use super::ty::*;
+use super::evaluate::*;
+use super::asm::*;
+use super::scope::*;
+use super::symbol_table::*;
 
 
+
+
+pub struct
+LabelID
+{
+  value: usize,
+}
+
+
+impl
+LabelID
+{
+
+
+pub fn
+new()-> Self
+{
+  Self{value: 0}
+}
+
+
+pub fn
+make_br_label_holder(&mut self)-> BrLabelHolder
+{
+  let  blh = BrLabelHolder::new(self.value);
+
+  self.value += 1;
+
+  blh
+}
+
+
+pub fn
+make_ctrl_label_holder(&mut self)-> CtrlLabelHolder
+{
+  let  clh = CtrlLabelHolder::new(self.value);
+
+  self.value += 1;
+
+  clh
+}
+
+
+}
+
+
+
+
+pub struct
+BrLabelHolder
+{
+  base: String,
+  number: usize,
+  label: String,
+
+}
+
+
+impl
+BrLabelHolder
+{
+
+
+pub fn
+new(id: usize)-> Self
+{
+  let   base = format!("L{}_",id);
+  let  label = format!("L{}_1",&base);
+
+  Self{base, number: 1, label}
+}
+
+
+pub fn
+get_label(&self)-> &String
+{
+  &self.label
+}
+
+
+pub fn
+make_end_label(&self)-> String
+{
+  format!("{}_END",&self.base)
+}
+
+
+pub fn
+increment(&mut self)
+{
+  self.number += 1;
+
+  self.label = format!("{}{}",&self.base,self.number);
+}
+
+
+}
+
+
+
+
+pub struct
+CtrlLabelHolder
+{
+     on_break: String,
+  on_continue: String,
+
+}
+
+
+impl
+CtrlLabelHolder
+{
+
+
+pub fn
+new(id: usize)-> Self
+{
+  Self{
+       on_break: format!("L{}_END",id),
+    on_continue: format!("L{}_RESTART",id),
+  }
+}
+
+
+}
 
 
 pub struct
@@ -72,6 +202,72 @@ pub fn  get_condition(&self)-> &Expr{&self.condition}
 pub fn  get_block(&self)-> &Block{&self.block}
 pub fn  get_elif_stmt_list(&self)-> &Vec<ElifStmt>{&self.elif_stmt_list}
 pub fn  get_else_block(&self)-> &Option<Block>{&self.else_block_opt}
+
+pub fn
+process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
+{
+  let  mut blh = lid.make_br_label_holder();
+
+  let  end_label = blh.make_end_label();
+
+  let  res = evaluate(&self.condition,tbl,Some(scp));
+
+    if let Ok(mut vp) = ValueProcess::try_from(res)
+    {
+        if vp.get_ty().is_bool()
+        {
+          output.push_table(vp.get_table_mut());
+          output.push_brz(blh.get_label());
+
+          self.block.process(tbl,ret_ty_str,lid,clh_opt,scp,output);
+
+          output.push_jmp(&end_label);
+        }
+
+      else{panic!();}
+    }
+
+  else{panic!();}
+
+
+    for elif in &self.elif_stmt_list
+    {
+      let  elif_res = evaluate(&elif.condition,tbl,Some(scp));
+
+      output.push_label(blh.get_label());
+
+      blh.increment();
+
+        if let Ok(mut vp) = ValueProcess::try_from(elif_res)
+        {
+            if vp.get_ty().is_bool()
+            {
+              output.push_table(vp.get_table_mut());
+              output.push_brz(blh.get_label());
+
+              elif.block.process(tbl,ret_ty_str,lid,clh_opt,scp,output);
+
+              output.push_jmp(&end_label);
+            }
+
+          else{panic!();}
+        }
+
+      else{panic!();}
+    }
+
+
+    if let Some(blk) = &self.else_block_opt
+    {
+      output.push_label(blh.get_label());
+
+      blk.process(tbl,ret_ty_str,lid,clh_opt,scp,output);
+    }
+
+
+  output.push_label(&end_label);
+}
+
 
 pub fn
 is_executable_as_const(&self)-> bool
@@ -157,6 +353,69 @@ pub fn  get_block(&self)-> &Block{&self.block}
 
 
 pub fn
+process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
+{
+  let  clh = lid.make_ctrl_label_holder();
+
+  let  mut new_scp = Scope::new(scp);
+
+
+  let  mut target_off = 0usize;
+
+  let  target_res = evaluate(&self.expr,tbl,Some(scp));
+
+    if let Ok(mut vp) = ValueProcess::try_from(target_res)
+    {
+        if vp.get_ty().is_int()
+        {
+          target_off = new_scp.add_var("<FOR_TARGET>",Ty::Int);
+
+          output.push_li_local_addr(target_off);
+          output.push_table(vp.get_table_mut());
+          output.push_opcode(Opcode::St64);
+        }
+
+      else{panic!();}
+    }
+
+  else{panic!();}
+
+
+
+  let  var_off = new_scp.add_var(&self.var_name,Ty::Int);
+
+  output.push_li_local_addr(var_off);
+  output.push_opcode(Opcode::Push0);
+  output.push_opcode(Opcode::St64);
+
+
+  output.push_label(&clh.on_continue);
+
+
+  output.push_li_local_addr(var_off);
+  output.push_opcode(Opcode::Dup);
+  output.push_opcode(Opcode::Ld64);
+  output.push_opcode(Opcode::Push1);
+  output.push_opcode(Opcode::Addi);
+  output.push_opcode(Opcode::St64);
+
+
+  output.push_li_local_addr(var_off);
+  output.push_opcode(Opcode::Ld64);
+  output.push_li_local_addr(target_off);
+  output.push_opcode(Opcode::Ld64);
+  output.push_opcode(Opcode::Lti);
+  output.push_brz(&clh.on_break);
+
+  self.block.process(tbl,ret_ty_str,lid,Some(&clh),&new_scp,output);
+
+  output.push_jmp(&clh.on_continue);
+
+  output.push_label(&clh.on_break);
+}
+
+
+pub fn
 is_executable_as_const(&self)-> bool
 {
   self.block.is_executable_as_const()
@@ -209,6 +468,34 @@ get_stmt_list(&self)-> &Vec<Stmt>
 
 
 pub fn
+terminate(&mut self)
+{
+    if let Some(last) = self.stmt_list.last()
+    {
+        if let Stmt::Return(_) = last
+        {
+          return;
+        }
+    }
+
+
+  self.stmt_list.push(Stmt::Return(None));
+}
+
+
+pub fn
+process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
+{
+  let  mut new_scp = Scope::new(scp);
+
+    for stmt in &self.stmt_list
+    {
+      stmt.process(tbl,ret_ty_str,lid,clh_opt,&mut new_scp,output);
+    }
+}
+
+
+pub fn
 is_executable_as_const(&self)-> bool
 {
     for stmt in &self.stmt_list
@@ -254,7 +541,7 @@ Stmt
   Block(Block),
 
   Expr(Expr),
-  Decl(Decl),
+  Decl(Decl,Option<usize>),
   Assign(Expr,Expr,String),
   If(IfStmt),
   Loop(Block),
@@ -289,6 +576,204 @@ read(s: &str)-> Result<Self,()>
 
 
   Err(())
+}
+
+
+pub fn
+process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmTable)
+{
+    match self
+    {
+  Self::Empty=>{}
+  Self::Block(blk)=>{blk.process(tbl,ret_ty_str,lid,clh_opt,scp,output);}
+  Self::Decl(decl,n_opt)=>
+    {
+        match decl.get_kind()
+        {
+      DeclKind::Const(e)=>
+        {
+          let  res = evaluate(e,tbl,Some(scp));
+
+            match res
+            {
+          EvalResult::Void    =>{}
+          EvalResult::Bool(b) =>{scp.add_const_bool( decl.get_name(),b);}
+          EvalResult::Int(i)  =>{scp.add_const_int(  decl.get_name(),i);}
+          EvalResult::Float(f)=>{scp.add_const_float(decl.get_name(),f);}
+          _=>{panic!();}
+            }
+        }
+      DeclKind::Var(e)=>
+        {
+          let  res = evaluate(e,tbl,Some(scp));
+
+            if let Ok(mut vp) = ValueProcess::try_from(res)
+            {
+              let  off = scp.add_var(decl.get_name(),vp.get_ty().clone());
+
+              output.push_li_local_addr(off);
+              output.push_table(vp.get_table_mut());
+              output.push_opcode(Opcode::St64);
+            }
+
+          else{panic!();}
+        }
+      DeclKind::Static(_)=>{}
+      _=>{panic!();}
+        }
+    }
+  Self::Expr(e)=>
+    {
+      let  res = evaluate(e,tbl,Some(scp));
+
+        match res
+        {
+      EvalResult::Value(mut vp)=>
+        {
+          output.push_table(vp.get_table_mut());
+          output.push_opcode(Opcode::Pop);
+        }
+      EvalResult::Deref(mut ls,mc)=>
+        {
+          output.push_table(&mut ls);
+          output.push_opcode(Opcode::Pop);
+        }
+      _=>{}
+        }
+    }
+  Self::If(i)=>{i.process(tbl,ret_ty_str,lid,clh_opt,scp,output);}
+  Self::Loop(blk)=>
+    {
+      let  clh = lid.make_ctrl_label_holder();
+
+      output.push_label(&clh.on_continue);
+
+      blk.process(tbl,ret_ty_str,lid,Some(&clh),scp,output);
+
+      output.push_jmp(&clh.on_continue);
+
+      output.push_label(&clh.on_break);
+    }
+  Self::While(e,blk)=>
+    {
+      let  clh = lid.make_ctrl_label_holder();
+
+      output.push_label(&clh.on_continue);
+
+      let  res = evaluate(e,tbl,Some(scp));
+
+        if let Ok(mut vp) = ValueProcess::try_from(res)
+        {
+            if vp.get_ty().is_bool()
+            {
+              output.push_table(vp.get_table_mut());
+
+              output.push_brz(&clh.on_break);
+
+              blk.process(tbl,ret_ty_str,lid,Some(&clh),scp,output);
+
+              output.push_jmp(&clh.on_continue);
+
+              output.push_label(&clh.on_break);
+            }
+
+          else{panic!();}
+        }
+
+      else{panic!();}
+    }
+  Self::For(f)=>{f.process(tbl,ret_ty_str,lid,clh_opt,scp,output);}
+  Self::Return(e_opt)=>
+    {
+        if let Some(e) = e_opt
+        {
+          let  res = evaluate(e,tbl,Some(scp));
+
+            if let Ok(mut vp) = ValueProcess::try_from(res)
+            {
+              let  s = vp.get_ty().get_canonical_name();
+
+                if &s == ret_ty_str
+                {
+                  output.push_table(vp.get_table_mut());
+                }
+
+              else{panic!("TYPE OF RETURN VALUE and TYPE OF EVALUATED VALUW are mismatched");}
+            }
+
+          else{panic!();}
+        }
+
+      else
+        {
+            if ret_ty_str == VOID_STR
+            {
+              output.push_opcode(Opcode::Push0);
+            }
+
+          else{panic!();}
+        }
+
+
+      output.push_opcode(Opcode::Ret);
+    }
+  Self::Assign(l,r,op)=>
+    {
+      let  l_res = evaluate(l,tbl,Some(scp));
+      let  r_res = evaluate(r,tbl,Some(scp));
+
+        if let EvalResult::Deref(mut l_stack,_) = l_res
+        {
+          output.push_table(&mut l_stack);
+          output.push_opcode(Opcode::Dup);
+          output.push_opcode(Opcode::Ld64);
+
+            if let Ok(mut r_vp) = ValueProcess::try_from(r_res)
+            {
+              output.push_table(r_vp.get_table_mut());
+
+                   if op ==  "+="{output.push_opcode(Opcode::Addi);}
+              else if op ==  "-="{output.push_opcode(Opcode::Subi);}
+              else if op ==  "*="{output.push_opcode(Opcode::Muli);}
+              else if op ==  "/="{output.push_opcode(Opcode::Divi);}
+              else if op ==  "%="{output.push_opcode(Opcode::Remi);}
+              else if op == "<<="{output.push_opcode(Opcode::Shl );}
+              else if op == ">>="{output.push_opcode(Opcode::Shr );}
+              else if op ==  "&="{output.push_opcode(Opcode::And );}
+              else if op ==  "|="{output.push_opcode(Opcode::Or  );}
+              else if op ==  "^="{output.push_opcode(Opcode::Xor );}
+              else if op ==   "="{                                 }
+              else{panic!()}
+
+
+              output.push_opcode(Opcode::St64);
+            }
+        }
+
+      else{panic!();}
+    }
+  Self::Break=>
+    {
+      output.push_jmp(&clh_opt.unwrap().on_break);
+    }
+  Self::Continue=>
+    {
+      output.push_jmp(&clh_opt.unwrap().on_continue);
+    }
+  Self::Print(e)=>
+    {
+      let  res = evaluate(e,tbl,Some(scp));
+
+        if let Ok(mut vp) = ValueProcess::try_from(res)
+        {
+          output.push_table(vp.get_table_mut());
+
+          output.push_opcode(Opcode::Pri);
+        }
+
+      else{panic!();}
+    }
+    }
 }
 
 
@@ -328,7 +813,7 @@ print(&self)
   Self::Block(blk)=>{blk.print();}
 
   Self::Expr(e)=>{e.print();}
-  Self::Decl(decl)=>{decl.print();}
+  Self::Decl(decl,_)=>{decl.print();}
   Self::Assign(l,r,op)=>
     {
       l.print();
@@ -526,7 +1011,7 @@ read_if_stmt(start_nd: &Node)-> IfStmt
 
             if let Some(el_d) = cur.select_node("else")
             {
-              else_block_opt = Some(read_block(el_d));
+              else_block_opt = Some(read_else(el_d));
             }
 
 
@@ -626,7 +1111,17 @@ read_block(start_nd: &Node)-> Block
 
     while let Some(d) = cur.select_node("statement")
     {
-      blk.stmt_list.push(read_stmt(d));
+      let  stmt = read_stmt(d);
+
+        if let Stmt::Empty = stmt
+        {
+        }
+
+      else
+        {
+          blk.stmt_list.push(stmt);
+        }
+
 
       cur.advance(1);
     }
@@ -704,7 +1199,7 @@ read_stmt(start_nd: &Node)-> Stmt
       else
         if d_name == "declaration"
         {
-          return Stmt::Decl(read_decl(d));
+          return Stmt::Decl(read_decl(d),None);
         }
 
       else

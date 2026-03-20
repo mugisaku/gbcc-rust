@@ -3,7 +3,6 @@ mod source_file;
 mod syntax;
 mod language;
 mod node;
-mod asm;
 mod debug;
 
 use std::env;
@@ -48,117 +47,53 @@ main()
   use crate::language::*;
   use crate::language::decl::*;
   use crate::language::symbol_table::*;
+  use crate::language::machine::*;
 
     if let Ok(root) = decl::Decl::read_as_root(
 r#"
-function test()-> i32
-{
-for x in 3
-{
-print x;
-}
 
-  return true;
+const  a = 8;
+const  b = a+4;
+const  c = b+8;
+
+
+
+fn
+test()
+{
+  for x in 8
+  {
+    print x;
+  }
 }
 "#)
 {
   let  mut tbl = SymbolTable::from(root);
 
-    if tbl.complete().is_ok()
+    if let Ok(img) = tbl.build()
     {
-      tbl.allocate_objects(0);
-
       tbl.print();
 
-        if tbl.build_function_codes().is_ok()
-        {
-          println!("\nok");
-        }
+      let  mut m = Machine::new();
+
+      println!("machine is reset");
+
+      m.reset(&img);
+
+      println!("machine runs");
+
+      m.run();
+
+      println!("machine is finished");
     }
-}
 
-/*
-  let  mut src = Vec::<asm::instruction::Instruction>::new();
-  let  mut m = asm::machine::Machine::new();
-
-  use asm::instruction::*;
-
-    if let Ok(ximg) = crate::asm::execution_image::ExecutionImage::try_from(
-r#"
-
-data s "";
-data x 4 9 7 4 5;
-space z 255;
-
-
-routine
-start a b c | tmp cnt
-{
-  pushglo x;
-  dup;
-  dup;
-  ldu8;
-  pri;
-  pop;
-  push1;
-  addu;
-  ldu8;
-  pri;
-  pop;
-  push2;
-  addu;
-  ldi8;
-  pri;
-  pop;
-  hlt;
-loop:
-  pushglo z;
-  ld64;
-  push 3;
-  ltu;
-  brz;
-  pushdst end;
-  pushglo z;
-  pushglo add;
-  prcal;
-  pushglo z;
-  ld64;
-  push1;
-  cal;
-  st64;
-  jmp;
-  pushdst loop;
-end:
-  pushglo z;
-  ld64;
-  hlt;
-}
-
-
-routine
-add a b |
-{
-  pusharg a;
-  ld64;
-  pusharg b;
-  ld64;
-  addu;
-  ret;
-}
-
-"#)
+  else
     {
-//      print_binary(&ximg);
-
-      m.reset();
-      m.install(&ximg);
-
-      m.run(Some(8));
+      println!("build is failed");
     }
+}
 
 
-//  open_and_print_tokens();
-*/
 }
 
 
