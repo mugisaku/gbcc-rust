@@ -56,15 +56,17 @@ const  a = 8;
 const  b = a+4;
 const  c = b+8;
 
+fn
+add(a: int, b: int)-> int
+{
+  return a+b;
+}
 
 
 fn
-test()
+main()-> int
 {
-  var  a = 26;
-  var  b = 88;
-
-  print b+c;
+  return add(3,add(7,40));
 }
 "#)
 {

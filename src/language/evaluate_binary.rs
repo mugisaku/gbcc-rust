@@ -285,7 +285,7 @@ evaluate_bool_and(lb: bool, r: EvalResult, op: &str)-> EvalResult
     {
       evaluate_bool_and_value(lb,rv,op)
     }
-  EvalResult::Deref(_,_)=>
+  EvalResult::Deref(_)=>
     {
       let  rv = ValueProcess::try_from(r).unwrap();
 
@@ -323,7 +323,7 @@ evaluate_int_and(li: i64, r: EvalResult, op: &str)-> EvalResult
     {
       evaluate_int_and_value(li,rv,op)
     }
-  EvalResult::Deref(_,_)=>
+  EvalResult::Deref(_)=>
     {
       let  rv = ValueProcess::try_from(r).unwrap();
 
@@ -361,7 +361,7 @@ evaluate_float_and(lf: f64, r: EvalResult, op: &str)-> EvalResult
     {
       evaluate_float_and_value(lf,rv,op)
     }
-  EvalResult::Deref(_,_)=>
+  EvalResult::Deref(_)=>
     {
       let  rv = ValueProcess::try_from(r).unwrap();
 
@@ -389,7 +389,7 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
         if let Ok(rv) = ValueProcess::try_from(r){evaluate_value(lv,rv,op)}
       else{EvalResult::Err}
     }
-  EvalResult::Deref(_,_)=>
+  EvalResult::Deref(_)=>
     {
       let  lv = ValueProcess::try_from(l).unwrap();
 

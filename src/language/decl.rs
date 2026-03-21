@@ -302,8 +302,6 @@ read_parameter_decl(start_nd: &Node)-> ParameterDecl
 {
   let  mut cur = start_nd.cursor();
 
-  cur.advance(1);
-
     if let Some(id_s) = cur.get_identifier()
     {
       let  name = id_s.clone();

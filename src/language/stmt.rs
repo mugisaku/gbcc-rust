@@ -617,9 +617,9 @@ process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: 
           output.push_table(vp.get_table_mut());
           output.push_opcode(Opcode::Pop);
         }
-      EvalResult::Deref(mut ls,mc)=>
+      EvalResult::Deref(mut vp)=>
         {
-          output.push_table(&mut ls);
+          output.push_table(vp.get_table_mut());
           output.push_opcode(Opcode::Pop);
         }
       _=>{}
@@ -706,9 +706,9 @@ process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: 
       let  l_res = evaluate(l,tbl,Some(scp));
       let  r_res = evaluate(r,tbl,Some(scp));
 
-        if let EvalResult::Deref(mut l_stack,_) = l_res
+        if let EvalResult::Deref(mut l_vp) = l_res
         {
-          output.push_table(&mut l_stack);
+          output.push_table(l_vp.get_table_mut());
           output.push_opcode(Opcode::Dup);
           output.push_opcode(Opcode::Ld64);
 

@@ -588,8 +588,8 @@ push_li_fn_addr(&mut self, off: usize)
 pub fn
 push_li_local_addr(&mut self, off: usize)
 {
-  self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(off as i64)));
   self.push_line(AsmLine::new(Opcode::Lfp,Postfix::None));
+  self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(off as i64)));
   self.push_line(AsmLine::new(Opcode::Addi,Postfix::None));
 }
 
@@ -597,8 +597,8 @@ push_li_local_addr(&mut self, off: usize)
 pub fn
 push_li_parameter_addr(&mut self, off: usize)
 {
-  self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(off as i64)));
   self.push_line(AsmLine::new(Opcode::Lfp,Postfix::None));
+  self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(off as i64)));
   self.push_line(AsmLine::new(Opcode::Subi,Postfix::None));
 }
 

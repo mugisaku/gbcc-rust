@@ -95,7 +95,7 @@ evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)->
     match res
     {
   EvalResult::Value(v)          =>{               evaluate_value(v,op)}
-  EvalResult::Deref(_,_)=>{if let Ok(v) = ValueProcess::try_from(res){evaluate_value(v,op)} else{EvalResult::Err}}
+  EvalResult::Deref(_)=>{if let Ok(v) = ValueProcess::try_from(res){evaluate_value(v,op)} else{EvalResult::Err}}
   EvalResult::Bool(b) =>{evaluate_bool( b,op)}
   EvalResult::Int(i)  =>{evaluate_int(  i,op)}
   EvalResult::Float(f)=>{evaluate_float(f,op)}

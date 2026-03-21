@@ -191,17 +191,13 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
 {
   let  mut cur = start_nd.cursor();
 
-    if let Some(nd) = cur.select_node("postfix_op")
-    {
-      let  name = nd.get_name();
+  let  nd = cur.get_node().unwrap();
+  let  name = nd.get_name();
 
-           if name == "access"   {return read_access_op(nd,o);}
-      else if name == "subscript"{return read_subscript_op(nd,o);}
-      else if name == "call"     {return read_call_op(nd,o);}
-    }
-
-
-  panic!();
+       if name == "access"   {return read_access_op(nd,o);}
+  else if name == "subscript"{return read_subscript_op(nd,o);}
+  else if name == "call"     {return read_call_op(nd,o);}
+  else{panic!();}
 }
 
 

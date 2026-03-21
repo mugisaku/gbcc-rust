@@ -83,10 +83,11 @@ impl TryFrom<EvalResult> for ValueProcess{  type Error = ();  fn try_from(res: E
     match res
     {
   EvalResult::Value(vp)=>{Ok(vp)}
-  EvalResult::Deref(mut ls,ma)=>
+  EvalResult::Deref(mut vp)=>
     {
-        match ma
+        match &vp.ty
         {
+/*
       MemAcc::I8=>
         {
           ls.push_opcode(Opcode::Ld8);
@@ -108,12 +109,6 @@ impl TryFrom<EvalResult> for ValueProcess{  type Error = ();  fn try_from(res: E
 
           Ok(ValueProcess::new(ls,Ty::Int))
         }
-      MemAcc::I64=>
-        {
-          ls.push_opcode(Opcode::Ld64);
-
-          Ok(ValueProcess::new(ls,Ty::Int))
-        }
       MemAcc::F32=>
         {
           ls.push_opcode(Opcode::Ld32);
@@ -121,11 +116,24 @@ impl TryFrom<EvalResult> for ValueProcess{  type Error = ();  fn try_from(res: E
 
           Ok(ValueProcess::new(ls,Ty::Float))
         }
-      MemAcc::F64=>
+*/
+      Ty::Int=>
         {
-          ls.push_opcode(Opcode::Ld64);
+          vp.table.push_opcode(Opcode::Ld64);
 
-          Ok(ValueProcess::new(ls,Ty::Float))
+          Ok(vp)
+        }
+      Ty::Float=>
+        {
+          vp.table.push_opcode(Opcode::Ld64);
+
+          Ok(vp)
+        }
+      Ty::Function{..}=>
+        {
+          vp.table.push_opcode(Opcode::Ld64);
+
+          Ok(vp)
         }
       _=>{Err(())}
         }
@@ -156,20 +164,10 @@ impl TryFrom<EvalResult> for ValueProcess{  type Error = ();  fn try_from(res: E
 
 #[derive(Clone)]
 pub enum
-MemAcc
-{
-  I8, I16, I32, I64,
-  F32, F64,
-
-}
-
-
-#[derive(Clone)]
-pub enum
 EvalResult
 {
   Value(ValueProcess),
-  Deref(AsmTable,MemAcc),
+  Deref(ValueProcess),
 
   Type(Ty),
 
@@ -212,7 +210,7 @@ from_global_addr_and_ty(off: usize, ty: &Ty)-> Self
 
   table.push_li_global_addr(off);
 
-  Self::Deref(table,MemAcc::I64)
+  Self::Deref(ValueProcess{table, ty: ty.clone()})
 }
 
 
@@ -223,7 +221,7 @@ from_fn_addr_and_ty(off: usize, ty: &Ty)-> Self
 
   table.push_li_global_addr(off);
 
-  Self::Deref(table,MemAcc::I64)
+  Self::Deref(ValueProcess{table, ty: ty.clone()})
 }
 
 
@@ -234,7 +232,7 @@ from_local_addr_and_ty(off: usize, ty: &Ty)-> Self
 
   table.push_li_local_addr(off);
 
-  Self::Deref(table,MemAcc::I64)
+  Self::Deref(ValueProcess{table, ty: ty.clone()})
 }
 
 
@@ -245,7 +243,7 @@ from_parameter_addr_and_ty(off: usize, ty: &Ty)-> Self
 
   table.push_li_parameter_addr(off);
 
-  Self::Deref(table,MemAcc::I64)
+  Self::Deref(ValueProcess{table, ty: ty.clone()})
 }
 
 
@@ -268,8 +266,8 @@ print(&self)
 {
     match self
     {
-  Self::Value(_)     =>{print!("value");}
-  Self::Deref(_,_)=>{print!("deref");}
+  Self::Value(_)=>{print!("value");}
+  Self::Deref(_)=>{print!("deref");}
 
   Self::Type(ty)=>{ty.print();}
 
@@ -383,6 +381,7 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
             }
           SymbolKind::Fn{..}=>
             {
+println!("{}",s);
               EvalResult::from_fn_addr_and_ty(sym.get_offset(),sym.get_ty())
             }
           _=>{EvalResult::Err}
@@ -414,7 +413,39 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
     }
   Expr::CallOp(f,args)=>
     {
-      evaluate(f,tbl,scp_opt)
+      let  res = evaluate(f,tbl,scp_opt);
+
+        if let Ok(mut vp) = ValueProcess::try_from(res)
+        {
+            if let Ty::Function{parameter_ty_list, return_ty} = &vp.ty
+            {
+              vp.table.push_opcode(Opcode::Prcal);
+
+                for a in args
+                {
+                  let  a_res = evaluate(a,tbl,scp_opt);
+
+                    if let Ok(mut a_vp) = ValueProcess::try_from(a_res)
+                    {
+                      vp.table.push_table(&mut a_vp.table);
+                    }
+
+                  else{panic!();}
+                }
+
+
+              vp.table.push_opcode(Opcode::Cal);
+
+              vp.ty = *return_ty.clone();
+
+              return EvalResult::Value(vp);
+            }
+
+          else{panic!();}          
+        }
+
+
+      panic!();
     }
   Expr::Expr(e)=>
     {

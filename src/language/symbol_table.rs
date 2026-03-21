@@ -817,9 +817,12 @@ build(&mut self)-> Result<ExecImage,()>
 
           img.write_u64(sym.offset,prog.get_offset() as u64);
 
-          img.entry_point = prog.get_offset();
+            if &sym.name == "main"
+            {
+              img.entry_point = prog.get_offset();
 
-          println!("entry_point: {}",img.entry_point);
+              println!("entry_point: {}",img.entry_point);
+            }
         }
       _=>{}
         }
