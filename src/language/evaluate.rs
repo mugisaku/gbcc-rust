@@ -340,29 +340,16 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
     }
   Expr::Identifier(s)=>
     {
-        if s == "void"
-        {
-          EvalResult::Void
-        }
+           if s ==  "void"{return EvalResult::Void;}
+      else if s == "false"{return EvalResult::Bool(false);}
+      else if s ==  "true"{return EvalResult::Bool(true);}
 
-      else
-        if s == "false"
-        {
-          EvalResult::Bool(false)
-        }
 
-      else
-        if s == "true"
-        {
-          EvalResult::Bool(true)
-        }
-
-      else
         if let Some(scp) = scp_opt
         {
             if let Some(lsym) = scp.find(s)
             {
-                match lsym.get_kind()
+              return match lsym.get_kind()
                 {
               LocalSymbolKind::Const=>
                 {
@@ -377,16 +364,14 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
                   EvalResult::from_parameter_addr_and_ty(lsym.get_offset(),lsym.get_ty())
                 }
               _=>{EvalResult::Err}
-                }
+                };
             }
-
-          else{EvalResult::Err}
         }
 
-      else
+
         if let Some(sym) = tbl.find_symbol(s)
         {
-            match sym.get_kind()
+          return match sym.get_kind()
             {
           SymbolKind::Const(_)=>
             {
@@ -401,13 +386,11 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
               EvalResult::from_fn_addr_and_ty(sym.get_offset(),sym.get_ty())
             }
           _=>{EvalResult::Err}
-            }
+            };
         }
 
-      else
-        {
-          EvalResult::Err
-        }
+
+      EvalResult::Err
     }
   Expr::Int(u)=>
     {

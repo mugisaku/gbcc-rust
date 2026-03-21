@@ -344,6 +344,17 @@ build(&mut self, offset: usize)-> Result<(),()>
     }
 
 
+    if let Some(last) = self.bytes.last()
+    {
+      let  ret_code = Opcode::Ret as u8;
+
+        if *last != ret_code
+        {
+          self.bytes.push(ret_code);
+        }
+    }
+
+
   self.offset = offset;
 
   Ok(())

@@ -61,10 +61,10 @@ const  c = b+8;
 fn
 test()
 {
-  for x in 8
-  {
-    print x;
-  }
+  var  a = 26;
+  var  b = 88;
+
+  print b+c;
 }
 "#)
 {

@@ -392,8 +392,6 @@ add_fn(&mut self, name: &str, fd: FnDecl)-> Result<SymbolKey,()>
 {
   let  (parameter_name_list,ty,mut block) = fd.decompose();
 
-  block.terminate();
-
   let  new_key = SymbolKey(self.symbols.len());
 
   let  sym = Symbol::new_fn(new_key,name.to_string(),parameter_name_list,ty,block);

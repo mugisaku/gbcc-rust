@@ -468,22 +468,6 @@ get_stmt_list(&self)-> &Vec<Stmt>
 
 
 pub fn
-terminate(&mut self)
-{
-    if let Some(last) = self.stmt_list.last()
-    {
-        if let Stmt::Return(_) = last
-        {
-          return;
-        }
-    }
-
-
-  self.stmt_list.push(Stmt::Return(None));
-}
-
-
-pub fn
 process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
 {
   let  mut new_scp = Scope::new(scp);
