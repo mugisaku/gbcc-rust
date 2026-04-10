@@ -5,6 +5,7 @@ use super::expr::*;
 use super::decl::*;
 use super::ty::*;
 use super::evaluate::*;
+use super::evaluate_const::*;
 use super::asm::*;
 use super::scope::*;
 use super::symbol_table::*;
@@ -204,56 +205,70 @@ pub fn  get_elif_stmt_list(&self)-> &Vec<ElifStmt>{&self.elif_stmt_list}
 pub fn  get_else_block(&self)-> &Option<Block>{&self.else_block_opt}
 
 pub fn
-process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
+collect(&self, buf: &mut Vec<Collectible>)
+{
+  self.condition.collect(buf);
+  self.block.collect(buf);
+
+    for elif in &self.elif_stmt_list
+    {
+      elif.condition.collect(buf);
+      elif.block.collect(buf);
+    }
+
+
+    if let Some(blk) = &self.else_block_opt
+    {
+      blk.collect(buf);
+    }
+}
+
+
+pub fn
+process(&self, tbl: &SymbolTable, ret_ty_name: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
 {
   let  mut blh = lid.make_br_label_holder();
 
   let  end_label = blh.make_end_label();
 
-  let  res = evaluate(&self.condition,tbl,Some(scp));
+  let  txt = evaluate(&self.condition,tbl,Some(scp)).to_text();
 
-    if let Ok(mut vp) = ValueProcess::try_from(res)
+    if txt.get_ty_name() == "bool"
     {
-        if vp.get_ty().is_bool()
-        {
-          output.push_table(vp.get_table_mut());
-          output.push_brz(blh.get_label());
+      output.push_eval_text(txt);
 
-          self.block.process(tbl,ret_ty_str,lid,clh_opt,scp,output);
+      output.push_brz(blh.get_label());
 
-          output.push_jmp(&end_label);
-        }
+      self.block.process(tbl,ret_ty_name,lid,clh_opt,scp,output);
 
-      else{panic!();}
+      output.push_jmp(&end_label);
     }
 
-  else{panic!();}
+  else
+    {panic!();}
 
 
     for elif in &self.elif_stmt_list
     {
-      let  elif_res = evaluate(&elif.condition,tbl,Some(scp));
+      let  elif_txt = evaluate(&elif.condition,tbl,Some(scp)).to_text();
 
       output.push_label(blh.get_label());
 
       blh.increment();
 
-        if let Ok(mut vp) = ValueProcess::try_from(elif_res)
+        if elif_txt.get_ty_name() == "bool"
         {
-            if vp.get_ty().is_bool()
-            {
-              output.push_table(vp.get_table_mut());
-              output.push_brz(blh.get_label());
+          output.push_eval_text(elif_txt);
 
-              elif.block.process(tbl,ret_ty_str,lid,clh_opt,scp,output);
+          output.push_brz(blh.get_label());
 
-              output.push_jmp(&end_label);
-            }
+          elif.block.process(tbl,ret_ty_name,lid,clh_opt,scp,output);
 
-          else{panic!();}
+          output.push_jmp(&end_label);
         }
 
-      else{panic!();}
+      else
+        {panic!();}
     }
 
 
@@ -261,7 +276,7 @@ process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: 
     {
       output.push_label(blh.get_label());
 
-      blk.process(tbl,ret_ty_str,lid,clh_opt,scp,output);
+      blk.process(tbl,ret_ty_name,lid,clh_opt,scp,output);
     }
 
 
@@ -353,61 +368,79 @@ pub fn  get_block(&self)-> &Block{&self.block}
 
 
 pub fn
-process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
+collect(&self, buf: &mut Vec<Collectible>)
+{
+   self.expr.collect(buf);
+  self.block.collect(buf);
+}
+
+
+pub fn
+process(&self, tbl: &SymbolTable, ret_ty_name: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
 {
   let  clh = lid.make_ctrl_label_holder();
 
   let  mut new_scp = Scope::new(scp);
 
 
-  let  mut target_off = 0usize;
+  let  mut count_max_off = 0usize;
 
-  let  target_res = evaluate(&self.expr,tbl,Some(scp));
+  let  mut count_max_txt = evaluate(&self.expr,tbl,Some(scp)).to_text();
 
-    if let Ok(mut vp) = ValueProcess::try_from(target_res)
+    if count_max_txt.get_ty_name() == "i64"
     {
-        if vp.get_ty().is_int()
-        {
-          target_off = new_scp.add_var("<FOR_TARGET>",Ty::Int);
+      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>","i64");
 
-          output.push_li_local_addr(target_off);
-          output.push_table(vp.get_table_mut());
-          output.push_opcode(Opcode::St64);
-        }
+      let  mut var_txt = AsmEvalText::new();
 
-      else{panic!();}
+      var_txt.push_local_var(count_max_off,"i64");
+
+      output.push_assign(var_txt,count_max_txt,"=");
     }
 
-  else{panic!();}
+  else
+    {panic!();}
 
 
 
-  let  var_off = new_scp.add_var(&self.var_name,Ty::Int);
+  let  count_cur_off = new_scp.add_var(&self.var_name,"i64");
 
-  output.push_li_local_addr(var_off);
-  output.push_opcode(Opcode::Push0);
-  output.push_opcode(Opcode::St64);
+  let  mut init_txt = AsmEvalText::new();
 
+  init_txt.push_local_var(count_cur_off,"i64");
+  init_txt.push_opcode(Opcode::Push0);
+  init_txt.push_opcode(Opcode::St64);
+
+  output.push_eval_text(init_txt);
 
   output.push_label(&clh.on_continue);
 
 
-  output.push_li_local_addr(var_off);
-  output.push_opcode(Opcode::Dup);
-  output.push_opcode(Opcode::Ld64);
-  output.push_opcode(Opcode::Push1);
-  output.push_opcode(Opcode::Addi);
-  output.push_opcode(Opcode::St64);
+  let  mut inc_txt = AsmEvalText::new();
+
+  inc_txt.push_local_var(count_cur_off,"i64");
+  inc_txt.push_opcode(Opcode::Dup);
+  inc_txt.push_opcode(Opcode::Ld64);
+  inc_txt.push_opcode(Opcode::Push1);
+  inc_txt.push_opcode(Opcode::Addi);
+  inc_txt.push_opcode(Opcode::St64);
+
+  output.push_eval_text(inc_txt);
 
 
-  output.push_li_local_addr(var_off);
-  output.push_opcode(Opcode::Ld64);
-  output.push_li_local_addr(target_off);
-  output.push_opcode(Opcode::Ld64);
-  output.push_opcode(Opcode::Lti);
+  let  mut cmp_txt = AsmEvalText::new();
+
+  cmp_txt.push_local_var(count_cur_off,"i64");
+  cmp_txt.push_opcode(Opcode::Ld64);
+  cmp_txt.push_local_var(count_max_off,"i64");
+  cmp_txt.push_opcode(Opcode::Ld64);
+  cmp_txt.push_opcode(Opcode::Lti);
+
+  output.push_eval_text(cmp_txt);
+
   output.push_brz(&clh.on_break);
 
-  self.block.process(tbl,ret_ty_str,lid,Some(&clh),&new_scp,output);
+  self.block.process(tbl,ret_ty_name,lid,Some(&clh),&new_scp,output);
 
   output.push_jmp(&clh.on_continue);
 
@@ -468,13 +501,23 @@ get_stmt_list(&self)-> &Vec<Stmt>
 
 
 pub fn
-process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
+collect(&self, buf: &mut Vec<Collectible>)
+{
+    for stmt in &self.stmt_list
+    {
+      stmt.collect(buf);
+    }
+}
+
+
+pub fn
+process(&self, tbl: &SymbolTable, ret_ty_name: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
 {
   let  mut new_scp = Scope::new(scp);
 
     for stmt in &self.stmt_list
     {
-      stmt.process(tbl,ret_ty_str,lid,clh_opt,&mut new_scp,output);
+      stmt.process(tbl,ret_ty_name,lid,clh_opt,&mut new_scp,output);
     }
 }
 
@@ -525,7 +568,7 @@ Stmt
   Block(Block),
 
   Expr(Expr),
-  Decl(Decl,Option<usize>),
+  Decl(Decl),
   Assign(Expr,Expr,String),
   If(IfStmt),
   Loop(Block),
@@ -563,44 +606,87 @@ read(s: &str)-> Result<Self,()>
 }
 
 
+
+
 pub fn
-process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmTable)
+collect(&self, buf: &mut Vec<Collectible>)
 {
     match self
     {
   Self::Empty=>{}
-  Self::Block(blk)=>{blk.process(tbl,ret_ty_str,lid,clh_opt,scp,output);}
-  Self::Decl(decl,n_opt)=>
+  Self::Block(blk)=>{blk.collect(buf);}
+  Self::Decl(decl)=>
+    {
+        match decl.get_kind()
+        {
+      DeclKind::Const(e)=>{e.collect(buf);}
+      DeclKind::Var(e)=>  {e.collect(buf);}
+      DeclKind::Static(_)=>{}
+      _=>{panic!();}
+        }
+    }
+  Self::Expr(e)=>{e.collect(buf);}
+  Self::If(i)=>{i.collect(buf);;}
+  Self::Loop(blk)=>{blk.collect(buf);}
+  Self::While(e,blk)=>
+    {
+        e.collect(buf);
+      blk.collect(buf);
+    }
+  Self::For(f)=>{f.collect(buf);}
+  Self::Return(e_opt)=>
+    {
+        if let Some(e) = e_opt
+        {
+          e.collect(buf);
+        }
+    }
+  Self::Assign(l,r,_)=>
+    {
+      l.collect(buf);
+      r.collect(buf);
+    }
+  Self::Print(e)=>{e.collect(buf);}
+  _=>{}
+    }
+}
+
+
+pub fn
+process(&self, tbl: &SymbolTable, ret_ty_name: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmTable)
+{
+    match self
+    {
+  Self::Empty=>{}
+  Self::Block(blk)=>{blk.process(tbl,ret_ty_name,lid,clh_opt,scp,output);}
+  Self::Decl(decl)=>
     {
         match decl.get_kind()
         {
       DeclKind::Const(e)=>
         {
-          let  res = evaluate(e,tbl,Some(scp));
+          let  cres = evaluate_const(e,tbl,Some(scp));
 
-            match res
+            match cres
             {
-          EvalResult::Void    =>{}
-          EvalResult::Bool(b) =>{scp.add_const_bool( decl.get_name(),b);}
-          EvalResult::Int(i)  =>{scp.add_const_int(  decl.get_name(),i);}
-          EvalResult::Float(f)=>{scp.add_const_float(decl.get_name(),f);}
+          EvalConstResult::Void    =>{}
+          EvalConstResult::Bool(b) =>{scp.add_const_bool( decl.get_name(),b);}
+          EvalConstResult::Int(i)  =>{scp.add_const_int(  decl.get_name(),i);}
+          EvalConstResult::Float(f)=>{scp.add_const_float(decl.get_name(),f);}
           _=>{panic!();}
             }
         }
       DeclKind::Var(e)=>
         {
-          let  res = evaluate(e,tbl,Some(scp));
+          let  r_txt = evaluate(e,tbl,Some(scp)).to_text();
 
-            if let Ok(mut vp) = ValueProcess::try_from(res)
-            {
-              let  off = scp.add_var(decl.get_name(),vp.get_ty().clone());
+          let  off = scp.add_var(decl.get_name(),r_txt.get_ty_name());
 
-              output.push_li_local_addr(off);
-              output.push_table(vp.get_table_mut());
-              output.push_opcode(Opcode::St64);
-            }
+          let  mut l_txt = AsmEvalText::new();
 
-          else{panic!();}
+          l_txt.push_local_var(off,r_txt.get_ty_name());
+
+          output.push_assign(l_txt,r_txt,"=");
         }
       DeclKind::Static(_)=>{}
       _=>{panic!();}
@@ -612,27 +698,23 @@ process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: 
 
         match res
         {
-      EvalResult::Value(mut vp)=>
+      EvalResult::Value(txt)=>
         {
-          output.push_table(vp.get_table_mut());
-          output.push_opcode(Opcode::Pop);
-        }
-      EvalResult::Deref(mut vp)=>
-        {
-          output.push_table(vp.get_table_mut());
+          output.push_eval_text(txt);
+
           output.push_opcode(Opcode::Pop);
         }
       _=>{}
         }
     }
-  Self::If(i)=>{i.process(tbl,ret_ty_str,lid,clh_opt,scp,output);}
+  Self::If(i)=>{i.process(tbl,ret_ty_name,lid,clh_opt,scp,output);}
   Self::Loop(blk)=>
     {
       let  clh = lid.make_ctrl_label_holder();
 
       output.push_label(&clh.on_continue);
 
-      blk.process(tbl,ret_ty_str,lid,Some(&clh),scp,output);
+      blk.process(tbl,ret_ty_name,lid,Some(&clh),scp,output);
 
       output.push_jmp(&clh.on_continue);
 
@@ -644,53 +726,49 @@ process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: 
 
       output.push_label(&clh.on_continue);
 
-      let  res = evaluate(e,tbl,Some(scp));
+      let  txt = evaluate(e,tbl,Some(scp)).to_text();
 
-        if let Ok(mut vp) = ValueProcess::try_from(res)
+        if txt.get_ty_name() == "bool"
         {
-            if vp.get_ty().is_bool()
-            {
-              output.push_table(vp.get_table_mut());
+          output.push_eval_text(txt);
 
-              output.push_brz(&clh.on_break);
+          output.push_brz(&clh.on_break);
 
-              blk.process(tbl,ret_ty_str,lid,Some(&clh),scp,output);
+          blk.process(tbl,ret_ty_name,lid,Some(&clh),scp,output);
 
-              output.push_jmp(&clh.on_continue);
+          output.push_jmp(&clh.on_continue);
 
-              output.push_label(&clh.on_break);
-            }
-
-          else{panic!();}
+          output.push_label(&clh.on_break);
         }
 
-      else{panic!();}
+      else
+        {panic!();}
     }
-  Self::For(f)=>{f.process(tbl,ret_ty_str,lid,clh_opt,scp,output);}
+  Self::For(f)=>{f.process(tbl,ret_ty_name,lid,clh_opt,scp,output);}
   Self::Return(e_opt)=>
     {
         if let Some(e) = e_opt
         {
-          let  res = evaluate(e,tbl,Some(scp));
+          let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
 
-            if let Ok(mut vp) = ValueProcess::try_from(res)
+            if txt.get_ty_name() == ret_ty_name
             {
-              let  s = vp.get_ty().get_canonical_name();
-
-                if &s == ret_ty_str
+                if txt.is_deref()
                 {
-                  output.push_table(vp.get_table_mut());
+                  txt.push_load();
                 }
 
-              else{panic!("TYPE OF RETURN VALUE and TYPE OF EVALUATED VALUW are mismatched");}
+
+              output.push_eval_text(txt);
             }
 
-          else{panic!();}
+          else
+            {panic!("TYPE OF RETURN VALUE and TYPE OF EVALUATED VALUW are mismatched");}
         }
 
       else
         {
-            if ret_ty_str == VOID_STR
+            if ret_ty_name == "void"
             {
               output.push_opcode(Opcode::Push0);
             }
@@ -703,38 +781,11 @@ process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: 
     }
   Self::Assign(l,r,op)=>
     {
-      let  l_res = evaluate(l,tbl,Some(scp));
-      let  r_res = evaluate(r,tbl,Some(scp));
+      let  mut l_asm = evaluate(l,tbl,Some(scp)).to_text();
+      let  mut r_asm = evaluate(r,tbl,Some(scp)).to_text();
 
-        if let EvalResult::Deref(mut l_vp) = l_res
-        {
-          output.push_table(l_vp.get_table_mut());
-          output.push_opcode(Opcode::Dup);
-          output.push_opcode(Opcode::Ld64);
-
-            if let Ok(mut r_vp) = ValueProcess::try_from(r_res)
-            {
-              output.push_table(r_vp.get_table_mut());
-
-                   if op ==  "+="{output.push_opcode(Opcode::Addi);}
-              else if op ==  "-="{output.push_opcode(Opcode::Subi);}
-              else if op ==  "*="{output.push_opcode(Opcode::Muli);}
-              else if op ==  "/="{output.push_opcode(Opcode::Divi);}
-              else if op ==  "%="{output.push_opcode(Opcode::Remi);}
-              else if op == "<<="{output.push_opcode(Opcode::Shl );}
-              else if op == ">>="{output.push_opcode(Opcode::Shr );}
-              else if op ==  "&="{output.push_opcode(Opcode::And );}
-              else if op ==  "|="{output.push_opcode(Opcode::Or  );}
-              else if op ==  "^="{output.push_opcode(Opcode::Xor );}
-              else if op ==   "="{                                 }
-              else{panic!()}
-
-
-              output.push_opcode(Opcode::St64);
-            }
-        }
-
-      else{panic!();}
+todo!();
+      output.push_opcode(Opcode::St64);
     }
   Self::Break=>
     {
@@ -746,16 +797,11 @@ process(&self, tbl: &SymbolTable, ret_ty_str: &str, lid: &mut LabelID, clh_opt: 
     }
   Self::Print(e)=>
     {
-      let  res = evaluate(e,tbl,Some(scp));
+      let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
 
-        if let Ok(mut vp) = ValueProcess::try_from(res)
-        {
-          output.push_table(vp.get_table_mut());
+      txt.push_opcode(Opcode::Pri);
 
-          output.push_opcode(Opcode::Pri);
-        }
-
-      else{panic!();}
+      output.push_eval_text(txt);
     }
     }
 }
@@ -797,7 +843,7 @@ print(&self)
   Self::Block(blk)=>{blk.print();}
 
   Self::Expr(e)=>{e.print();}
-  Self::Decl(decl,_)=>{decl.print();}
+  Self::Decl(decl)=>{decl.print();}
   Self::Assign(l,r,op)=>
     {
       l.print();
@@ -1183,7 +1229,7 @@ read_stmt(start_nd: &Node)-> Stmt
       else
         if d_name == "declaration"
         {
-          return Stmt::Decl(read_decl(d),None);
+          return Stmt::Decl(read_decl(d));
         }
 
       else

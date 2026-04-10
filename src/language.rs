@@ -5,15 +5,13 @@ pub mod asm;
 pub mod expr;
 pub mod stmt;
 pub mod ty;
+pub mod evaluate_const;
 pub mod evaluate;
-pub mod evaluate_unary;
-pub mod evaluate_binary;
 pub mod decl;
 pub mod program;
 pub mod scope;
 pub mod symbol_table;
 pub mod tplg_sort;
-pub mod execute;
 //pub mod codify;
 pub mod dictionary;
 
@@ -22,16 +20,13 @@ pub mod dictionary;
 
 pub const WORD_SIZE: usize = 8;
 
+pub struct Align(usize);
+impl Align{pub fn  get(&self, off: usize)-> usize{if self.0 != 0{(off+(self.0-1))/self.0*self.0} else{off}}}
+
 pub fn
 get_word_aligned(off: usize)-> usize
 {
-  (off+(WORD_SIZE-1))/WORD_SIZE*WORD_SIZE
-}
-
-pub fn
-get_aligned(al: usize, off: usize)-> usize
-{
-  if al != 0{(off+(al-1))/al*al} else{off}
+  Align(WORD_SIZE).get(off)
 }
 
 

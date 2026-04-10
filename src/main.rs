@@ -48,6 +48,9 @@ main()
   use crate::language::decl::*;
   use crate::language::symbol_table::*;
   use crate::language::machine::*;
+  use crate::language::ty::*;
+
+  install_basic_types();
 
     if let Ok(root) = decl::Decl::read_as_root(
 r#"
@@ -57,16 +60,16 @@ const  b = a+4;
 const  c = b+8;
 
 fn
-add(a: int, b: int)-> int
+add(a: i64, b: i64)-> i64
 {
   return a+b;
 }
 
 
 fn
-main()-> int
+main()-> i64
 {
-  return add(3,add(7,40));
+  return add(7,add(40,322));
 }
 "#)
 {

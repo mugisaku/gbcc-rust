@@ -12,7 +12,7 @@ pub struct
 ParameterDecl
 {
   name: String,
-    ty: Ty,
+  ty_node: TyNode,
 
 }
 
@@ -22,16 +22,14 @@ ParameterDecl
 {
 
 
-pub fn  get_name(&self)-> &String{&self.name}
-pub fn  get_ty(&self)->   &Ty{&self.ty}
+pub fn     get_name(&self)-> &String{&self.name}
+pub fn  get_ty_node(&self)-> &TyNode{&self.ty_node}
 
 
 pub fn
 print(&self)
 {
-  print!("{}: ",&self.name);
-
-  self.ty.print();
+  print!("{}: {}",&self.name,&self.ty_node.to_string());
 }
 
 
@@ -45,7 +43,7 @@ FnDecl
 {
   parameter_decl_list: Vec<ParameterDecl>,
 
-  return_ty: Ty,
+  return_ty_node: TyNode,
 
   block: Block,
 
@@ -57,26 +55,24 @@ FnDecl
 {
 
 
-pub fn  get_return_ty(&self)-> &Ty{&self.return_ty}
+pub fn  get_return_ty_node(&self)-> &TyNode{&self.return_ty_node}
 pub fn  get_parameter_decl_list(&self)-> &Vec<ParameterDecl>{&self.parameter_decl_list}
 pub fn  get_block(&self)-> &Block{&self.block}
 
 pub fn
-decompose(mut self)-> (Vec<String>,Ty,Block)
+get_ty_node(&self)-> TyNode
 {
-  let  mut name_list = Vec::<String>::new();
-  let  mut   ty_list =     Vec::<Ty>::new();
+  let  mut parameter_ty_nodes = Vec::<TyNode>::new();
 
-    for decl in self.parameter_decl_list
+    for pd in &self.parameter_decl_list
     {
-      name_list.push(decl.name);
-        ty_list.push(decl.ty  );
+      parameter_ty_nodes.push(pd.ty_node.clone());
     }
 
 
-  let  ty = Ty::Function{parameter_ty_list: ty_list, return_ty: Box::new(self.return_ty)};
+  let  return_ty_node = Box::new(self.return_ty_node.clone());
 
-  (name_list,ty,self.block)
+  TyNode::Function{parameter_ty_nodes, return_ty_node}
 }
 
 
@@ -93,9 +89,7 @@ print(&self)
     }
 
 
-  print!(")-> ");
-
-  self.return_ty.print();
+  print!(")-> {}",&self.return_ty_node.to_string());
 
   print!("\n");
 
@@ -314,9 +308,9 @@ read_parameter_decl(start_nd: &Node)-> ParameterDecl
 
             if let Some(ty_nd) = cur.select_node("type")
             {
-              let  ty = read_ty(ty_nd);
+              let  ty_node = read_ty(ty_nd);
 
-              return ParameterDecl{name,ty};
+              return ParameterDecl{name,ty_node};
             }
         }
     }
@@ -413,7 +407,7 @@ read_fn_decl(start_nd: &Node)-> (String,FnDecl)
 
           cur.advance(1);
 
-          let  mut return_ty = Ty::Void;
+          let  mut return_ty_node = TyNode::Root("void".to_string());
 
             if let Some(_) = cur.get_semi_string()
             {
@@ -421,7 +415,7 @@ read_fn_decl(start_nd: &Node)-> (String,FnDecl)
 
                 if let Some(ty_d) = cur.get_node()
                 {
-                  return_ty = read_ty(ty_d);
+                  return_ty_node = read_ty(ty_d);
 
                   cur.advance(1);
                 }
@@ -432,7 +426,7 @@ read_fn_decl(start_nd: &Node)-> (String,FnDecl)
             {
               let  block = read_block(blk_d);
 
-              let  f = FnDecl{parameter_decl_list, return_ty, block};
+              let  f = FnDecl{parameter_decl_list, return_ty_node, block};
 
               return (name,f);
             }

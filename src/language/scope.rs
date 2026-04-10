@@ -1,13 +1,14 @@
 
 
+use std::rc::{Rc,Weak};
 use std::cell::Cell;
-use std::rc::Rc;
 
 use super::*;
 use super::decl::*;
 use super::expr::*;
 use super::stmt::*;
 use super::ty::*;
+use super::evaluate_const::*;
 use super::symbol_table::*;
 
 
@@ -16,11 +17,11 @@ use super::symbol_table::*;
 pub enum
 LocalSymbolKind
 {
-  Parameter,
-
   Static,
   Const,
     Var,
+
+  IntV(Cell<usize>),
 
 }
 
@@ -32,9 +33,9 @@ LocalSymbol
 
   kind: LocalSymbolKind,
 
-  ty: Ty,
+  value: EvalConstResult,
 
-  value: SymbolValue,
+  ty_name: String,
 
   offset: usize,
     size: usize,
@@ -48,27 +49,13 @@ LocalSymbol
 
 
 pub fn
-new_parameter(name: &str, ty: Ty, offset: usize)-> Self
-{
-  Self{
-    name: name.to_string(),
-    kind: LocalSymbolKind::Parameter,
-    ty,
-    value: SymbolValue::Void,
-    offset: offset+WORD_SIZE,
-    size: WORD_SIZE,
-  }
-}
-
-
-pub fn
 new_const_bool(name: &str, b: bool)-> Self
 {
   Self{
     name: name.to_string(),
     kind: LocalSymbolKind::Const,
-    ty: Ty::Bool,
-    value: SymbolValue::Bool(b),
+    value: EvalConstResult::Bool(b),
+    ty_name: "bool".to_string(),
     offset: 0,
     size: WORD_SIZE,
   }
@@ -81,8 +68,8 @@ new_const_int(name: &str, i: i64)-> Self
   Self{
     name: name.to_string(),
     kind: LocalSymbolKind::Const,
-    ty: Ty::Int,
-    value: SymbolValue::Int(i),
+    value: EvalConstResult::Int(i),
+    ty_name: "i64".to_string(),
     offset: 0,
     size: WORD_SIZE,
   }
@@ -90,13 +77,13 @@ new_const_int(name: &str, i: i64)-> Self
 
 
 pub fn
-new_const_int_v(name: &str, i: i64)-> Self
+new_int_v(name: &str)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: LocalSymbolKind::Const,
-    ty: Ty::Int,
-    value: SymbolValue::IntV(std::cell::Cell::new(i)),
+    kind: LocalSymbolKind::IntV(Cell::new(0)),
+    value: EvalConstResult::Void,
+    ty_name: "i64".to_string(),
     offset: 0,
     size: WORD_SIZE,
   }
@@ -109,8 +96,8 @@ new_const_float(name: &str, f: f64)-> Self
   Self{
     name: name.to_string(),
     kind: LocalSymbolKind::Const,
-    ty: Ty::Float,
-    value: SymbolValue::Float(f),
+    value: EvalConstResult::Float(f),
+    ty_name: "f64".to_string(),
     offset: 0,
     size: WORD_SIZE,
   }
@@ -118,13 +105,13 @@ new_const_float(name: &str, f: f64)-> Self
 
 
 pub fn
-new_var(name: &str, ty: Ty, offset: usize)-> Self
+new_var(name: &str, ty_name: &str, offset: usize)-> Self
 {
   Self{
     name: name.to_string(),
     kind: LocalSymbolKind::Var,
-    ty,
-    value: SymbolValue::Void,
+    value: EvalConstResult::Void,
+    ty_name: ty_name.to_string(),
     offset,
     size: WORD_SIZE,
   }
@@ -146,16 +133,16 @@ get_kind(&self)-> &LocalSymbolKind
 
 
 pub fn
-get_ty(&self)-> &Ty
+get_value(&self)-> &EvalConstResult
 {
-  &self.ty
+  &self.value
 }
 
 
 pub fn
-get_value(&self)-> &SymbolValue
+get_ty_name(&self)-> &String
 {
-  &self.value
+  &self.ty_name
 }
 
 
@@ -191,36 +178,31 @@ Scope<'a>
 
 
 pub fn
-new_root(name_ls: &Vec<String>, ty_ls: &Vec<Ty>)-> Self
+new_root(names: &Vec<String>, ty_names: &Vec<String>)-> Self
 {
-  let  mut symbol_list = Vec::<LocalSymbol>::new();
+  let  mut scp = Self{
+    previous_opt: None,
+    symbol_list: Vec::new(),
+    offset: 0,
+    offset_max: Rc::new(Cell::new(0)),
+  };
 
-  let  mut name_iter = name_ls.iter();
-  let  mut   ty_iter =   ty_ls.iter();
 
-  let  mut off = 0usize;
+  let  mut    name_iter =    names.iter();
+  let  mut ty_name_iter = ty_names.iter();
 
     while let Some(name) = name_iter.next()
     {
-        if let Some(ty) = ty_iter.next()
+        if let Some(ty_name) = ty_name_iter.next()
         {
-          let  sym = LocalSymbol::new_parameter(name,ty.clone(),off);
-
-          off = sym.offset;
-
-          symbol_list.push(sym);
+          scp.add_var(name,ty_name);
         }
 
       else{panic!();}
     }
 
 
-  Self{
-    previous_opt: None,
-    symbol_list,
-    offset: 0,
-    offset_max: Rc::new(Cell::new(0)),
-  }
+  scp
 }
 
 
@@ -290,11 +272,11 @@ add_const_float(&mut self, name: &str, f: f64)
 
 
 pub fn
-add_var(&mut self, name: &str, ty: Ty)-> usize
+add_var(&mut self, name: &str, ty_name: &str)-> usize
 {
   let  offset = self.offset;
 
-  let  sym = LocalSymbol::new_var(name,ty,offset);
+  let  sym = LocalSymbol::new_var(name,ty_name,offset);
 
   self.offset = get_word_aligned(offset+sym.size);
 
@@ -303,6 +285,15 @@ add_var(&mut self, name: &str, ty: Ty)-> usize
   self.update_offset_max();
 
   offset
+}
+
+
+pub fn
+add_int_v(&mut self, name: &str)
+{
+  let  sym = LocalSymbol::new_int_v(name);
+
+  self.symbol_list.push(sym);
 }
 
 

@@ -1,16 +1,13 @@
 
 
-use super::symbol_table::SymbolKey;
-
-
 
 
 pub struct
 TplgNode
 {
-  key: SymbolKey,
+  name: String,
 
-  deps_child_list: Vec<SymbolKey>,
+  deps_child_list: Vec<String>,
 
   parent_count: usize,
 
@@ -23,10 +20,10 @@ TplgNode
 
 
 pub fn
-new(key: SymbolKey, deps_child_list: Vec<SymbolKey>, parent_count: usize)-> Self
+new(name: String, deps_child_list: Vec<String>, parent_count: usize)-> Self
 {
   Self{
-    key,
+    name,
     deps_child_list,
     parent_count,
   }
@@ -59,11 +56,11 @@ step(nodes: &mut Vec<TplgNode>, remains: &mut Vec<TplgNode>)-> Vec<TplgNode>
 
     for removed_nd in &buf
     {
-        for key in &removed_nd.deps_child_list
+        for name in &removed_nd.deps_child_list
         {
             for remained_nd in remains.iter_mut()
             {
-                if remained_nd.key == *key
+                if &remained_nd.name == name
                 {
                   remained_nd.parent_count -= 1;
 
@@ -79,10 +76,10 @@ step(nodes: &mut Vec<TplgNode>, remains: &mut Vec<TplgNode>)-> Vec<TplgNode>
 
 
 pub fn
-tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<SymbolKey>,()>
+tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<String>,()>
 {
   let  mut remains = Vec::<TplgNode>::new();
-  let  mut  output = Vec::<SymbolKey>::new();
+  let  mut  output = Vec::<String>::new();
 
 //  println!("トポロジカルソートを開始");
 
@@ -102,7 +99,7 @@ tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<SymbolKey>,()>
         {
 //          println!("{}をプッシュ",nd.key.to_number());
 
-          output.push(nd.key);
+          output.push(nd.name);
         }
 
 

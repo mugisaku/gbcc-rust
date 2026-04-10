@@ -1,5 +1,6 @@
 
 
+use super::ty::*;
 
 
 pub enum
@@ -63,7 +64,7 @@ Opcode
   Ltu, Ltequ, Gtu, Gtequ,
   Ltf, Lteqf, Gtf, Gteqf,
 
-  Andl, Orl,
+  Land, Lor,
 
    Jmp,
    Brz,
@@ -180,8 +181,8 @@ to_str(&self)-> &'static str
   Self::Gtf  =>{"gtf"}
   Self::Gteqf=>{"gteqf"}
 
-  Self::Andl=>{"andl"}
-  Self::Orl=>{"orl"}
+  Self::Land=>{"land"}
+  Self::Lor=>{"lor"}
 
   Self::Jmp=>{"jmp"}
   Self::Brz=>{"brz"}
@@ -293,8 +294,8 @@ from(b: u8)-> Self
   (op) if op == Self::Lteqf as u8=>{Self::Lteqf}
   (op) if op == Self::Gtf   as u8=>{Self::Gtf}
   (op) if op == Self::Gteqf as u8=>{Self::Gteqf}
-  (op) if op == Self::Andl as u8=>{Self::Andl}
-  (op) if op == Self::Orl  as u8=>{Self::Orl}
+  (op) if op == Self::Land as u8=>{Self::Land}
+  (op) if op == Self::Lor  as u8=>{Self::Lor}
   (op) if op == Self::Jmp as u8=>{Self::Jmp}
   (op) if op == Self::Brz as u8=>{Self::Brz}
   (op) if op == Self::Brnz as u8=>{Self::Brnz}
@@ -383,6 +384,419 @@ pub fn
 get_postfix(&self)-> &Postfix
 {
   &self.postfix
+}
+
+
+}
+
+
+
+
+#[derive(Clone)]
+pub struct
+AsmEvalText
+{
+  lines: Vec<AsmLine>,
+
+  ty_name: String,
+
+  is_deref: bool,
+
+}
+
+
+impl
+AsmEvalText
+{
+
+
+pub fn
+new()-> Self
+{
+  Self{lines: Vec::new(), ty_name: String::new(), is_deref: false}
+}
+
+
+pub fn
+get_ty_name(&self)-> &String
+{
+  &self.ty_name
+}
+
+
+pub fn
+set_ty_name(&mut self, ty_name: &str)
+{
+  self.ty_name = ty_name.to_string();
+}
+
+
+pub fn
+is_deref(&self)-> bool
+{
+  self.is_deref
+}
+
+
+pub fn
+push_opcode(&mut self, opcode: Opcode)
+{
+  self.lines.push(AsmLine::new(opcode,Postfix::None));
+}
+
+
+pub fn
+push_2opcodes(&mut self, a: Opcode, b: Opcode)
+{
+  self.push_opcode(a);
+  self.push_opcode(b);
+}
+
+
+pub fn
+push_li_bool(&mut self, b: bool)
+{
+  self.lines.push(AsmLine::new(Opcode::Li,Postfix::Bool(b)));
+
+  self.ty_name = "bool".to_string();
+}
+
+
+pub fn
+push_li_int(&mut self, i: i64)
+{
+  self.lines.push(AsmLine::new(Opcode::Li,Postfix::Int(i)));
+
+  self.ty_name = "i64".to_string();
+}
+
+
+pub fn
+push_li_float(&mut self, f: f64)
+{
+  self.lines.push(AsmLine::new(Opcode::Li,Postfix::Float(f)));
+
+  self.ty_name = "f64".to_string();
+}
+
+
+pub fn
+push_global_var(&mut self, off: usize, ty_name: &str)
+{
+  self.push_li_int(off as i64);
+
+  self.ty_name = ty_name.to_string();
+  self.is_deref = true;
+}
+
+
+pub fn
+push_fn(&mut self, off: usize, ty_name: &str)
+{
+  self.push_li_int(off as i64);
+  self.push_opcode(Opcode::Ld64);
+
+  self.ty_name = ty_name.to_string();
+  self.is_deref = true;
+}
+
+
+pub fn
+push_local_var(&mut self, off: usize, ty_name: &str)
+{
+  self.push_opcode(Opcode::Lfp);
+  self.push_li_int(off as i64);
+  self.push_opcode(Opcode::Addi);
+
+  self.ty_name = ty_name.to_string();
+  self.is_deref = true;
+}
+
+
+pub fn
+push_call(&mut self, args: Vec<Self>)
+{
+  let  ty = find_ty(&self.ty_name).unwrap();
+
+    if let TyKind::Function{parameter_ty_names, return_ty_name} = ty.get_kind()
+    {
+        if parameter_ty_names.len() != args.len()
+        {
+          panic!();
+        }
+
+
+      self.push_opcode(Opcode::Prcal);
+
+        for a in args
+        {
+          self.lines.extend(a.lines);
+        }
+
+
+      self.push_opcode(Opcode::Cal);
+
+      self.set_ty_name(return_ty_name);
+
+      self.is_deref = false;
+    }
+
+  else
+    {panic!();}
+}
+
+
+pub fn
+push_load(&mut self)
+{
+    if !self.is_deref
+    {
+      panic!();
+    }
+
+
+    match &self.ty_name
+    {
+  (s) if s == "bool" =>{self.push_opcode(Opcode::Ld8);}
+  (s) if s == "i8"   =>{self.push_2opcodes(Opcode::Ld8 ,Opcode::Sx8 );}
+  (s) if s == "i16"  =>{self.push_2opcodes(Opcode::Ld16,Opcode::Sx16);}
+  (s) if s == "i32"  =>{self.push_2opcodes(Opcode::Ld32,Opcode::Sx32);}
+  (s) if s == "i64"  =>{self.push_opcode(Opcode::Ld64);}
+  (s) if s == "isize"=>{self.push_opcode(Opcode::Ld64);}
+  (s) if s == "u8"   =>{self.push_opcode(Opcode::Ld8 );}
+  (s) if s == "u16"  =>{self.push_opcode(Opcode::Ld16);}
+  (s) if s == "u32"  =>{self.push_opcode(Opcode::Ld32);}
+  (s) if s == "u64"  =>{self.push_opcode(Opcode::Ld64);}
+  (s) if s == "usize"=>{self.push_opcode(Opcode::Ld64);}
+  (s) if s == "f32"  =>{self.push_2opcodes(Opcode::Ld32,Opcode::B32toF);}
+  (s) if s == "f64"  =>{self.push_opcode(Opcode::Ld64);}
+  _=>{panic!();}
+    }
+
+
+  self.is_deref = false;
+}
+
+
+pub fn
+push_store(&mut self)
+{
+    if !self.is_deref
+    {
+      panic!();
+    }
+
+
+    match &self.ty_name
+    {
+  (s) if s == "bool" =>{self.push_opcode(Opcode::St8);}
+  (s) if s == "i8"   =>{self.push_opcode(Opcode::St8 );}
+  (s) if s == "i16"  =>{self.push_opcode(Opcode::St16);}
+  (s) if s == "i32"  =>{self.push_opcode(Opcode::St32);}
+  (s) if s == "i64"  =>{self.push_opcode(Opcode::St64);}
+  (s) if s == "isize"=>{self.push_opcode(Opcode::St64);}
+  (s) if s == "u8"   =>{self.push_opcode(Opcode::St8 );}
+  (s) if s == "u16"  =>{self.push_opcode(Opcode::St16);}
+  (s) if s == "u32"  =>{self.push_opcode(Opcode::St32);}
+  (s) if s == "u64"  =>{self.push_opcode(Opcode::St64);}
+  (s) if s == "usize"=>{self.push_opcode(Opcode::St64);}
+  (s) if s == "f32"  =>{self.push_2opcodes(Opcode::FtoB32,Opcode::Ld32);}
+  (s) if s == "f64"  =>{self.push_opcode(Opcode::St64);}
+  _=>{panic!();}
+    }
+
+
+  self.ty_name = String::new();
+}
+
+
+pub fn
+push_unary(&mut self, op: &str)
+{
+    match op
+    {
+  (s) if s == "-"=>
+    {
+        if self.is_deref
+        {
+          self.push_load();
+        }
+
+
+        if (&self.ty_name == "i8")
+        || (&self.ty_name == "i16")
+        || (&self.ty_name == "i32")
+        || (&self.ty_name == "i64")
+        || (&self.ty_name == "isize")
+        {
+          self.push_opcode(Opcode::Neg);
+        }
+
+      else
+        if (&self.ty_name == "f32")
+        || (&self.ty_name == "f64")
+        {
+          self.push_opcode(Opcode::Negf);
+        }
+    }
+  (s) if s == "!"=>
+    {
+        if self.is_deref
+        {
+          self.push_load();
+        }
+
+
+        if (&self.ty_name == "i8")
+        || (&self.ty_name == "i16")
+        || (&self.ty_name == "i32")
+        || (&self.ty_name == "i64")
+        || (&self.ty_name == "isize")
+        || (&self.ty_name == "u8")
+        || (&self.ty_name == "u16")
+        || (&self.ty_name == "u32")
+        || (&self.ty_name == "u64")
+        || (&self.ty_name == "usize")
+        {
+          self.push_opcode(Opcode::Not);
+        }
+
+      else
+        if (&self.ty_name == "bool")
+        {
+          self.push_opcode(Opcode::Notl);
+        }
+    }
+  (s) if s == "&"=>
+    {
+      todo!();
+    }
+  (s) if s == "*"=>
+    {
+      let  ty = find_ty(&self.ty_name).unwrap();
+
+        match ty.get_kind()
+        {
+      TyKind::Pointer(ty_name)=>
+        {
+          self.ty_name = ty_name.clone();
+          self.is_deref = true;
+        }
+      TyKind::Reference(ty_name)=>
+        {
+          self.ty_name = ty_name.clone();
+          self.is_deref = true;
+        }
+      _=>{panic!();}
+        }
+    }
+  _=>{panic!();}
+    }
+}
+
+
+fn
+push_ari_or_cmp(&mut self, other: Self, i_op: Opcode, u_op: Opcode, f_op: Opcode, is_cmp: bool)
+{
+    if &self.ty_name != &other.ty_name
+    {
+      panic!();
+    }
+
+
+  let  op = match &self.ty_name
+    {
+  (s) if s == "i8"   =>{i_op}
+  (s) if s == "i16"  =>{i_op}
+  (s) if s == "i32"  =>{i_op}
+  (s) if s == "i64"  =>{i_op}
+  (s) if s == "isize"=>{i_op}
+  (s) if s == "u8"   =>{u_op}
+  (s) if s == "u16"  =>{u_op}
+  (s) if s == "u32"  =>{u_op}
+  (s) if s == "u64"  =>{u_op}
+  (s) if s == "usize"=>{u_op}
+  (s) if s == "f32"  =>{f_op}
+  (s) if s == "f64"  =>{f_op}
+  _=>{Opcode::Hlt}
+    };
+
+
+    if let Opcode::Hlt = op
+    {
+      panic!();
+    }
+
+
+  self.lines.extend(other.lines);
+
+  self.push_opcode(op);
+
+    if is_cmp
+    {
+      self.ty_name = "bool".to_string();
+    }
+}
+
+
+fn
+push_log(&mut self, other: Self, op: Opcode)
+{
+    if &self.ty_name != &other.ty_name
+    {
+      panic!();
+    }
+
+
+    if &self.ty_name != "bool"
+    {
+      panic!();
+    }
+
+
+  self.lines.extend(other.lines);
+
+  self.push_opcode(op);
+}
+
+
+pub fn
+push_binary(&mut self, mut other: Self, op: &str)
+{
+    if self.is_deref
+    {
+      self.push_load();
+    }
+
+
+    if other.is_deref
+    {
+      other.push_load();
+    }
+
+
+    match op
+    {
+  (s) if s ==  "+"=>{self.push_ari_or_cmp(other,Opcode::Addi ,Opcode::Addu ,Opcode::Addf ,false)}
+  (s) if s ==  "-"=>{self.push_ari_or_cmp(other,Opcode::Subi ,Opcode::Subu ,Opcode::Subf ,false)}
+  (s) if s ==  "*"=>{self.push_ari_or_cmp(other,Opcode::Muli ,Opcode::Mulu ,Opcode::Mulf ,false)}
+  (s) if s ==  "/"=>{self.push_ari_or_cmp(other,Opcode::Divi ,Opcode::Divu ,Opcode::Divf ,false)}
+  (s) if s ==  "%"=>{self.push_ari_or_cmp(other,Opcode::Remi ,Opcode::Remu ,Opcode::Remf ,false)}
+  (s) if s == "<<"=>{self.push_ari_or_cmp(other,Opcode::Shl  ,Opcode::Shl  ,Opcode::Hlt  ,false)}
+  (s) if s == ">>"=>{self.push_ari_or_cmp(other,Opcode::Shr  ,Opcode::Shr  ,Opcode::Hlt  ,false)}
+  (s) if s ==  "&"=>{self.push_ari_or_cmp(other,Opcode::And  ,Opcode::And  ,Opcode::Hlt  ,false)}
+  (s) if s ==  "|"=>{self.push_ari_or_cmp(other,Opcode::Or   ,Opcode::Or   ,Opcode::Hlt  ,false)}
+  (s) if s ==  "^"=>{self.push_ari_or_cmp(other,Opcode::Xor  ,Opcode::Xor  ,Opcode::Hlt  ,false)}
+  (s) if s == "=="=>{self.push_ari_or_cmp(other,Opcode::Eq   ,Opcode::Eq   ,Opcode::Eqf  ,true)}
+  (s) if s == "!="=>{self.push_ari_or_cmp(other,Opcode::Neq  ,Opcode::Neq  ,Opcode::Neqf ,true)}
+  (s) if s ==  "<"=>{self.push_ari_or_cmp(other,Opcode::Lti  ,Opcode::Ltu  ,Opcode::Ltf  ,true)}
+  (s) if s == "<="=>{self.push_ari_or_cmp(other,Opcode::Lteqi,Opcode::Ltequ,Opcode::Lteqf,true)}
+  (s) if s ==  ">"=>{self.push_ari_or_cmp(other,Opcode::Gti  ,Opcode::Gtu  ,Opcode::Gtf  ,true)}
+  (s) if s == ">="=>{self.push_ari_or_cmp(other,Opcode::Gteqi,Opcode::Gtequ,Opcode::Gteqf,true)}
+  (s) if s == "&&"=>{self.push_log(other,Opcode::Land)}
+  (s) if s == "||"=>{self.push_log(other,Opcode::Lor )}
+  _=>{panic!();}
+    }
 }
 
 
@@ -518,13 +932,6 @@ reset_block_position(&mut self)
 
 
 pub fn
-push_table(&mut self, other: &mut Self)
-{
-  self.core.append(&mut other.core);
-}
-
-
-pub fn
 push_label(&mut self, s: &str)
 {
   let  blk = AsmBlock::new(s);
@@ -550,9 +957,12 @@ push_line(&mut self, ln: AsmLine)
 
 
 pub fn
-push_li_bool(&mut self, b: bool)
+push_eval_text(&mut self, et: AsmEvalText)
 {
-  self.push_line(AsmLine::new(Opcode::Li,Postfix::Bool(b)));
+    for ln in et.lines
+    {
+      self.push_line(ln);
+    }
 }
 
 
@@ -560,46 +970,6 @@ pub fn
 push_li_int(&mut self, i: i64)
 {
   self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(i)));
-}
-
-
-pub fn
-push_li_float(&mut self, f: f64)
-{
-  self.push_line(AsmLine::new(Opcode::Li,Postfix::Float(f)));
-}
-
-
-pub fn
-push_li_global_addr(&mut self, off: usize)
-{
-  self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(off as i64)));
-}
-
-
-pub fn
-push_li_fn_addr(&mut self, off: usize)
-{
-  self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(off as i64)));
-  self.push_line(AsmLine::new(Opcode::Ld64,Postfix::None));
-}
-
-
-pub fn
-push_li_local_addr(&mut self, off: usize)
-{
-  self.push_line(AsmLine::new(Opcode::Lfp,Postfix::None));
-  self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(off as i64)));
-  self.push_line(AsmLine::new(Opcode::Addi,Postfix::None));
-}
-
-
-pub fn
-push_li_parameter_addr(&mut self, off: usize)
-{
-  self.push_line(AsmLine::new(Opcode::Lfp,Postfix::None));
-  self.push_line(AsmLine::new(Opcode::Li,Postfix::Int(off as i64)));
-  self.push_line(AsmLine::new(Opcode::Subi,Postfix::None));
 }
 
 
@@ -621,6 +991,52 @@ pub fn
 push_brnz(&mut self, s: &str)
 {
   self.push_line(AsmLine::new(Opcode::Brnz,Postfix::Identifier(s.to_string())));
+}
+
+
+
+
+pub fn
+push_assign(&mut self, mut l: AsmEvalText, r: AsmEvalText, op: &str)
+{
+    if !l.is_deref
+    {
+      panic!();
+    }
+
+
+    if &l.ty_name != &r.ty_name
+    {
+      panic!();
+    }
+
+
+  l.push_opcode(Opcode::Dup);
+  l.push_load();
+
+       if op ==  "+="{l.push_binary(r,"+");}
+  else if op ==  "-="{l.push_binary(r,"-");}
+  else if op ==  "*="{l.push_binary(r,"*");}
+  else if op ==  "/="{l.push_binary(r,"/");}
+  else if op ==  "%="{l.push_binary(r,"%");}
+  else if op == "<<="{l.push_binary(r,"<<");}
+  else if op == ">>="{l.push_binary(r,">>");}
+  else if op ==  "&="{l.push_binary(r,"&");}
+  else if op ==  "|="{l.push_binary(r,"|");}
+  else if op ==  "^="{l.push_binary(r,"^");}
+  else if op ==   "="{                     }
+  else{panic!()}
+
+  l.push_store();
+
+  self.push_eval_text(l);
+}
+
+
+pub fn
+append(&mut self, other: &mut Self)
+{
+  self.core.append(&mut other.core);
 }
 
 

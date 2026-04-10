@@ -9,6 +9,7 @@ use super::asm::*;
 use super::scope::*;
 use super::program::*;
 use super::evaluate::*;
+use super::evaluate_const::*;
 use super::tplg_sort::*;
 
 
@@ -17,49 +18,14 @@ use super::tplg_sort::*;
 pub enum
 SymbolKind
 {
-      Const(Expr),
-  GlobalVar(Expr),
+  Null,
 
-  Fn{parameter_name_list: Vec<String>, block: Block},
+  Ty(TyNode),
 
-}
+      Const(Expr,EvalConstResult),
+  GlobalVar(Expr,EvalConstResult),
 
-
-pub enum
-SymbolValue
-{
-  Void,
-
-  Bool(bool),
-    Int(i64),
-    IntV(std::cell::Cell<i64>),
-   Uint(u64),
-  Float(f64),
-
-  Bytes(Vec<u8>),
-
-  ProgramIndex(usize),
-
-}
-
-
-impl
-SymbolValue
-{
-
-
-pub fn get_bool(&self)-> bool{if let Self::Bool(b)  = self{*b} else{false}}
-pub fn get_int(&self)->   i64{if let Self::Int(i)   = self{*i} else{0}}
-pub fn get_int_v(&self)-> i64{if let Self::IntV(i)  = self{i.get()} else{0}}
-pub fn get_uint(&self)->  u64{if let Self::Uint(u)  = self{*u} else{0}}
-pub fn get_float(&self)-> f64{if let Self::Float(f) = self{*f} else{0.0}}
-pub fn get_bytes(&self)-> &Vec<u8>
-{
-  static DUMMY: Vec<u8> = Vec::new();
-
-  if let Self::Bytes(s) = self{s} else{&DUMMY}
-}
-
+  Fn(FnDecl),
 
 }
 
@@ -69,21 +35,17 @@ pub fn get_bytes(&self)-> &Vec<u8>
 pub struct
 Symbol
 {
-  key: SymbolKey,
-
   name: String,
 
   kind: SymbolKind,
 
-  value: SymbolValue,
-
-  ty: Ty,
+  ty_name: String,
 
   offset: usize,
     size: usize,
 
-  deps_parent_list: Vec<SymbolKey>,
-   deps_child_list: Vec<SymbolKey>,
+  deps_parent_list: Vec<String>,
+   deps_child_list: Vec<String>,
 
 }
 
@@ -94,14 +56,12 @@ Symbol
 
 
 pub fn
-new_const(key: SymbolKey, name: String, e: Expr)-> Self
+new()-> Self
 {
   Self{
-    key,
-    name,
-    kind: SymbolKind::Const(e),
-    value: SymbolValue::Void,
-    ty: Ty::Undef,
+    name: String::new(),
+    kind: SymbolKind::Null,
+    ty_name: String::new(),
     offset: 0,
       size: 0,
     deps_parent_list: Vec::new(),
@@ -111,14 +71,12 @@ new_const(key: SymbolKey, name: String, e: Expr)-> Self
 
 
 pub fn
-new_global(key: SymbolKey, name: String, e: Expr)-> Self
+new_ty(name: String, ty_node: TyNode)-> Self
 {
   Self{
-    key,
     name,
-    kind: SymbolKind::GlobalVar(e),
-    value: SymbolValue::Void,
-    ty: Ty::Undef,
+    kind: SymbolKind::Ty(ty_node),
+    ty_name: String::new(),
     offset: 0,
       size: 0,
     deps_parent_list: Vec::new(),
@@ -128,14 +86,12 @@ new_global(key: SymbolKey, name: String, e: Expr)-> Self
 
 
 pub fn
-new_fn(key: SymbolKey, name: String, parameter_name_list: Vec<String>, ty: Ty, block: Block)-> Self
+new_const(name: String, e: Expr)-> Self
 {
   Self{
-    key,
     name,
-    kind: SymbolKind::Fn{parameter_name_list, block},
-    value: SymbolValue::Void,
-    ty,
+    kind: SymbolKind::Const(e,EvalConstResult::Void),
+    ty_name: String::new(),
     offset: 0,
       size: 0,
     deps_parent_list: Vec::new(),
@@ -145,9 +101,32 @@ new_fn(key: SymbolKey, name: String, parameter_name_list: Vec<String>, ty: Ty, b
 
 
 pub fn
-get_key(&self)-> SymbolKey
+new_global(name: String, e: Expr)-> Self
 {
-  self.key
+  Self{
+    name,
+    kind: SymbolKind::GlobalVar(e,EvalConstResult::Void),
+    ty_name: String::new(),
+    offset: 0,
+      size: 0,
+    deps_parent_list: Vec::new(),
+     deps_child_list: Vec::new(),
+  }
+}
+
+
+pub fn
+new_fn(name: String, fndecl: FnDecl)-> Self
+{
+  Self{
+    name,
+    kind: SymbolKind::Fn(fndecl),
+    ty_name: String::new(),
+    offset: 0,
+      size: 0,
+    deps_parent_list: Vec::new(),
+     deps_child_list: Vec::new(),
+  }
 }
 
 
@@ -166,23 +145,9 @@ get_kind(&self)-> &SymbolKind
 
 
 pub fn
-get_value(&self)-> &SymbolValue
+get_ty_name(&self)-> &String
 {
-  &self.value
-}
-
-
-pub fn
-get_value_mut(&mut self)-> &mut SymbolValue
-{
-  &mut self.value
-}
-
-
-pub fn
-get_ty(&self)-> &Ty
-{
-  &self.ty
+  &self.ty_name
 }
 
 
@@ -208,87 +173,51 @@ get_reference_count(&self)-> usize
 
 
 pub fn
-print(&self, progs: &Vec<Program>)
+print(&self)
 {
     match &self.kind
     {
-  SymbolKind::Const(_)    =>{print!("const");}
-  SymbolKind::GlobalVar(_)=>{print!("(g)var");}
-  SymbolKind::Fn{..}      =>{print!("fn");}
+  SymbolKind::Null          =>{print!("null");}
+  SymbolKind::Const(_,_)    =>{print!("const");}
+  SymbolKind::GlobalVar(_,_)=>{print!("(g)var");}
+  SymbolKind::Fn(_)         =>{print!("fn");}
+  SymbolKind::Ty(_)         =>{print!("ty");}
     }
 
 
-  print!(" {}({}i): ",&self.name,self.key.0);
+  print!(" {}: ",&self.name);
 
     match &self.kind
     {
-  SymbolKind::Const(e)    =>{e.print();}
-  SymbolKind::GlobalVar(e)=>{e.print();}
-  SymbolKind::Fn{ parameter_name_list, block}=>{block.print();}
-    }
-
-
-  print!(" -> ");
-
-  self.ty.print();
-
-  print!(" ");
-
-    match &self.ty
-    {
-  Ty::Bool =>{print!("{}",self.value.get_bool()) ;}
-  Ty::Int  =>{print!("{}",self.value.get_int())  ;}
-  Ty::Float=>{print!("{}",self.value.get_float());}
-  _=>{}
+  SymbolKind::Null          =>{}
+  SymbolKind::Const(e,_)    =>{e.print();}
+  SymbolKind::GlobalVar(e,_)=>{e.print();}
+  SymbolKind::Fn(fd)=>{fd.get_block().print();}
+  SymbolKind::Ty(_)=>{}
     }
 
 
   println!("");
-  println!("offset: {}",self.offset);
-  println!("  size: {}",self.size);
-
+  println!("offset: {}, size: {}",self.offset,self.size);
   println!("");
 
-    for key in &self.deps_parent_list
+    for name in &self.deps_parent_list
     {
-      println!("this requires {}",key.0);
+      println!("this requires {}",name);
     }
 
 
-    for key in &self.deps_child_list
+    for name in &self.deps_child_list
     {
-      println!("this is required by {}",key.0);
+      println!("this is required by {}",name);
     }
 
 
   println!("reference count: {}",self.get_reference_count());
 
-    if let SymbolValue::ProgramIndex(i) = &self.value
-    {
-      progs[*i].print_lines();
-      progs[*i].print_bytes();
-    }
-
-
   println!("");
 }
 
-
-}
-
-
-
-
-#[derive(Clone,Copy,PartialEq)]
-pub struct SymbolKey(usize);
-impl SymbolKey{pub fn to_number(self)-> usize{self.0}}
-
-
-pub enum
-Embedded
-{
-  Key(SymbolKey,SymbolKey),
-  String(String),
 
 }
 
@@ -356,6 +285,38 @@ find_string_offset(&self, s: &str)-> Option<usize>
 
 
 pub fn
+find_program(&self, name: &str)-> Option<&Program>
+{
+    for prog in &self.programs
+    {
+        if prog.get_name() == name
+        {
+          return Some(prog);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+find_symbol_index(&self, name: &str)-> Option<usize>
+{
+    for i in 0..self.symbols.len()
+    {
+        if &self.symbols[i].name == name
+        {
+          return Some(i);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
 find_symbol(&self, name: &str)-> Option<&Symbol>
 {
     for sym in &self.symbols
@@ -388,55 +349,41 @@ find_symbol_mut(&mut self, name: &str)-> Option<&mut Symbol>
 
 
 pub fn
-add_fn(&mut self, name: &str, fd: FnDecl)-> Result<SymbolKey,()>
+add_fn(&mut self, name: &str, fd: FnDecl)
 {
-  let  (parameter_name_list,ty,mut block) = fd.decompose();
-
-  let  new_key = SymbolKey(self.symbols.len());
-
-  let  sym = Symbol::new_fn(new_key,name.to_string(),parameter_name_list,ty,block);
+  let  sym = Symbol::new_fn(name.to_string(),fd);
 
   self.symbols.push(sym);
-
-  Ok(new_key)
 }
 
 
 pub fn
-add_const(&mut self, name: &str, e: Expr)-> Result<SymbolKey,()>
+add_const(&mut self, name: &str, e: Expr)
 {
-  let  new_key = SymbolKey(self.symbols.len());
-
-  let  sym = Symbol::new_const(new_key,name.to_string(),e);
+  let  sym = Symbol::new_const(name.to_string(),e);
 
   self.symbols.push(sym);
-
-  Ok(new_key)
 }
 
 
 pub fn
-add_global(&mut self, name: &str, e: Expr)-> Result<SymbolKey,()>
+add_global(&mut self, name: &str, e: Expr)
 {
-  let  new_key = SymbolKey(self.symbols.len());
-
-  let  sym = Symbol::new_global(new_key,name.to_string(),e);
+  let  sym = Symbol::new_global(name.to_string(),e);
 
   self.symbols.push(sym);
-
-  Ok(new_key)
 }
 
 
 pub fn
-add(&mut self, mut decl: Decl)-> Result<SymbolKey,()>
+add(&mut self, mut decl: Decl)
 {
   let  decl_name = decl.release_name();
   let  decl_k    = decl.release_kind();
 
     match decl_k
     {
-  DeclKind::Undef=>{Err(())}
+  DeclKind::Undef=>{}
   DeclKind::Const(e)=>
     {
       self.add_const(&decl_name,e)
@@ -457,76 +404,9 @@ add(&mut self, mut decl: Decl)-> Result<SymbolKey,()>
 }
 
 
-pub fn
-collect_embedded_for_expr(&self, key: SymbolKey, e: &Expr, buf: &mut Vec<Embedded>)
-{
-    match e
-    {
-  Expr::Identifier(s)=>
-    {
-        if let Some(sym) = self.find_symbol(s)
-        {
-          buf.push(Embedded::Key(sym.key,key));
-        }
-
-      else
-        {
-          println!("{} is not found",s);
-        }
-    }
-  Expr::String(s)=>
-    {
-      buf.push(Embedded::String(s.clone()));
-    }
-  Expr::AccessOp(e,_)=>
-    {
-      self.collect_embedded_for_expr(key,e,buf);
-    }
-  Expr::SubscriptOp(e,i_e)=>
-    {
-      self.collect_embedded_for_expr(key,  e,buf);
-      self.collect_embedded_for_expr(key,i_e,buf);
-    }
-  Expr::CallOp(f,args)=>
-    {
-      self.collect_embedded_for_expr(key,f,buf);
-
-        for a in args
-        {
-          self.collect_embedded_for_expr(key,a,buf);
-        }
-    }
-  Expr::Expr(e)=>
-    {
-      self.collect_embedded_for_expr(key,e,buf);
-    }
-  Expr::UnaryOp(o,_)=>
-    {
-      self.collect_embedded_for_expr(key,o,buf);
-    }
-  Expr::BinaryOp(l,r,_)=>
-    {
-      self.collect_embedded_for_expr(key,l,buf);
-      self.collect_embedded_for_expr(key,r,buf);
-    }
-  _=>{}
-    }
-}
-
-
 fn
-link_deps(&mut self, parent_key: SymbolKey, child_key: SymbolKey)
+process_collectibles(&mut self)
 {
-  self.get_mut(parent_key).deps_child_list.push(  child_key);
-  self.get_mut( child_key).deps_parent_list.push(parent_key);
-}
-
-
-fn
-process_embedded(&mut self)
-{
-  let  mut emb_ls = Vec::<Embedded>::new();
-
     for sym in &mut self.symbols
     {
       sym.deps_parent_list.clear();
@@ -534,26 +414,34 @@ process_embedded(&mut self)
     }
 
 
-    for sym in &self.symbols
+    for i in 0..self.symbols.len()
     {
-        match &sym.kind
+      let  mut buf = Vec::<Collectible>::new();
+
+        match &self.symbols[i].kind
         {
-      SymbolKind::Const(e)    =>{self.collect_embedded_for_expr(sym.key,e,&mut emb_ls);}
-      SymbolKind::GlobalVar(e)=>{self.collect_embedded_for_expr(sym.key,e,&mut emb_ls);}
-      SymbolKind::Fn{..}=>
-        {
-        }
+      SymbolKind::Const(e,_)    =>{e.collect(&mut buf);}
+      SymbolKind::GlobalVar(e,_)=>{e.collect(&mut buf);}
+      SymbolKind::Fn(fd)        =>{fd.get_block().collect(&mut buf);}
+      SymbolKind::Ty(ty_node)   =>{ty_node.collect(&mut buf);}
       _=>{panic!();}
         }
-    }
 
 
-    for emb in emb_ls
-    {
-        match emb
+        for co in buf
         {
-      Embedded::Key(parent,child)=>{self.link_deps(parent,child);}
-      Embedded::String(s)        =>{self.add_string_literal(s);}
+            match co
+            {
+          Collectible::Identifier(s)=>
+            {
+              let  sym_name = self.symbols[i].name.clone();
+
+              self.find_symbol_mut(&s).unwrap().deps_child_list.push(sym_name);
+
+              self.symbols[i].deps_parent_list.push(s);
+            }
+          Collectible::String(s)=>{self.add_string_literal(s);}
+            }
         }
     }
 }
@@ -566,7 +454,7 @@ make_tplg_node_list(&self)-> Vec<TplgNode>
 
     for sym in &self.symbols
     {
-      let  nd = TplgNode::new(sym.key,sym.deps_child_list.clone(),sym.deps_parent_list.len());
+      let  nd = TplgNode::new(sym.name.clone(),sym.deps_child_list.clone(),sym.deps_parent_list.len());
 
       buf.push(nd);
     }
@@ -577,99 +465,95 @@ make_tplg_node_list(&self)-> Vec<TplgNode>
 
 
 pub fn
-build_value(&mut self, key: SymbolKey, alloc_off: &mut usize)-> Result<(),()>
+build_value(&mut self, name: &str, alloc_off: &mut usize)
 {
-  println!("building {}...",&self.get(key).name);
+  println!("building {}...",name);
 
-    match &self.get(key).kind
-    {
-  SymbolKind::Const(e)=>
-    {
-      let  res = evaluate(e,self,None);
+  let  i = self.find_symbol_index(name).unwrap();
 
-      let  sym = self.get_mut(key);
+  let  mut tmp = Symbol::new();
+
+  std::mem::swap(&mut self.symbols[i],&mut tmp);
+
+    match &mut tmp.kind
+    {
+  SymbolKind::Const(e,res)=>
+    {
+      *res = evaluate_const(e,self,None);
 
         match res
         {
-      EvalResult::Void   =>{sym.ty = Ty::Void;}
-      EvalResult::Bool(b)=>
+      EvalConstResult::Void=>{tmp.ty_name = "void".to_string();}
+      EvalConstResult::Bool(_)=>
         {
-          sym.value = SymbolValue::Bool(b);
-          sym.ty = Ty::Bool;
-          sym.size = WORD_SIZE;
+          tmp.ty_name = "bool".to_string();
+          tmp.size = WORD_SIZE;
         }
-      EvalResult::Int(i)=>
+      EvalConstResult::Int(_)=>
         {
-          sym.value = SymbolValue::Int(i);
-          sym.ty = Ty::Int;
-          sym.size = WORD_SIZE;
+          tmp.ty_name = "i64".to_string();
+          tmp.size = WORD_SIZE;
         }
-      EvalResult::Float(f)=>
+      EvalConstResult::Float(_)=>
         {
-          sym.value = SymbolValue::Float(f);
-          sym.ty = Ty::Float;
-          sym.size = WORD_SIZE;
+          tmp.ty_name = "f64".to_string();
+          tmp.size = WORD_SIZE;
         }
-      _=>{println!("build const errorx");  res.print();  return Err(());}
+      _=>{  println!("build const error: {} ",&tmp.name);  e.print();  panic!();}
         }
-
-
-      return Ok(());
     }
-  SymbolKind::GlobalVar(e)=>
+  SymbolKind::GlobalVar(e,res)=>
     {
-      let  res = evaluate(e,self,None);
+      *res = evaluate_const(e,self,None);
 
-      let  sym = self.get_mut(key);
-
-      sym.offset = *alloc_off;
+      tmp.offset = *alloc_off;
 
         match res
         {
-      EvalResult::Void   =>{sym.ty = Ty::Void;}
-      EvalResult::Bool(b)=>
+      EvalConstResult::Void   =>{tmp.ty_name = "void".to_string();}
+      EvalConstResult::Bool(_)=>
         {
-          sym.value = SymbolValue::Bool(b);
-          sym.ty = Ty::Bool;
-          sym.size = WORD_SIZE;
+          tmp.ty_name = "bool".to_string();
+          tmp.size = WORD_SIZE;
         }
-      EvalResult::Int(i)=>
+      EvalConstResult::Int(_)=>
         {
-          sym.value = SymbolValue::Int(i);
-          sym.ty = Ty::Int;
-          sym.size = WORD_SIZE;
+          tmp.ty_name = "i64".to_string();
+          tmp.size = WORD_SIZE;
         }
-      EvalResult::Float(f)=>
+      EvalConstResult::Float(_)=>
         {
-          sym.value = SymbolValue::Float(f);
-          sym.ty = Ty::Float;
-          sym.size = WORD_SIZE;
+          tmp.ty_name = "f64".to_string();
+          tmp.size = WORD_SIZE;
         }
-      _=>{return Err(());}
+      _=>{panic!();}
         }
 
 
-      *alloc_off = get_word_aligned(*alloc_off+sym.size);
-
-      return Ok(());
+      *alloc_off = get_word_aligned(*alloc_off+tmp.size);
     }
-  SymbolKind::Fn{..}=>
+  SymbolKind::Fn(fd)=>
     {
-      let  sym = self.get_mut(key);
+      let  tynd = fd.get_ty_node();
 
-      sym.offset = *alloc_off;
+      let  ty = Ty::build_and_add(&tynd,self);
 
-      sym.size = WORD_SIZE;
+      tmp.ty_name = ty.get_name().clone();
 
-      *alloc_off = get_word_aligned(*alloc_off+sym.size);
+      tmp.offset = *alloc_off;
 
-      return Ok(());
+      tmp.size = WORD_SIZE;
+
+      *alloc_off = get_word_aligned(*alloc_off+tmp.size);
+    }
+  SymbolKind::Ty(ty_node)=>
+    {
     }
   _=>{}
     }
 
 
-  Err(())
+  std::mem::swap(&mut self.symbols[i],&mut tmp);
 }
 
 
@@ -694,18 +578,13 @@ allocate_global_vars(&mut self, mut pos: usize)-> usize
 {
   let  nodes = self.make_tplg_node_list();
 
-    if let Ok(sorted_keys) = tplg_sort(nodes)
+    if let Ok(names) = tplg_sort(nodes)
     {
       let  gval_start = pos;
 
-        for key in sorted_keys
+        for name in names
         {
-            if self.build_value(key,&mut pos).is_err()
-            {
-              println!("build_symbol is failed");
-
-              panic!();
-            }
+          self.build_value(&name,&mut pos);
         }
 
 
@@ -756,25 +635,31 @@ build_fn(&mut self, i: usize)-> Result<(),()>
 {
   let  sym = &self.symbols[i];
 
-    if let SymbolKind::Fn{parameter_name_list, block} = &sym.kind
+    if let SymbolKind::Fn(fd) = &sym.kind
     {
-        if let Ty::Function{parameter_ty_list, return_ty} = &sym.ty
-        {
-          let  ret_ty_s = return_ty.get_canonical_name();
+      let  mut parameter_names = Vec::<String>::new();
 
+        for decl in fd.get_parameter_decl_list()
+        {
+          parameter_names.push(decl.get_name().clone());
+        }
+
+
+      let  ty = find_ty(&sym.ty_name).unwrap();
+
+        if let TyKind::Function{parameter_ty_names, return_ty_name} = ty.get_kind()
+        {
           let  mut lid = LabelID::new();
 
-          let  scp = Scope::new_root(parameter_name_list,parameter_ty_list);
+          let  scp = Scope::new_root(&parameter_names,parameter_ty_names);
 
           let  mut output = AsmTable::new();
 
-          block.process(self,&ret_ty_s,&mut lid,None,&scp,&mut output);
+          fd.get_block().process(self,return_ty_name,&mut lid,None,&scp,&mut output);
 
-          let  index = self.programs.len();
+          let  prog = Program::new(&sym.name,scp.get_offset_max(),output);
 
-          self.symbols[i].value = SymbolValue::ProgramIndex(index);
-
-          self.programs.push(Program::new(index,scp.get_offset_max(),output));
+          self.programs.push(prog);
         }
     }
 
@@ -786,7 +671,7 @@ build_fn(&mut self, i: usize)-> Result<(),()>
 pub fn
 build(&mut self)-> Result<ExecImage,()>
 {
-  self.process_embedded();
+  self.process_collectibles();
 
   let  first_pos = self.allocate_strings();
   let   last_pos = self.allocate_global_vars(first_pos);
@@ -797,23 +682,22 @@ build(&mut self)-> Result<ExecImage,()>
 
     for sym in &self.symbols
     {
-        match &sym.value
+        match &sym.kind
         {
-      SymbolValue::Bool(b)=>
+      SymbolKind::GlobalVar(_,res)=>
         {
-          img.write_u64(sym.offset,if *b{1} else{0});
+            match res
+            {
+          EvalConstResult::Bool(b) =>{img.write_u64(sym.offset,if *b{1} else{0});}
+          EvalConstResult::Int(i)  =>{img.write_u64(sym.offset,*i as u64);}
+          EvalConstResult::Float(f)=>{img.write_u64(sym.offset,f.to_bits());}
+          _=>{}
+            }
         }
-      SymbolValue::Int(i)=>
+      SymbolKind::Fn{..}=>
         {
-          img.write_u64(sym.offset,*i as u64);
-        }
-      SymbolValue::Float(f)=>
-        {
-          img.write_u64(sym.offset,f.to_bits());
-        }
-      SymbolValue::ProgramIndex(i)=>
-        {
-          let  prog = self.get_program(*i);
+println!("{}",&sym.name);
+          let  prog = self.find_program(&sym.name).unwrap();
 
           img.write_u64(sym.offset,prog.get_offset() as u64);
 
@@ -843,27 +727,6 @@ build(&mut self)-> Result<ExecImage,()>
 
 
 pub fn
-get(&self, key: SymbolKey)-> &Symbol
-{
-  &self.symbols[key.0]
-}
-
-
-pub fn
-get_program(&self, i: usize)-> &Program
-{
-  &self.programs[i]
-}
-
-
-pub fn
-get_mut(&mut self, key: SymbolKey)-> &mut Symbol
-{
-  &mut self.symbols[key.0]
-}
-
-
-pub fn
 print(&self)
 {
   println!("string literals{{");
@@ -878,7 +741,21 @@ print(&self)
 
     for sym in &self.symbols
     {
-      sym.print(&self.programs);
+      sym.print();
+
+      println!("");
+    }
+
+
+  println!("}}\nprograms{{");
+
+    for prog in &self.programs
+    {
+      prog.print_lines();
+
+      println!("");
+
+      prog.print_bytes();
 
       println!("");
     }

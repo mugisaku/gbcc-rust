@@ -7,7 +7,18 @@ use super::asm::*;
 
 
 
-#[derive(Clone)]
+pub enum
+Collectible
+{
+  Identifier(String),
+      String(String),
+
+}
+
+
+
+
+#[derive(Clone,PartialEq)]
 pub enum
 Expr
 {
@@ -20,7 +31,8 @@ Expr
 
   String(String),
 
-  AccessOp(Box<Expr>,String),
+  SelfAccessOp(Box<Expr>,String),
+  TypeAccessOp(Box<Expr>,String),
   SubscriptOp(Box<Expr>,Box<Expr>),
   CallOp(Box<Expr>,Vec<Expr>),
 
@@ -55,61 +67,122 @@ read(s: &str)-> Result<Self,()>
 
 
 pub fn
-print(&self)
+collect(&self, buf: &mut Vec<Collectible>)
 {
     match self
     {
-  Self::Void=>{print!("void");}
-
-  Self::Identifier(s)=>{print!("{}",s);}
-
-    Self::Int(u)=>{print!("{}",*u);}
-  Self::Float(f)=>{print!("{}",*f);}
-
-  Self::String(s)=>{print!("\"{}\"",s);}
-
-  Self::AccessOp(e,s)=>{  e.print(); print!(".{}",s);}
+  Self::Identifier(s)=>{buf.push(Collectible::Identifier(s.clone()));}
+  Self::String(s)    =>{buf.push(Collectible::String(    s.clone()));}
+  Self::SelfAccessOp(e,s)=>{e.collect(buf);}
+  Self::TypeAccessOp(e,s)=>{e.collect(buf);}
   Self::SubscriptOp(e,i_e)=>
     {
-      e.print();
-      print!("[");
-      i_e.print();
-      print!("]");
+        e.collect(buf);
+      i_e.collect(buf);
     }
   Self::CallOp(f,args)=>
     {
-      f.print();
-
-      print!("(");
+      f.collect(buf);
 
         for e in args
         {
-          e.print();
+          e.collect(buf);
+        }
+    }
+  Self::Expr(e)=>{e.collect(buf);}
+  Self::UnaryOp(o,op)=>{o.collect(buf);}
+  Self::BinaryOp(l,r,op)=>
+    {
+      l.collect(buf);
+      r.collect(buf);
+    }
+  _=>{}
+    }
+}
 
-          print!(", ");
+
+pub fn
+print_to(&self, buf: &mut String)
+{
+    match self
+    {
+  Self::Void=>{buf.push_str("void");}
+
+  Self::Identifier(s)=>{buf.push_str(s);}
+
+    Self::Int(u)=>{buf.push_str(&format!("{}",*u));}
+  Self::Float(f)=>{buf.push_str(&format!("{}",*f));}
+
+  Self::String(s)=>
+    {
+      buf.push('\"');
+      buf.push_str(s);
+      buf.push('\"');
+    }
+  Self::SelfAccessOp(e,s)=>
+    {
+      e.print_to(buf);
+      buf.push('.');
+      buf.push_str(s);
+    }
+  Self::TypeAccessOp(e,s)=>
+    {
+      e.print_to(buf);
+      buf.push_str("::");
+      buf.push_str(s);
+    }
+  Self::SubscriptOp(e,i_e)=>
+    {
+      e.print_to(buf);
+      buf.push('[');
+      i_e.print_to(buf);
+      buf.push(']');
+    }
+  Self::CallOp(f,args)=>
+    {
+      f.print_to(buf);
+
+      buf.push('(');
+
+        for e in args
+        {
+          e.print_to(buf);
+
+          buf.push(',');
         }
 
 
-      print!(")");
+      buf.push(')');
     }
   Self::Expr(e)=>
     {
-      print!("(");
-      e.print();
-      print!(")");
+      buf.push('(');
+      e.print_to(buf);
+      buf.push(')');
     }
    Self::UnaryOp(o,op)=>
     {
-      print!("{}",op);
-      o.print();
+      buf.push_str(op);
+      o.print_to(buf);
     }
   Self::BinaryOp(l,r,op)=>
     {
-      l.print();
-      print!("{}",op);
-      r.print();
+      l.print_to(buf);
+      buf.push_str(op);
+      r.print_to(buf);
     }
     }
+}
+
+
+pub fn
+print(&self)
+{
+  let  mut buf = String::new();
+
+  self.print_to(&mut buf);
+
+  print!("{}",&buf);
 }
 
 
@@ -194,7 +267,8 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
   let  nd = cur.get_node().unwrap();
   let  name = nd.get_name();
 
-       if name == "access"   {return read_access_op(nd,o);}
+       if name == "self_access"{return Expr::SelfAccessOp(o,read_access_op(nd));}
+  else if name == "type_access"{return Expr::TypeAccessOp(o,read_access_op(nd));}
   else if name == "subscript"{return read_subscript_op(nd,o);}
   else if name == "call"     {return read_call_op(nd,o);}
   else{panic!();}
@@ -202,7 +276,7 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
 
 pub fn
-read_access_op(start_nd: &Node, o: Box<Expr>)-> Expr
+read_access_op(start_nd: &Node)-> String
 {
   let  mut cur = start_nd.cursor();
 
@@ -210,7 +284,7 @@ read_access_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
     if let Some(s) = cur.get_identifier()
     {
-      return Expr::AccessOp(o,s.clone());
+      return s.clone();
     }
 
 

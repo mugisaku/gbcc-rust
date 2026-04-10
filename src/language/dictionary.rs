@@ -35,13 +35,14 @@ binary_operator:
   ;
 
 
-access         : "." & .Identifier;
+self_access    : "."  & .Identifier;
+type_access    : "::" & .Identifier;
 subscript      : "[" & expression & "]";
 call           : "(" & [expression & [{"," & expression}]] & ")";
 increment      : "++";
 decrement      : "++";
 
-postfix_op: access | subscript | call | increment | decrement;
+postfix_op: self_access | type_access | subscript | call | increment | decrement;
 
 operand: [{unary_operator}] & operand_core & [{postfix_op}];
 

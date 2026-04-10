@@ -482,7 +482,7 @@ step(&mut self)
   (op) if op == Opcode::Itof as u8=>{let  v = self.ref_last_mut();  *v = ((*v) as i64 as f64).to_bits();}
   (op) if op == Opcode::Ftoi as u8=>{let  v = self.ref_last_mut();  *v = (f64::from_bits(*v) as f64).to_bits();}
 
-  (op) if op == Opcode::Addi as u8=>{let  (l,r) = self.pop2_i();  self.push((l+r) as u64);}
+  (op) if op == Opcode::Addi as u8=>{let  (l,r) = self.pop2_i();  println!("{}+{} = {}",l,r,l+r); self.push((l+r) as u64);}
   (op) if op == Opcode::Subi as u8=>{let  (l,r) = self.pop2_i();  self.push((l-r) as u64);}
   (op) if op == Opcode::Muli as u8=>{let  (l,r) = self.pop2_i();  self.push((l*r) as u64);}
   (op) if op == Opcode::Divi as u8=>{let  (l,r) = self.pop2_i();  self.push((l/r) as u64);}
@@ -522,8 +522,8 @@ step(&mut self)
   (op) if op == Opcode::Gtf   as u8=>{let  (l,r) = self.pop2_f();  self.push_b(l >  r);}
   (op) if op == Opcode::Gteqf as u8=>{let  (l,r) = self.pop2_f();  self.push_b(l >= r);}
 
-  (op) if op == Opcode::Andl as u8=>{let  (l,r) = self.pop2();  self.push_b((l != 0) && (r != 0));}
-  (op) if op == Opcode::Orl  as u8=>{let  (l,r) = self.pop2();  self.push_b((l != 0) || (r != 0));}
+  (op) if op == Opcode::Land as u8=>{let  (l,r) = self.pop2();  self.push_b((l != 0) && (r != 0));}
+  (op) if op == Opcode::Lor  as u8=>{let  (l,r) = self.pop2();  self.push_b((l != 0) || (r != 0));}
 
   (op) if op == Opcode::Jmp as u8=>
     {
@@ -566,13 +566,28 @@ step(&mut self)
   (op) if op == Opcode::Cal as u8=>
     {
       let  pc_addr = self.cp-(WORD_SIZE*3);
+      let  sp_addr = self.cp-(WORD_SIZE*1);
 
       let  old_pc = self.pc                                 ;
                     self.pc = self.get_u64(pc_addr) as usize;
 
       self.put_u64(pc_addr,old_pc as u64);
 
-      self.fp = self.sp;
+      self.fp = self.get_u64(sp_addr) as usize;
+
+      let  mut arg_addr = self.fp;
+
+      print!("called with args(");
+
+        while arg_addr < self.sp
+        {
+          print!("{},",self.get_u64(arg_addr));
+
+          arg_addr += WORD_SIZE;
+        }
+
+
+      print!(")\n");
 
       self.call_depth += 1;
     }

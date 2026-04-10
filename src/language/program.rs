@@ -222,7 +222,7 @@ output(&self, dst_bytes: &mut Vec<u8>)
 pub struct
 Program
 {
-  index: usize,
+  name: String,
 
   stack_size: usize,
 
@@ -241,7 +241,7 @@ Program
 
 
 pub fn
-new(index: usize, stack_size: usize, mut body: AsmTable)-> Self
+new(name: &str, stack_size: usize, mut body: AsmTable)-> Self
 {
   let  mut table = AsmTable::new();
 
@@ -257,7 +257,7 @@ new(index: usize, stack_size: usize, mut body: AsmTable)-> Self
   table.reset_block_position();
 
   Self{
-    index,
+    name: name.to_string(),
     stack_size,
     table,
     bytes: Vec::new(),
@@ -369,9 +369,9 @@ get_bytes(&self)-> &Vec<u8>
 
 
 pub fn
-get_index(&self)-> usize
+get_name(&self)-> &String
 {
-  self.index
+  &self.name
 }
 
 
