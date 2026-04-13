@@ -13,7 +13,7 @@ type: ["*" | "&"] & .Identifier;
 
 table_element: .Identifier & ":" & expression;
 
-table: "[" & [table_element & {"," & table_element}] & "]";
+table: "[" & [{table_element & [","]}] & "]";
 
 operand_core: .Identifier | .Number | .Character | .String | table | ("(" & expression & ")");
 
@@ -38,7 +38,7 @@ binary_operator:
 self_access    : "."  & .Identifier;
 type_access    : "::" & .Identifier;
 subscript      : "[" & expression & "]";
-call           : "(" & [expression & [{"," & expression}]] & ")";
+call           : "(" & [{expression & [","]}] & ")";
 increment      : "++";
 decrement      : "++";
 
@@ -103,7 +103,7 @@ for  : 'for -> .Identifier & 'in -> expression & block;
 
 
 parameter: .Identifier & ":" & type;
-parameter_list: "(" & [parameter & [{"," & parameter}]] & ")";
+parameter_list: "(" & [{parameter & [","]}] & ")";
 
 fn: 'fn -> .Identifier & parameter_list & ["->" & type] & block;
 var  : 'var   -> .Identifier & "=" & expression;
@@ -111,7 +111,24 @@ const: 'const -> .Identifier & "=" & expression;
 static: 'static -> .Identifier & "=" & expression;
 print: 'print & expression;
 
-declaration: fn | var | static | const | ";";
+
+field_list: "{" & [{parameter & [","]}] & "}";
+
+enumerator: .Identifier;
+enumerator_list: "{" & [{enumerator & [","]}] & "}";
+
+struct: 'struct -> .Identifier & field_list;
+union:  'union  -> .Identifier & field_list;
+enum:   'enum   -> .Identifier & enumerator_list;
+
+declaration: fn
+           | var
+           | static
+           | const
+           | struct
+           | union
+           | enum
+           | ";";
 
 
 
@@ -135,6 +152,9 @@ get_dictionary()-> &'static Dictionary
                 {
                   DIC_OPT = Some(tmp_dic);
                 }
+
+              else
+                {panic!();}
             }
         }
 

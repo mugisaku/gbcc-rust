@@ -42,7 +42,6 @@ Symbol
   ty_name: String,
 
   offset: usize,
-    size: usize,
 
   deps_parent_list: Vec<String>,
    deps_child_list: Vec<String>,
@@ -63,7 +62,6 @@ new()-> Self
     kind: SymbolKind::Null,
     ty_name: String::new(),
     offset: 0,
-      size: 0,
     deps_parent_list: Vec::new(),
      deps_child_list: Vec::new(),
   }
@@ -78,7 +76,6 @@ new_ty(name: String, ty_node: TyNode)-> Self
     kind: SymbolKind::Ty(ty_node),
     ty_name: String::new(),
     offset: 0,
-      size: 0,
     deps_parent_list: Vec::new(),
      deps_child_list: Vec::new(),
   }
@@ -93,7 +90,6 @@ new_const(name: String, e: Expr)-> Self
     kind: SymbolKind::Const(e,EvalConstResult::Void),
     ty_name: String::new(),
     offset: 0,
-      size: 0,
     deps_parent_list: Vec::new(),
      deps_child_list: Vec::new(),
   }
@@ -108,7 +104,6 @@ new_global(name: String, e: Expr)-> Self
     kind: SymbolKind::GlobalVar(e,EvalConstResult::Void),
     ty_name: String::new(),
     offset: 0,
-      size: 0,
     deps_parent_list: Vec::new(),
      deps_child_list: Vec::new(),
   }
@@ -123,7 +118,6 @@ new_fn(name: String, fndecl: FnDecl)-> Self
     kind: SymbolKind::Fn(fndecl),
     ty_name: String::new(),
     offset: 0,
-      size: 0,
     deps_parent_list: Vec::new(),
      deps_child_list: Vec::new(),
   }
@@ -155,13 +149,6 @@ pub fn
 get_offset(&self)-> usize
 {
   self.offset
-}
-
-
-pub fn
-get_size(&self)-> usize
-{
-  self.size
 }
 
 
@@ -198,7 +185,7 @@ print(&self)
 
 
   println!("");
-  println!("offset: {}, size: {}",self.offset,self.size);
+  println!("offset: {}",self.offset);
   println!("");
 
     for name in &self.deps_parent_list
@@ -349,6 +336,15 @@ find_symbol_mut(&mut self, name: &str)-> Option<&mut Symbol>
 
 
 pub fn
+add_ty(&mut self, name: &str, ty_node: TyNode)
+{
+  let  sym = Symbol::new_ty(name.to_string(),ty_node);
+
+  self.symbols.push(sym);
+}
+
+
+pub fn
 add_fn(&mut self, name: &str, fd: FnDecl)
 {
   let  sym = Symbol::new_fn(name.to_string(),fd);
@@ -399,6 +395,18 @@ add(&mut self, mut decl: Decl)
   DeclKind::Fn(fd)=>
     {
       self.add_fn(&decl_name,fd)
+    }
+  DeclKind::Struct(ls)=>
+    {
+      self.add_ty(&decl_name,TyNode::Struct(ls))
+    }
+  DeclKind::Union(ls)=>
+    {
+      self.add_ty(&decl_name,TyNode::Union(ls))
+    }
+  DeclKind::Enum(ls)=>
+    {
+      self.add_ty(&decl_name,TyNode::Enum(ls))
     }
     }
 }
@@ -477,28 +485,22 @@ build_value(&mut self, name: &str, alloc_off: &mut usize)
 
     match &mut tmp.kind
     {
+  SymbolKind::Ty(ty_node)=>
+    {
+      let  ty = Ty::build_and_add(ty_node,self);
+
+      tmp.name = ty.get_name().clone();
+    }
   SymbolKind::Const(e,res)=>
     {
       *res = evaluate_const(e,self,None);
 
         match res
         {
-      EvalConstResult::Void=>{tmp.ty_name = "void".to_string();}
-      EvalConstResult::Bool(_)=>
-        {
-          tmp.ty_name = "bool".to_string();
-          tmp.size = WORD_SIZE;
-        }
-      EvalConstResult::Int(_)=>
-        {
-          tmp.ty_name = "i64".to_string();
-          tmp.size = WORD_SIZE;
-        }
-      EvalConstResult::Float(_)=>
-        {
-          tmp.ty_name = "f64".to_string();
-          tmp.size = WORD_SIZE;
-        }
+      EvalConstResult::Void    =>{tmp.ty_name = "void".to_string();}
+      EvalConstResult::Bool(_) =>{tmp.ty_name = "bool".to_string();}
+      EvalConstResult::Int(_)  =>{tmp.ty_name = "i64".to_string();}
+      EvalConstResult::Float(_)=>{tmp.ty_name = "f64".to_string();}
       _=>{  println!("build const error: {} ",&tmp.name);  e.print();  panic!();}
         }
     }
@@ -510,27 +512,17 @@ build_value(&mut self, name: &str, alloc_off: &mut usize)
 
         match res
         {
-      EvalConstResult::Void   =>{tmp.ty_name = "void".to_string();}
-      EvalConstResult::Bool(_)=>
-        {
-          tmp.ty_name = "bool".to_string();
-          tmp.size = WORD_SIZE;
-        }
-      EvalConstResult::Int(_)=>
-        {
-          tmp.ty_name = "i64".to_string();
-          tmp.size = WORD_SIZE;
-        }
-      EvalConstResult::Float(_)=>
-        {
-          tmp.ty_name = "f64".to_string();
-          tmp.size = WORD_SIZE;
-        }
+      EvalConstResult::Void    =>{tmp.ty_name = "void".to_string();}
+      EvalConstResult::Bool(_) =>{tmp.ty_name = "bool".to_string();}
+      EvalConstResult::Int(_)  =>{tmp.ty_name = "i64".to_string();}
+      EvalConstResult::Float(_)=>{tmp.ty_name = "f64".to_string();}
       _=>{panic!();}
         }
 
 
-      *alloc_off = get_word_aligned(*alloc_off+tmp.size);
+      let  ty = find_ty(&tmp.ty_name).unwrap();
+
+      *alloc_off = get_word_aligned(*alloc_off+ty.get_size());
     }
   SymbolKind::Fn(fd)=>
     {
@@ -542,12 +534,7 @@ build_value(&mut self, name: &str, alloc_off: &mut usize)
 
       tmp.offset = *alloc_off;
 
-      tmp.size = WORD_SIZE;
-
-      *alloc_off = get_word_aligned(*alloc_off+tmp.size);
-    }
-  SymbolKind::Ty(ty_node)=>
-    {
+      *alloc_off = get_word_aligned(*alloc_off+WORD_SIZE);
     }
   _=>{}
     }
@@ -696,7 +683,6 @@ build(&mut self)-> Result<ExecImage,()>
         }
       SymbolKind::Fn{..}=>
         {
-println!("{}",&sym.name);
           let  prog = self.find_program(&sym.name).unwrap();
 
           img.write_u64(sym.offset,prog.get_offset() as u64);

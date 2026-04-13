@@ -59,6 +59,22 @@ const  a = 8;
 const  b = a+4;
 const  c = b+8;
 
+struct St{
+a: i64,
+b: u16,
+c: i8,
+d: f32
+
+}
+
+struct Un{
+a: i64,
+b: u8,
+c: f32
+
+}
+
+
 fn
 add(a: i64, b: i64)-> i64
 {

@@ -8,6 +8,7 @@ use super::expr::*;
 use super::evaluate_const::*;
 use super::evaluate::*;
 use super::symbol_table::*;
+use super::decl::ParameterDecl;
 use super::*;
 
 
@@ -22,8 +23,9 @@ TyNode
   Pointer(Box<TyNode>),
   Reference(Box<TyNode>),
   Array(Box<TyNode>,Expr),
-  Struct(Vec<(String,TyNode)>),
-   Union(Vec<(String,TyNode)>),
+  Struct(Vec<ParameterDecl>),
+   Union(Vec<ParameterDecl>),
+    Enum(Vec<(String,)>),
   Function{parameter_ty_nodes: Vec<TyNode>, return_ty_node: Box<TyNode>},
 
 }
@@ -32,22 +34,6 @@ TyNode
 impl
 TyNode
 {
-
-
-pub fn   new_void()-> Self{Self::Root("void".to_string())}
-pub fn   new_bool()-> Self{Self::Root("bool".to_string())}
-pub fn     new_i8()-> Self{Self::Root("i8".to_string())}
-pub fn    new_i16()-> Self{Self::Root("i16".to_string())}
-pub fn    new_i32()-> Self{Self::Root("i32".to_string())}
-pub fn    new_i64()-> Self{Self::Root("i64".to_string())}
-pub fn  new_isize()-> Self{Self::Root("isize".to_string())}
-pub fn     new_u8()-> Self{Self::Root("u8".to_string())}
-pub fn    new_u16()-> Self{Self::Root("u16".to_string())}
-pub fn    new_u32()-> Self{Self::Root("u32".to_string())}
-pub fn    new_u64()-> Self{Self::Root("u64".to_string())}
-pub fn  new_usize()-> Self{Self::Root("usize".to_string())}
-pub fn    new_f32()-> Self{Self::Root("f32".to_string())}
-pub fn    new_f64()-> Self{Self::Root("f64".to_string())}
 
 
 pub fn
@@ -81,16 +67,23 @@ collect(&self, buf: &mut Vec<Collectible>)
     }
   Self::Struct(ls)=>
     {
-        for (_,tn) in ls
+        for p in ls
         {
-          tn.collect(buf);
+          p.get_ty_node().collect(buf);
         }
     }
   Self::Union(ls)=>
     {
-        for (_,tn) in ls
+        for p in ls
         {
-          tn.collect(buf);
+          p.get_ty_node().collect(buf);
+        }
+    }
+  Self::Enum(ls)=>
+    {
+        for (name,) in ls
+        {
+//          tn.collect(buf);
         }
     }
   Self::Function{parameter_ty_nodes,return_ty_node}=>
@@ -106,13 +99,6 @@ collect(&self, buf: &mut Vec<Collectible>)
   _=>{}
     }
 }
-
-
-pub fn   is_pointer(&self)-> bool{if let Self::Pointer(_)   = self{true} else{false}}
-pub fn is_reference(&self)-> bool{if let Self::Reference(_) = self{true} else{false}}
-pub fn  is_function(&self)-> bool{if let Self::Function{..} = self{true} else{false}}
-pub fn     is_array(&self)-> bool{if let Self::Array(_,_)   = self{true} else{false}}
-pub fn      is_root(&self)-> bool{if let Self::Root(_)      = self{true} else{false}}
 
 
 pub fn
@@ -133,9 +119,11 @@ print_to(&self, buf: &mut String)
     {
       buf.push_str("struct{{");
 
-        for (_,tn) in ls
+        for p in ls
         {
-          tn.print_to(buf);
+          buf.push_str(p.get_name());
+
+          p.get_ty_node().print_to(buf);
 
           buf.push_str(",");
         }
@@ -147,9 +135,25 @@ print_to(&self, buf: &mut String)
     {
       buf.push_str("union{{");
 
-        for (_,tn) in ls
+        for p in ls
         {
-          tn.print_to(buf);
+          buf.push_str(p.get_name());
+
+          p.get_ty_node().print_to(buf);
+
+          buf.push_str(",");
+        }
+
+
+      buf.push_str("}}");
+    }
+  Self::Enum(ls)=>
+    {
+      buf.push_str("enum{{");
+
+        for (name,) in ls
+        {
+          buf.push_str(name);
 
           buf.push_str(",");
         }
@@ -251,7 +255,7 @@ TyKind
   Reference(String),
   Struct(Vec<Field>),
   Union(Vec<Field>),
-  Enum,
+  Enum(Vec<(String,i64)>),
   Function{parameter_ty_names: Vec<String>, return_ty_name: String},
 
 }
@@ -338,16 +342,16 @@ build_and_add(ty_node: &TyNode, symtbl: &SymbolTable)-> Rc<Self>
       let  mut offset = 0usize;
       let  mut  align = 0usize;
 
-        for (f_name,f_tn) in ls
+        for p in ls
         {
-          let  target = Self::build_and_add(f_tn,symtbl);
+          let  target = Self::build_and_add(p.get_ty_node(),symtbl);
 
           name.push_str(&target.name);
           name.push(',');
 
           offset = Align(target.align).get(offset);
 
-          let  f = Field{name: f_name.clone(), ty_name: target.name.clone(), offset};
+          let  f = Field{name: p.get_name().clone(), ty_name: target.name.clone(), offset};
 
           field_table.push(f);
 
@@ -375,14 +379,14 @@ build_and_add(ty_node: &TyNode, symtbl: &SymbolTable)-> Rc<Self>
       let  mut  size = 0usize;
       let  mut align = 0usize;
 
-        for (f_name,f_tn) in ls
+        for p in ls
         {
-          let  target = Self::build_and_add(f_tn,symtbl);
+          let  target = Self::build_and_add(p.get_ty_node(),symtbl);
 
           name.push_str(&target.name);
           name.push(',');
 
-          let  f = Field{name: f_name.clone(), ty_name: target.name.clone(), offset: 0};
+          let  f = Field{name: p.get_name().clone(), ty_name: target.name.clone(), offset: 0};
 
           field_table.push(f);
 
@@ -398,6 +402,32 @@ build_and_add(ty_node: &TyNode, symtbl: &SymbolTable)-> Rc<Self>
         kind: TyKind::Union(field_table),
         size: size,
         align: align,
+      })
+    }
+  TyNode::Enum(ls)=>
+    {
+      let  mut name = "enum{".to_string();
+
+      let  mut en_table = Vec::<(String,i64)>::new();
+
+        for (en_name,) in ls
+        {
+          let  n = en_table.len() as i64;
+
+          name.push_str(&format!("{}",n));
+          name.push(',');
+
+          en_table.push((en_name.clone(),n));
+        }
+
+
+      name.push('}');
+
+      Self::wrap_and_add(Self{
+        name,
+        kind: TyKind::Enum(en_table),
+        size: WORD_SIZE,
+        align: WORD_SIZE,
       })
     }
   TyNode::Function{parameter_ty_nodes,return_ty_node}=>
@@ -500,12 +530,39 @@ find_field_in<'a>(ls: &'a Vec<Field>, name: &str)-> Option<&'a Field>
 
 
 fn
+find_enumerator_in(ls: &Vec<(String,i64)>, name: &str)-> Option<i64>
+{
+    for (en_name,n) in ls
+    {
+        if en_name == name
+        {
+          return Some(*n);
+        }
+    }
+
+
+  None
+}
+
+
+fn
 find_field(&self, name: &str)-> Option<&Field>
 {
     match &self.kind
     {
   TyKind::Struct(ls)=>{Self::find_field_in(ls,name)}
   TyKind::Union(ls) =>{Self::find_field_in(ls,name)}
+  _=>{None}
+    }
+}
+
+
+fn
+find_enumerator(&self, name: &str)-> Option<i64>
+{
+    match &self.kind
+    {
+  TyKind::Enum(ls) =>{Self::find_enumerator_in(ls,name)}
   _=>{None}
     }
 }
