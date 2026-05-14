@@ -59,6 +59,8 @@ const  a = 8;
 const  b = a+4;
 const  c = b+8;
 
+var  test: St = St::default;
+
 struct St{
 a: i64,
 b: u16,
@@ -67,11 +69,17 @@ d: f32
 
 }
 
-struct Un{
-a: i64,
+union Un{
+a: i16,
 b: u8,
 c: f32
 
+}
+
+
+enum En
+{
+  Apple, Grape, Peach
 }
 
 
@@ -89,11 +97,17 @@ main()-> i64
 }
 "#)
 {
-  let  mut tbl = SymbolTable::from(root);
-
-    if let Ok(img) = tbl.build()
+    if let Ok(tbl) = SymbolTable::build(root)
     {
       tbl.print();
+
+      println!("");
+
+      print_tys();
+
+      println!("");
+
+      let  img = ExecImage::build(&tbl);
 
       let  mut m = Machine::new();
 

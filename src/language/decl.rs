@@ -4,6 +4,7 @@ use crate::node::*;
 use super::expr::*;
 use super::stmt::*;
 use super::ty::*;
+use super::scope::*;
 
 
 
@@ -60,8 +61,9 @@ pub fn  get_return_ty_node(&self)-> &TyNode{&self.return_ty_node}
 pub fn  get_parameter_decl_list(&self)-> &Vec<ParameterDecl>{&self.parameter_decl_list}
 pub fn  get_block(&self)-> &Block{&self.block}
 
+
 pub fn
-get_ty_node(&self)-> TyNode
+make_ty_node(&self)-> TyNode
 {
   let  mut parameter_ty_nodes = Vec::<TyNode>::new();
 
@@ -110,15 +112,13 @@ DeclKind
 {
   Undef,
 
-   Const(Expr),
-     Var(Expr),
-  Static(Expr),
+   Const(Option<TyNode>,Expr),
+     Var(Option<TyNode>,Expr),
+  Static(Option<TyNode>,Expr),
 
   Fn(FnDecl),
 
-  Struct(Vec<ParameterDecl>),
-   Union(Vec<ParameterDecl>),
-    Enum(Vec<(String,)>),
+  Ty(TyNode),
 
 }
 
@@ -129,78 +129,70 @@ DeclKind
 
 
 pub fn
-print(&self)
+print(&self, name: &str)
 {
     match self
     {
-  DeclKind::Undef   =>{print!("undef");}
-  DeclKind::Const(o)=>
+  DeclKind::Undef=>{print!("undef {}",name);}
+  DeclKind::Const(tn_opt,e)=>
     {
-      print!("const ");
+      print!("const {}",name);
 
-      o.print();
+        if let Some(tn) = tn_opt
+        {
+          print!(": ");
+
+          tn.print();
+        }
+
+
+      print!(" = ");
+
+      e.print();
     }
-  DeclKind::Var(o)=>
+  DeclKind::Var(tn_opt,e)=>
     {
-      print!("var ");
+      print!("var {}",name);
 
-      o.print();
+        if let Some(tn) = tn_opt
+        {
+          print!(": ");
+
+          tn.print();
+        }
+
+
+      print!(" = ");
+
+      e.print();
     }
-  DeclKind::Static(o)=>
+  DeclKind::Static(tn_opt,e)=>
     {
-      print!("static ");
+      print!("static {}",name);
 
-      o.print();
+        if let Some(tn) = tn_opt
+        {
+          print!(": ");
+
+          tn.print();
+        }
+
+
+      print!(" = ");
+
+      e.print();
     }
   DeclKind::Fn(f)=>
     {
-      print!("fn");
+      print!("fn {}",name);
 
       f.print();
     }
-  DeclKind::Struct(ls)=>
+  DeclKind::Ty(tn)=>
     {
-      println!("struct{{");
+      println!("type {} ",name);
 
-        for p in ls
-        {
-          print!("{}: ",p.name);
-
-          p.ty_node.print();
-
-          println!(",");
-        }
-
-
-      println!("}}");
-    }
-  DeclKind::Union(ls)=>
-    {
-      println!("union{{");
-
-        for p in ls
-        {
-          print!("{}: ",p.name);
-
-          p.ty_node.print();
-
-          println!(",");
-        }
-
-
-      println!("}}");
-    }
-  DeclKind::Enum(ls)=>
-    {
-      println!("enum{{");
-
-        for (s,) in ls
-        {
-          println!("{},",s);
-        }
-
-
-      println!("}}");
+      tn.print();
     }
     }
 }
@@ -236,6 +228,13 @@ new()-> Self
 
 
 pub fn
+expire(self)-> (String,DeclKind)
+{
+  (self.name,self.kind)
+}
+
+
+pub fn
 get_name(&self)-> &String
 {
   &self.name
@@ -249,25 +248,41 @@ get_kind(&self)-> &DeclKind
 }
 
 
-pub fn
-release_name(&mut self)-> String
+fn
+collect_from_object_decl(tn_opt: &Option<TyNode>, e: &Expr, buf: &mut Vec<Collectible>)
 {
-  let  mut s = String::new();
+    if let Some(tn) = tn_opt
+    {
+      tn.collect(buf);
+    }
 
-  std::mem::swap(&mut self.name,&mut s);
 
-  s
+  e.collect(buf);
+}
+
+
+fn
+collect_from_parameters(ls: &Vec<ParameterDecl>, buf: &mut Vec<Collectible>)
+{
+    for decl in ls
+    {
+      decl.ty_node.collect(buf);
+    }
 }
 
 
 pub fn
-release_kind(&mut self)-> DeclKind
+collect(&self, buf: &mut Vec<Collectible>)
 {
-  let  mut k = DeclKind::Undef;
-
-  std::mem::swap(&mut self.kind,&mut k);
-
-  k
+    match &self.kind
+    {
+  DeclKind::Undef=>{}
+  DeclKind::Const(tn_opt,e)=>{Self::collect_from_object_decl(tn_opt,e,buf);}
+  DeclKind::Var(tn_opt,e)  =>{Self::collect_from_object_decl(tn_opt,e,buf);}
+  DeclKind::Fn(fd)=>{fd.get_block().collect(buf);}
+  DeclKind::Ty(tn)=>{tn.collect(buf);}
+  _=>{panic!();}
+    }
 }
 
 
@@ -310,7 +325,13 @@ read_as_root(s: &str)-> Result<Vec<Self>,()>
         {
           let  decl = read_decl(decl_nd);
 
-          ls.push(decl);
+            if let DeclKind::Undef = &decl.kind
+            {
+            }
+
+          else
+            {ls.push(decl);}
+
 
           cur.advance(1);
         }
@@ -327,11 +348,7 @@ read_as_root(s: &str)-> Result<Vec<Self>,()>
 pub fn
 print(&self)
 {
-  print!("{} ",&self.name);
-
-  self.kind.print();
-
-  print!("\n");
+  self.kind.print(&self.name);
 }
 
 
@@ -407,7 +424,49 @@ read_parameter_list(start_nd: &Node)-> Vec<ParameterDecl>
 
 
 pub fn
-read_object_decl(start_nd: &Node)-> (String,Expr)
+read_initialize(start_nd: &Node)-> (Option<TyNode>,Expr)
+{
+  let  mut cur = start_nd.cursor();
+
+  let  mut tynode_opt = Option::<TyNode>::None;
+
+    if let Some(s) = cur.get_semi_string()
+    {
+        if s == ":"
+        {
+          cur.advance(1);
+
+            if let Some(ty_nd) = cur.select_node("type")
+            {
+              let  ty = read_ty(ty_nd);
+
+              tynode_opt = Some(ty);
+
+              cur.advance(1);
+            }
+
+          else
+            {panic!();}
+        }
+
+
+      cur.advance(1);
+
+        if let Some(e_nd) = cur.select_node("expression")
+        {
+          let  expr = read_expr(e_nd);
+
+          return (tynode_opt,expr);
+        }
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+read_object_decl(start_nd: &Node)-> (String,Option<TyNode>,Expr)
 {
   let  mut cur = start_nd.cursor();
 
@@ -419,16 +478,11 @@ read_object_decl(start_nd: &Node)-> (String,Expr)
 
       cur.advance(1);
 
-        if let Some(s) = cur.get_semi_string()
+        if let Some(init_nd) = cur.select_node("initialize")
         {
-          cur.advance(1);
+          let  (tynode_opt,expr) = read_initialize(init_nd);
 
-            if let Some(e_nd) = cur.select_node("expression")
-            {
-              let  expr = read_expr(e_nd);
-
-              return (name,expr);
-            }
+          return (name,tynode_opt,expr);
         }
     }
 
@@ -520,7 +574,7 @@ read_enumerator(start_nd: &Node)-> (String,)
 {
   let  mut cur = start_nd.cursor();
 
-    if let Some(s) = cur.get_string()
+    if let Some(s) = cur.get_identifier()
     {
       return (s.clone(),);
     }
@@ -606,7 +660,9 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  (name,ls) = read_struct(nd);
 
-          return Decl{name, kind: DeclKind::Struct(ls)};
+          let  ty_node = TyNode::Struct(ls);
+
+          return Decl{name, kind: DeclKind::Ty(ty_node)};
         }
 
       else
@@ -614,7 +670,9 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  (name,ls) = read_struct(nd);
 
-          return Decl{name, kind: DeclKind::Union(ls)};
+          let  ty_node = TyNode::Union(ls);
+
+          return Decl{name, kind: DeclKind::Ty(ty_node)};
         }
 
       else
@@ -622,7 +680,9 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  (name,ls) = read_enum(nd);
 
-          return Decl{name, kind: DeclKind::Enum(ls)};
+          let  ty_node = TyNode::Enum(ls);
+
+          return Decl{name, kind: DeclKind::Ty(ty_node)};
         }
 
       else
@@ -636,31 +696,36 @@ read_decl(start_nd: &Node)-> Decl
       else
         if name == "var"
         {
-          let  (name,expr) = read_object_decl(nd);
+          let  (name,tynode_opt,expr) = read_object_decl(nd);
 
-          return Decl{name, kind: DeclKind::Var(expr)};
+          return Decl{name, kind: DeclKind::Var(tynode_opt,expr)};
         }
 
       else
         if name == "const"
         {
-          let  (name,expr) = read_object_decl(nd);
+          let  (name,tynode_opt,expr) = read_object_decl(nd);
 
-          return Decl{name, kind: DeclKind::Const(expr)};
+          return Decl{name, kind: DeclKind::Const(tynode_opt,expr)};
         }
 
       else
         if name == "static"
         {
-          let  (name,expr) = read_object_decl(nd);
+          let  (name,tynode_opt,expr) = read_object_decl(nd);
 
-          return Decl{name, kind: DeclKind::Static(expr)};
+          return Decl{name, kind: DeclKind::Static(tynode_opt,expr)};
+        }
+
+      else
+        {
+          println!("{} is unknown decl",name);
         }
     }
 
   else
     {
-      return Decl{name: String::new(), kind: DeclKind::Undef};
+      return Decl::new();
     }
 
 

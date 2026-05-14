@@ -237,6 +237,27 @@ get_next_byte(&mut self)-> u8
 
 
 pub fn
+get_imm_i8(&mut self)-> i8
+{
+  self.get_imm_u8() as i8
+}
+
+
+pub fn
+get_imm_i16(&mut self)-> i16
+{
+  self.get_imm_u16() as i16
+}
+
+
+pub fn
+get_imm_i32(&mut self)-> i32
+{
+  self.get_imm_u32() as i32
+}
+
+
+pub fn
 get_imm_u8(&mut self)-> u8
 {
   self.get_next_byte()
@@ -268,51 +289,39 @@ get_imm_u64(&mut self)-> u64
 
 
 pub fn
-get_imm(&mut self)-> u64
+get_imm_f32(&mut self)-> f32
 {
-    match self.get_next_byte()
+  f32::from_bits(self.get_imm_u32())
+}
+
+
+pub fn
+extend_stack(&mut self, n: usize)
+{
+  self.sp += (WORD_SIZE*n);
+}
+
+
+pub fn
+branch_if_zero(&mut self, offset: isize)
+{
+  let  cond = self.pop();
+
+    if cond == 0
     {
-  (k) if k == ImmKind::U8 as u8=>
-    {
-      self.get_imm_u8() as u64
+      self.jump(offset);
     }
-  (k) if k == ImmKind::U16 as u8=>
+}
+
+
+pub fn
+branch_if_non_zero(&mut self, offset: isize)
+{
+  let  cond = self.pop();
+
+    if cond != 0
     {
-      self.get_imm_u16() as u64
-    }
-  (k) if k == ImmKind::U32 as u8=>
-    {
-      self.get_imm_u32() as u64
-    }
-  (k) if k == ImmKind::I8 as u8=>
-    {
-      self.get_imm_u8() as i8 as u64
-    }
-  (k) if k == ImmKind::I16 as u8=>
-    {
-      self.get_imm_u16() as i16 as u64
-    }
-  (k) if k == ImmKind::I32 as u8=>
-    {
-      self.get_imm_u32() as i32 as u64
-    }
-  (k) if k == ImmKind::F32 as u8=>
-    {
-      (f32::from_bits(self.get_imm_u32()) as f64).to_bits()
-    }
-  (k) if k == ImmKind::I64 as u8=>
-    {
-      self.get_imm_u64()
-    }
-  (k) if k == ImmKind::U64 as u8=>
-    {
-      self.get_imm_u64()
-    }
-  (k) if k == ImmKind::F64 as u8=>
-    {
-      self.get_imm_u64()
-    }
-  _=>{panic!();}
+      self.jump(offset);
     }
 }
 
@@ -339,34 +348,142 @@ step(&mut self)
   (op) if op == Opcode::Push6 as u8=>{self.push(6);}
   (op) if op == Opcode::Push7 as u8=>{self.push(7);}
   (op) if op == Opcode::Push8 as u8=>{self.push(8);}
+  (op) if op == Opcode::Pushpc as u8=>
+    {
+      self.push(self.pc as u64);
+    }
+  (op) if op == Opcode::Pushfp as u8=>
+    {
+      self.push(self.fp as u64);
+    }
+  (op) if op == Opcode::Pushsp as u8=>
+    {
+      self.push(self.sp as u64);
+    }
+  (op) if op == Opcode::Pushi8 as u8=>
+    {
+      let  v = self.get_imm_i8() as i64 as u64;
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Pushi16 as u8=>
+    {
+      let  v = self.get_imm_i16() as i64 as u64;
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Pushi32 as u8=>
+    {
+      let  v = self.get_imm_i32() as i64 as u64;
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Pushu8 as u8=>
+    {
+      let  v = self.get_imm_u8() as u64;
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Pushu16 as u8=>
+    {
+      let  v = self.get_imm_u16() as u64;
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Pushu32 as u8=>
+    {
+      let  v = self.get_imm_u32() as u64;
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Pushu64 as u8=>
+    {
+      let  v = self.get_imm_u64();
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Pushf32 as u8=>
+    {
+      let  v = (self.get_imm_f32() as f64).to_bits();
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Xs8 as u8=>
+    {
+      let  v = self.get_imm_u8() as usize;
+
+      self.extend_stack(v);
+    }
+  (op) if op == Opcode::Xs16 as u8=>
+    {
+      let  v = self.get_imm_u16() as usize;
+
+      self.extend_stack(v);
+    }
+  (op) if op == Opcode::Xs32 as u8=>
+    {
+      let  v = self.get_imm_u32() as usize;
+
+      self.extend_stack(v);
+    }
+  (op) if op == Opcode::Jmp8 as u8=>
+    {
+      let  offset = self.get_imm_i8() as isize;
+
+      self.jump(offset);
+    }
+  (op) if op == Opcode::Jmp16 as u8=>
+    {
+      let  offset = self.get_imm_i16() as isize;
+
+      self.jump(offset);
+    }
+  (op) if op == Opcode::Jmp32 as u8=>
+    {
+      let  offset = self.get_imm_i32() as isize;
+
+      self.jump(offset);
+    }
+  (op) if op == Opcode::Brz8 as u8=>
+    {
+      let  offset = self.get_imm_i8() as isize;
+
+      self.branch_if_zero(offset);
+    }
+  (op) if op == Opcode::Brz16 as u8=>
+    {
+      let  offset = self.get_imm_i16() as isize;
+
+      self.branch_if_zero(offset);
+    }
+  (op) if op == Opcode::Brz32 as u8=>
+    {
+      let  offset = self.get_imm_i32() as isize;
+
+      self.branch_if_zero(offset);
+    }
+  (op) if op == Opcode::Brnz8 as u8=>
+    {
+      let  offset = self.get_imm_i8() as isize;
+
+      self.branch_if_non_zero(offset);
+    }
+  (op) if op == Opcode::Brnz16 as u8=>
+    {
+      let  offset = self.get_imm_i16() as isize;
+
+      self.branch_if_non_zero(offset);
+    }
+  (op) if op == Opcode::Brnz32 as u8=>
+    {
+      let  offset = self.get_imm_i32() as isize;
+
+      self.branch_if_non_zero(offset);
+    }
   (op) if op == Opcode::Pop as u8=>{let  _ = self.pop();}
   (op) if op == Opcode::Dup as u8=>
     {
       let  v = self.get_last();
-
-      self.push(v);
-    }
-  (op) if op == Opcode::Xs as u8=>
-    {
-      let  v = self.pop() as usize;
-
-      self.sp += (WORD_SIZE*v);
-    }
-  (op) if op == Opcode::Lpc as u8=>
-    {
-      self.push(self.pc as u64);
-    }
-  (op) if op == Opcode::Lfp as u8=>
-    {
-      self.push(self.fp as u64);
-    }
-  (op) if op == Opcode::Lsp as u8=>
-    {
-      self.push(self.sp as u64);
-    }
-  (op) if op == Opcode::Li as u8=>
-    {
-      let  v = self.get_imm();
 
       self.push(v);
     }
@@ -482,7 +599,7 @@ step(&mut self)
   (op) if op == Opcode::Itof as u8=>{let  v = self.ref_last_mut();  *v = ((*v) as i64 as f64).to_bits();}
   (op) if op == Opcode::Ftoi as u8=>{let  v = self.ref_last_mut();  *v = (f64::from_bits(*v) as f64).to_bits();}
 
-  (op) if op == Opcode::Addi as u8=>{let  (l,r) = self.pop2_i();  println!("{}+{} = {}",l,r,l+r); self.push((l+r) as u64);}
+  (op) if op == Opcode::Addi as u8=>{let  (l,r) = self.pop2_i();  self.push((l+r) as u64);}
   (op) if op == Opcode::Subi as u8=>{let  (l,r) = self.pop2_i();  self.push((l-r) as u64);}
   (op) if op == Opcode::Muli as u8=>{let  (l,r) = self.pop2_i();  self.push((l*r) as u64);}
   (op) if op == Opcode::Divi as u8=>{let  (l,r) = self.pop2_i();  self.push((l/r) as u64);}
@@ -524,35 +641,6 @@ step(&mut self)
 
   (op) if op == Opcode::Land as u8=>{let  (l,r) = self.pop2();  self.push_b((l != 0) && (r != 0));}
   (op) if op == Opcode::Lor  as u8=>{let  (l,r) = self.pop2();  self.push_b((l != 0) || (r != 0));}
-
-  (op) if op == Opcode::Jmp as u8=>
-    {
-      let  offset = self.get_imm() as isize;
-
-      self.jump(offset);
-    }
-  (op) if op == Opcode::Brz as u8=>
-    {
-      let  offset = self.get_imm() as isize;
-
-      let  cond = self.pop();
-
-        if cond == 0
-        {
-          self.jump(offset);
-        }
-    }
-  (op) if op == Opcode::Brnz as u8=>
-    {
-      let  offset = self.get_imm() as isize;
-
-      let  cond = self.pop();
-
-        if cond != 0
-        {
-          self.jump(offset);
-        }
-    }
   (op) if op == Opcode::Prcal as u8=>
     {
       let  f_addr = self.pop();

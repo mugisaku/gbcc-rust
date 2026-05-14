@@ -147,6 +147,13 @@ get_ty_name(&self)-> &String
 
 
 pub fn
+get_ty(&self)-> Rc<Ty>
+{
+  find_ty(&self.ty_name).unwrap()
+}
+
+
+pub fn
 get_offset(&self)-> usize
 {
   self.offset
@@ -178,7 +185,7 @@ Scope<'a>
 
 
 pub fn
-new_root(names: &Vec<String>, ty_names: &Vec<String>)-> Self
+new_root(decl: &FnDecl, tbl: &SymbolTable)-> Self
 {
   let  mut scp = Self{
     previous_opt: None,
@@ -188,17 +195,11 @@ new_root(names: &Vec<String>, ty_names: &Vec<String>)-> Self
   };
 
 
-  let  mut    name_iter =    names.iter();
-  let  mut ty_name_iter = ty_names.iter();
-
-    while let Some(name) = name_iter.next()
+    for pd in decl.get_parameter_decl_list()
     {
-        if let Some(ty_name) = ty_name_iter.next()
-        {
-          scp.add_var(name,ty_name);
-        }
+      let  ty = add_ty_from_node(pd.get_ty_node(),tbl);
 
-      else{panic!();}
+      scp.add_var(pd.get_name(),ty.get_name());
     }
 
 

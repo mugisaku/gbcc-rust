@@ -88,6 +88,7 @@ statement: ";"
 break   : 'break;
 continue: 'continue;
 return  : 'return -> [expression];
+print: 'print & expression;
 
 
 else: 'else -> block;
@@ -106,10 +107,12 @@ parameter: .Identifier & ":" & type;
 parameter_list: "(" & [{parameter & [","]}] & ")";
 
 fn: 'fn -> .Identifier & parameter_list & ["->" & type] & block;
-var  : 'var   -> .Identifier & "=" & expression;
-const: 'const -> .Identifier & "=" & expression;
-static: 'static -> .Identifier & "=" & expression;
-print: 'print & expression;
+
+initialize: [":" & type] & "=" & expression;
+
+var  :   'var   -> .Identifier & initialize;
+const:   'const -> .Identifier & initialize;
+static: 'static -> .Identifier & initialize;
 
 
 field_list: "{" & [{parameter & [","]}] & "}";

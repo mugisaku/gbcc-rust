@@ -8,11 +8,10 @@ pub mod ty;
 pub mod evaluate_const;
 pub mod evaluate;
 pub mod decl;
-pub mod program;
+pub mod assemble;
 pub mod scope;
 pub mod symbol_table;
 pub mod tplg_sort;
-//pub mod codify;
 pub mod dictionary;
 
 

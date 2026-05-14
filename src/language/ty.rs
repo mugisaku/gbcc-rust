@@ -123,6 +123,8 @@ print_to(&self, buf: &mut String)
         {
           buf.push_str(p.get_name());
 
+          buf.push_str(":");
+
           p.get_ty_node().print_to(buf);
 
           buf.push_str(",");
@@ -138,6 +140,8 @@ print_to(&self, buf: &mut String)
         for p in ls
         {
           buf.push_str(p.get_name());
+
+          buf.push_str(":");
 
           p.get_ty_node().print_to(buf);
 
@@ -232,12 +236,45 @@ read_ty(start_nd: &Node)-> TyNode
 pub struct
 Field
 {
-     name: String,
-  ty_name: String,
+  name: String,
+
+  ty: Rc<Ty>,
 
   offset: usize,
 
 }
+
+
+pub struct
+Enumerator
+{
+   name: String,
+  value: i64,
+}
+
+
+impl
+Enumerator
+{
+
+
+pub fn
+get_name(&self)-> &String
+{
+  &self.name
+}
+
+
+pub fn
+get_value(&self)-> i64
+{
+  self.value
+}
+
+
+}
+
+
 
 
 pub enum
@@ -250,13 +287,13 @@ TyKind
   Int,
   Uint,
   Float,
-  Array(String,usize),
-  Pointer(String),
-  Reference(String),
+  Array(Rc<Ty>,usize),
+  Pointer(Rc<Ty>),
+  Reference(Rc<Ty>),
   Struct(Vec<Field>),
   Union(Vec<Field>),
-  Enum(Vec<(String,i64)>),
-  Function{parameter_ty_names: Vec<String>, return_ty_name: String},
+  Enum(Vec<Enumerator>),
+  Function{parameter_tys: Vec<Rc<Ty>>, return_ty: Rc<Ty>},
 
 }
 
@@ -272,6 +309,8 @@ Ty
    size: usize,
   align: usize,
 
+  default_data: EvalConstResult,
+
 }
 
 
@@ -281,206 +320,14 @@ Ty
 
 
 pub fn
-wrap_and_add(ty: Ty)-> Rc<Self>
-{
-  add_ty(Rc::new(ty))
-}
-
-
-pub fn
-build_and_add(ty_node: &TyNode, symtbl: &SymbolTable)-> Rc<Self>
-{
-    match ty_node
-    {
-  TyNode::Pointer(tn)=>
-    {
-      let  target = Self::build_and_add(tn,symtbl);
-
-      Self::wrap_and_add(Self{
-        name: format!("*{}",&target.name),
-        kind: TyKind::Pointer(target.name.clone()),
-        size: WORD_SIZE,
-        align: WORD_SIZE,
-      })
-    }
-  TyNode::Reference(tn)=>
-    {
-      let  target = Self::build_and_add(tn,symtbl);
-
-      Self::wrap_and_add(Self{
-        name: format!("&{}",&target.name),
-        kind: TyKind::Reference(target.name.clone()),
-        size: WORD_SIZE,
-        align: WORD_SIZE,
-      })
-    }
-  TyNode::Array(tn,e)=>
-    {
-      let  res = evaluate_const(e,symtbl,None);
-
-        if let EvalConstResult::Int(n) = res
-        {
-          let  target = Self::build_and_add(tn,symtbl);
-
-          Self::wrap_and_add(Self{
-            name: format!("{}[{}]",&target.name,n),
-            kind: TyKind::Array(target.name.clone(),n as usize),
-            size: target.size*(n as usize),
-            align: target.align,
-          })
-        }
-
-      else
-        {panic!();}
-    }
-  TyNode::Struct(ls)=>
-    {
-      let  mut name = "struct{".to_string();
-
-      let  mut field_table = Vec::<Field>::new();
-
-      let  mut offset = 0usize;
-      let  mut  align = 0usize;
-
-        for p in ls
-        {
-          let  target = Self::build_and_add(p.get_ty_node(),symtbl);
-
-          name.push_str(&target.name);
-          name.push(',');
-
-          offset = Align(target.align).get(offset);
-
-          let  f = Field{name: p.get_name().clone(), ty_name: target.name.clone(), offset};
-
-          field_table.push(f);
-
-          offset += target.size;
-
-          align = std::cmp::max(align,target.align);
-        }
-
-
-      name.push('}');
-
-      Self::wrap_and_add(Self{
-        name,
-        kind: TyKind::Struct(field_table),
-        size: Align(align).get(offset),
-        align: align,
-      })
-    }
-  TyNode::Union(ls)=>
-    {
-      let  mut name = "union{".to_string();
-
-      let  mut field_table = Vec::<Field>::new();
-
-      let  mut  size = 0usize;
-      let  mut align = 0usize;
-
-        for p in ls
-        {
-          let  target = Self::build_and_add(p.get_ty_node(),symtbl);
-
-          name.push_str(&target.name);
-          name.push(',');
-
-          let  f = Field{name: p.get_name().clone(), ty_name: target.name.clone(), offset: 0};
-
-          field_table.push(f);
-
-           size = std::cmp::max( size, target.size);
-          align = std::cmp::max(align,target.align);
-        }
-
-
-      name.push('}');
-
-      Self::wrap_and_add(Self{
-        name,
-        kind: TyKind::Union(field_table),
-        size: size,
-        align: align,
-      })
-    }
-  TyNode::Enum(ls)=>
-    {
-      let  mut name = "enum{".to_string();
-
-      let  mut en_table = Vec::<(String,i64)>::new();
-
-        for (en_name,) in ls
-        {
-          let  n = en_table.len() as i64;
-
-          name.push_str(&format!("{}",n));
-          name.push(',');
-
-          en_table.push((en_name.clone(),n));
-        }
-
-
-      name.push('}');
-
-      Self::wrap_and_add(Self{
-        name,
-        kind: TyKind::Enum(en_table),
-        size: WORD_SIZE,
-        align: WORD_SIZE,
-      })
-    }
-  TyNode::Function{parameter_ty_nodes,return_ty_node}=>
-    {
-      let  mut name = "fn(".to_string();
-
-      let  mut parameter_ty_names = Vec::<String>::new();
-
-        for tn in parameter_ty_nodes
-        {
-          let  target = Self::build_and_add(tn,symtbl);
-
-          name.push_str(&target.name);
-          name.push(',');
-
-          parameter_ty_names.push(target.name.clone());
-        }
-
-
-      let  target = Self::build_and_add(return_ty_node,symtbl);
-
-      name.push_str(")->");
-      name.push_str(&target.name);
-
-      Self::wrap_and_add(Self{
-        name,
-        kind: TyKind::Function{parameter_ty_names, return_ty_name: target.name.clone()},
-        size: WORD_SIZE,
-        align: WORD_SIZE,
-      })
-    }
-  TyNode::Root(s)=>
-    {
-        if let Some(sym) = symtbl.find_symbol(s)
-        {
-todo!();
-        }
-
-
-      find_ty(s).unwrap()
-    }
-    }
-}
-
-
-pub fn
-new_basic(name: &str, kind: TyKind, size: usize)-> Rc<Self>
+new_basic(name: &str, kind: TyKind, size: usize, default_data: EvalConstResult)-> Rc<Self>
 {
   Rc::new(Self{
     name: name.to_string(),
     kind,
     size,
     align: size,
+    default_data,
   })
 }
 
@@ -513,6 +360,83 @@ get_align(&self)-> usize
 }
 
 
+pub fn
+construct(&self, args: Vec<EvalConstResult>)-> EvalConstResult
+{
+    match &self.name
+    {
+  (s) if s == "i8"=>
+    {
+        if args.len() == 1{args[0].clone().to_int_if_uint().to_i8_if_int()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "i16"=>
+    {
+        if args.len() == 1{args[0].clone().to_int_if_uint().to_i16_if_int()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "i32"=>
+    {
+        if args.len() == 1{args[0].clone().to_int_if_uint().to_i32_if_int()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "i64"=>
+    {
+        if args.len() == 1{args[0].clone().to_int_if_uint().to_i64_if_int()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "isize"=>
+    {
+        if args.len() == 1{args[0].clone().to_int_if_uint().to_isize_if_int()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "u8"=>
+    {
+        if args.len() == 1{args[0].clone().to_u8_if_uint()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "u16"=>
+    {
+        if args.len() == 1{args[0].clone().to_u16_if_uint()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "u32"=>
+    {
+        if args.len() == 1{args[0].clone().to_u32_if_uint()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "u64"=>
+    {
+        if args.len() == 1{args[0].clone().to_u64_if_uint()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "usize"=>
+    {
+        if args.len() == 1{args[0].clone().to_usize_if_uint()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "f32"=>
+    {
+        if args.len() == 1{args[0].clone().to_f32_if_float()}
+      else{EvalConstResult::Err}
+    }
+  (s) if s == "f64"=>
+    {
+        if args.len() == 1{args[0].clone().to_f64_if_float()}
+      else{EvalConstResult::Err}
+    }
+  _=>{EvalConstResult::Err}
+    }
+}
+
+
+pub fn
+get_default(&self)-> &EvalConstResult
+{
+  &self.default_data
+}
+
+
 fn
 find_field_in<'a>(ls: &'a Vec<Field>, name: &str)-> Option<&'a Field>
 {
@@ -530,13 +454,13 @@ find_field_in<'a>(ls: &'a Vec<Field>, name: &str)-> Option<&'a Field>
 
 
 fn
-find_enumerator_in(ls: &Vec<(String,i64)>, name: &str)-> Option<i64>
+find_enumerator_in(ls: &Vec<Enumerator>, name: &str)-> Option<i64>
 {
-    for (en_name,n) in ls
+    for en in ls
     {
-        if en_name == name
+        if en.name == name
         {
-          return Some(*n);
+          return Some(en.value);
         }
     }
 
@@ -571,7 +495,36 @@ find_enumerator(&self, name: &str)-> Option<i64>
 pub fn
 print(&self)
 {
-  print!("name:{}, size: {}, align: {}\n",&self.name,self.size,self.align);
+  println!("name: {}, size: {}, align: {}",&self.name,self.size,self.align);
+
+    match &self.kind
+    {
+  TyKind::Struct(ls)=>
+    {
+      println!("fields{{");
+
+        for f in ls
+        {
+          println!("{}(off: {}) ,",&f.name,f.offset);
+        }
+
+
+      println!("}}");
+    }
+  TyKind::Union(ls)=>
+    {
+      println!("fields{{");
+
+        for f in ls
+        {
+          println!("{}(off: {}) ,",&f.name,f.offset);
+        }
+
+
+      println!("}}");
+    }
+  _=>{}
+    }
 }
 
 
@@ -586,20 +539,20 @@ static  mut TABLE: Vec<Rc<Ty>> = Vec::new();
 pub fn
 install_basic_types()
 {
-  let   void_ty = Ty::new_basic( "void",TyKind::Void ,0);
-  let   bool_ty = Ty::new_basic( "bool",TyKind::Bool ,1);
-  let     i8_ty = Ty::new_basic(   "i8",TyKind::Int  ,1);
-  let    i16_ty = Ty::new_basic(  "i16",TyKind::Int  ,2);
-  let    i32_ty = Ty::new_basic(  "i32",TyKind::Int  ,4);
-  let    i64_ty = Ty::new_basic(  "i64",TyKind::Int  ,8);
-  let  isize_ty = Ty::new_basic("isize",TyKind::Int  ,8);
-  let     u8_ty = Ty::new_basic(   "u8",TyKind::Uint ,1);
-  let    u16_ty = Ty::new_basic(  "u16",TyKind::Uint ,2);
-  let    u32_ty = Ty::new_basic(  "u32",TyKind::Uint ,4);
-  let    u64_ty = Ty::new_basic(  "u64",TyKind::Uint ,8);
-  let  usize_ty = Ty::new_basic("usize",TyKind::Uint ,8);
-  let    f32_ty = Ty::new_basic(  "f32",TyKind::Float,4);
-  let    f64_ty = Ty::new_basic(  "f64",TyKind::Float,8);
+  let   void_ty = Ty::new_basic( "void",TyKind::Void ,0,EvalConstResult::Void);
+  let   bool_ty = Ty::new_basic( "bool",TyKind::Bool ,1,EvalConstResult::Bool(false));
+  let     i8_ty = Ty::new_basic(   "i8",TyKind::Int  ,1,EvalConstResult::I8(0));
+  let    i16_ty = Ty::new_basic(  "i16",TyKind::Int  ,2,EvalConstResult::I16(0));
+  let    i32_ty = Ty::new_basic(  "i32",TyKind::Int  ,4,EvalConstResult::I32(0));
+  let    i64_ty = Ty::new_basic(  "i64",TyKind::Int  ,8,EvalConstResult::I64(0));
+  let  isize_ty = Ty::new_basic("isize",TyKind::Int  ,8,EvalConstResult::ISize(0));
+  let     u8_ty = Ty::new_basic(   "u8",TyKind::Uint ,1,EvalConstResult::U8(0));
+  let    u16_ty = Ty::new_basic(  "u16",TyKind::Uint ,2,EvalConstResult::U16(0));
+  let    u32_ty = Ty::new_basic(  "u32",TyKind::Uint ,4,EvalConstResult::U32(0));
+  let    u64_ty = Ty::new_basic(  "u64",TyKind::Uint ,8,EvalConstResult::U64(0));
+  let  usize_ty = Ty::new_basic("usize",TyKind::Uint ,8,EvalConstResult::USize(0));
+  let    f32_ty = Ty::new_basic(  "f32",TyKind::Float,4,EvalConstResult::F32(0.0));
+  let    f64_ty = Ty::new_basic(  "f64",TyKind::Float,8,EvalConstResult::F64(0.0));
 
     unsafe
     {
@@ -622,7 +575,7 @@ install_basic_types()
 
 
 pub fn
-add_ty(ty: Rc<Ty>)-> Rc<Ty>
+add_ty(ty: Ty)-> Rc<Ty>
 {
     if let Some(existed) = find_ty(&ty.name)
     {
@@ -631,9 +584,501 @@ add_ty(ty: Rc<Ty>)-> Rc<Ty>
 
   else
     {
-      unsafe{TABLE.push(Rc::clone(&ty));}
+      add_ty_unchecked(ty)
+    }
+}
 
-      ty
+
+pub fn
+add_ty_unchecked(ty: Ty)-> Rc<Ty>
+{
+  let  rc = Rc::new(ty);
+
+  unsafe{TABLE.push(Rc::clone(&rc));}
+
+  rc
+}
+
+
+pub fn
+add_ty_from_node(tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
+{
+    match tn
+    {
+  TyNode::Pointer(tn)=>
+    {
+      let  target = add_ty_from_node(tn,symtbl);
+
+      get_pointer_ty(target)
+    }
+  TyNode::Reference(tn)=>
+    {
+      let  target = add_ty_from_node(tn,symtbl);
+
+      get_reference_ty(target)
+    }
+  TyNode::Array(tn,e)=>
+    {
+      let  res = evaluate_const(e,symtbl,None);
+
+        if let EvalConstResult::Uint(n) = res
+        {
+          let  target = add_ty_from_node(tn,symtbl);
+
+          get_array_ty(target,n as usize)
+        }
+
+      else
+        {panic!();}
+    }
+  TyNode::Struct(ls)=>
+    {
+      let  mut fields = Vec::<Field>::new();
+
+        for p in ls
+        {
+          let  ty = add_ty_from_node(p.get_ty_node(),symtbl);
+
+          let  f = Field{name: p.get_name().clone(), ty, offset: 0};
+
+          fields.push(f);
+        }
+
+
+      get_struct_ty(fields)
+    }
+  TyNode::Union(ls)=>
+    {
+      let  mut fields = Vec::<Field>::new();
+
+        for p in ls
+        {
+          let  ty = add_ty_from_node(p.get_ty_node(),symtbl);
+
+          let  f = Field{name: p.get_name().clone(), ty, offset: 0};
+
+          fields.push(f);
+        }
+
+
+      get_union_ty(fields)
+    }
+  TyNode::Enum(ls)=>
+    {
+      let  mut en_table = Vec::<Enumerator>::new();
+
+        for (en_name,) in ls
+        {
+          let  value = en_table.len() as i64;
+
+          let  en = Enumerator{name: en_name.clone(), value};
+
+          en_table.push(en);
+        }
+
+
+      get_enum_ty(en_table)
+    }
+  TyNode::Function{parameter_ty_nodes,return_ty_node}=>
+    {
+      let  mut parameter_tys = Vec::<Rc<Ty>>::new();
+
+        for tn in parameter_ty_nodes
+        {
+          let  ty = add_ty_from_node(tn,symtbl);
+
+          parameter_tys.push(ty);
+        }
+
+
+      let  return_ty = add_ty_from_node(return_ty_node,symtbl);
+
+      get_function_ty(parameter_tys,return_ty)
+    }
+  TyNode::Root(s)=>
+    {
+        if let Some(sym) = symtbl.find_symbol(s)
+        {
+          find_ty(sym.get_ty_name()).unwrap()
+        }
+
+      else
+        {
+          find_ty(s).unwrap()
+        }
+    }
+    }
+}
+
+
+pub fn
+get_pointer_ty_name(base_name: &str)-> String
+{
+  format!("*{}",base_name)
+}
+
+
+pub fn
+get_pointer_ty_by_name(name: &str)-> Rc<Ty>
+{
+  let  ptr_ty_name = get_pointer_ty_name(name);
+
+    if let Some(existed) = find_ty(&ptr_ty_name)
+    {
+      existed
+    }
+
+  else
+    if let Some(base) = find_ty(name)
+    {
+      get_pointer_ty(base)
+    }
+
+  else
+    {panic!();}
+}
+
+
+pub fn
+get_pointer_ty(ty: Rc<Ty>)-> Rc<Ty>
+{
+  let  ptr_ty_name = get_pointer_ty_name(&ty.name);
+
+    if let Some(existed) = find_ty(&ptr_ty_name)
+    {
+      existed
+    }
+
+  else
+    {
+      add_ty(Ty{
+        name: ptr_ty_name.clone(),
+        kind: TyKind::Pointer(Rc::clone(&ty)),
+        size: WORD_SIZE,
+        align: WORD_SIZE,
+        default_data: EvalConstResult::Complex(ptr_ty_name,vec![EvalConstResult::NullPointer]),
+      })
+    }
+}
+
+
+pub fn
+get_reference_ty_name(base_name: &str)-> String
+{
+  format!("&{}",base_name)
+}
+
+
+pub fn
+get_reference_ty_by_name(name: &str)-> Rc<Ty>
+{
+  let  ref_ty_name = get_reference_ty_name(name);
+
+    if let Some(existed) = find_ty(&ref_ty_name)
+    {
+      existed
+    }
+
+  else
+    if let Some(base) = find_ty(name)
+    {
+      get_reference_ty(base)
+    }
+
+  else
+    {panic!();}
+}
+
+
+pub fn
+get_reference_ty(ty: Rc<Ty>)-> Rc<Ty>
+{
+  let  ref_ty_name = get_reference_ty_name(&ty.name);
+
+    if let Some(existed) = find_ty(&ref_ty_name)
+    {
+      existed
+    }
+
+  else
+    {
+      add_ty(Ty{
+        name: ref_ty_name.clone(),
+        kind: TyKind::Reference(Rc::clone(&ty)),
+        size: WORD_SIZE,
+        align: WORD_SIZE,
+        default_data: EvalConstResult::Complex(ref_ty_name,vec![EvalConstResult::NullPointer]),
+      })
+    }
+}
+
+
+pub fn
+get_array_ty_name(base_name: &str, n: usize)-> String
+{
+  format!("{}[{}]",base_name,n)
+}
+
+
+pub fn
+get_array_ty_by_name(name: &str, n: usize)-> Rc<Ty>
+{
+  let  arr_ty_name = get_array_ty_name(name,n);
+
+    if let Some(existed) = find_ty(&arr_ty_name)
+    {
+      existed
+    }
+
+  else
+    if let Some(base) = find_ty(name)
+    {
+      get_array_ty(base,n)
+    }
+
+  else
+    {panic!();}
+}
+
+
+pub fn
+get_array_ty(ty: Rc<Ty>, n: usize)-> Rc<Ty>
+{
+  let  arr_ty_name = get_array_ty_name(&ty.name,n);
+
+    if let Some(existed) = find_ty(&arr_ty_name)
+    {
+      existed
+    }
+
+  else
+    {
+      let  mut buf = Vec::<EvalConstResult>::new();
+
+        for _ in 0..n
+        {
+          buf.push(ty.get_default().clone());
+        }
+
+
+      add_ty(Ty{
+        name: arr_ty_name.clone(),
+        kind: TyKind::Array(Rc::clone(&ty),n),
+        size: ty.size*n,
+        align: ty.align,
+        default_data: EvalConstResult::Complex(arr_ty_name,buf),
+      })
+    }
+}
+
+
+
+
+pub fn
+get_struct_ty_name(fields: &Vec<Field>)-> String
+{
+  let  mut name = "struct{".to_string();
+
+    for f in fields
+    {
+      name.push_str(&f.ty.name);
+      name.push(',');
+    }
+
+
+  name.push('}');
+
+  name
+}
+
+
+pub fn
+get_struct_ty(mut fields: Vec<Field>)-> Rc<Ty>
+{
+  let  st_ty_name = get_struct_ty_name(&fields);
+
+    if let Some(existed) = find_ty(&st_ty_name)
+    {
+      existed
+    }
+
+  else
+    {
+      let  mut offset = 0usize;
+      let  mut  align = 0usize;
+
+      let  mut buf = Vec::<EvalConstResult>::new();
+
+        for f in &mut fields
+        {
+          offset = Align(f.ty.align).get(offset);
+
+          f.offset = offset;
+
+          offset += f.ty.size;
+
+          align = std::cmp::max(align,f.ty.align);
+
+          buf.push(f.ty.get_default().clone());
+        }
+
+
+      add_ty(Ty{
+        name: st_ty_name.clone(),
+        kind: TyKind::Struct(fields),
+        size: Align(align).get(offset),
+        align: align,
+        default_data: EvalConstResult::Complex(st_ty_name,buf),
+      })
+    }
+}
+
+
+pub fn
+get_union_ty_name(fields: &Vec<Field>)-> String
+{
+  let  mut name = "union{".to_string();
+
+    for f in fields
+    {
+      name.push_str(&f.ty.name);
+      name.push(',');
+    }
+
+
+  name.push('}');
+
+  name
+}
+
+
+pub fn
+get_union_ty(mut fields: Vec<Field>)-> Rc<Ty>
+{
+  let  un_ty_name = get_union_ty_name(&fields);
+
+    if let Some(existed) = find_ty(&un_ty_name)
+    {
+      existed
+    }
+
+  else
+    {
+      let  mut  size = 0usize;
+      let  mut align = 0usize;
+
+      let  mut buf = Vec::<EvalConstResult>::new();
+
+        for f in &fields
+        {
+           size = std::cmp::max( size,f.ty.size );
+          align = std::cmp::max(align,f.ty.align);
+
+          buf.push(f.ty.get_default().clone());
+        }
+
+
+      add_ty(Ty{
+        name: un_ty_name.clone(),
+        kind: TyKind::Union(fields),
+        size,
+        align,
+        default_data: EvalConstResult::Complex(un_ty_name,buf),
+      })
+    }
+}
+
+
+
+
+pub fn
+get_enum_ty_name(enumers: &Vec<Enumerator>)-> String
+{
+  let  mut name = "enum{".to_string();
+
+    for en in enumers
+    {
+      name.push_str(&format!("{}:{}",&en.name,en.value));
+      name.push(',');
+    }
+
+
+  name.push('}');
+
+  name
+}
+
+
+pub fn
+get_enum_ty(mut enumers: Vec<Enumerator>)-> Rc<Ty>
+{
+  let  en_ty_name = get_enum_ty_name(&enumers);
+
+    if let Some(existed) = find_ty(&en_ty_name)
+    {
+      existed
+    }
+
+  else
+    {
+      let  mut id = String::new();
+
+        if let Some(en) = enumers.first()
+        {
+          id = en.name.clone();
+        }
+
+
+      add_ty(Ty{
+        name: en_ty_name.clone(),
+        kind: TyKind::Enum(enumers),
+        size: WORD_SIZE,
+        align: WORD_SIZE,
+        default_data: EvalConstResult::Enumerator(en_ty_name,id),
+      })
+    }
+}
+
+
+
+pub fn
+get_function_ty_name(param_tys: &Vec<Rc<Ty>>, ret_ty: &Rc<Ty>)-> String
+{
+  let  mut name = "fn(".to_string();
+
+    for ty in param_tys
+    {
+      name.push_str(&ty.name);
+      name.push(',');
+    }
+
+
+  name.push_str(")->");
+  name.push_str(&ret_ty.name);
+
+  name
+}
+
+
+pub fn
+get_function_ty(parameter_tys: Vec<Rc<Ty>>, return_ty: Rc<Ty>)-> Rc<Ty>
+{
+  let  fn_ty_name = get_function_ty_name(&parameter_tys,&return_ty);
+
+    if let Some(existed) = find_ty(&fn_ty_name)
+    {
+      existed
+    }
+
+  else
+    {
+      add_ty(Ty{
+        name: fn_ty_name.clone(),
+        kind: TyKind::Function{parameter_tys, return_ty},
+        size: WORD_SIZE,
+        align: WORD_SIZE,
+        default_data: EvalConstResult::Complex(fn_ty_name,vec![EvalConstResult::NullPointer]),
+      })
     }
 }
 
@@ -651,6 +1096,18 @@ find_ty(name: &str)-> Option<Rc<Ty>>
 
 
   None
+}
+
+
+pub fn
+print_tys()
+{
+    for ty in unsafe{&TABLE}
+    {
+      ty.print();
+
+      println!("");
+    }
 }
 
 

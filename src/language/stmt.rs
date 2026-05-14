@@ -1,5 +1,7 @@
 
 
+use std::rc::Rc;
+
 use crate::node::*;
 use super::expr::*;
 use super::decl::*;
@@ -11,132 +13,6 @@ use super::scope::*;
 use super::symbol_table::*;
 
 
-
-
-pub struct
-LabelID
-{
-  value: usize,
-}
-
-
-impl
-LabelID
-{
-
-
-pub fn
-new()-> Self
-{
-  Self{value: 0}
-}
-
-
-pub fn
-make_br_label_holder(&mut self)-> BrLabelHolder
-{
-  let  blh = BrLabelHolder::new(self.value);
-
-  self.value += 1;
-
-  blh
-}
-
-
-pub fn
-make_ctrl_label_holder(&mut self)-> CtrlLabelHolder
-{
-  let  clh = CtrlLabelHolder::new(self.value);
-
-  self.value += 1;
-
-  clh
-}
-
-
-}
-
-
-
-
-pub struct
-BrLabelHolder
-{
-  base: String,
-  number: usize,
-  label: String,
-
-}
-
-
-impl
-BrLabelHolder
-{
-
-
-pub fn
-new(id: usize)-> Self
-{
-  let   base = format!("L{}_",id);
-  let  label = format!("L{}_1",&base);
-
-  Self{base, number: 1, label}
-}
-
-
-pub fn
-get_label(&self)-> &String
-{
-  &self.label
-}
-
-
-pub fn
-make_end_label(&self)-> String
-{
-  format!("{}_END",&self.base)
-}
-
-
-pub fn
-increment(&mut self)
-{
-  self.number += 1;
-
-  self.label = format!("{}{}",&self.base,self.number);
-}
-
-
-}
-
-
-
-
-pub struct
-CtrlLabelHolder
-{
-     on_break: String,
-  on_continue: String,
-
-}
-
-
-impl
-CtrlLabelHolder
-{
-
-
-pub fn
-new(id: usize)-> Self
-{
-  Self{
-       on_break: format!("L{}_END",id),
-    on_continue: format!("L{}_RESTART",id),
-  }
-}
-
-
-}
 
 
 pub struct
@@ -202,7 +78,7 @@ IfStmt
 pub fn  get_condition(&self)-> &Expr{&self.condition}
 pub fn  get_block(&self)-> &Block{&self.block}
 pub fn  get_elif_stmt_list(&self)-> &Vec<ElifStmt>{&self.elif_stmt_list}
-pub fn  get_else_block(&self)-> &Option<Block>{&self.else_block_opt}
+pub fn  get_else_block_opt(&self)-> &Option<Block>{&self.else_block_opt}
 
 pub fn
 collect(&self, buf: &mut Vec<Collectible>)
@@ -221,66 +97,6 @@ collect(&self, buf: &mut Vec<Collectible>)
     {
       blk.collect(buf);
     }
-}
-
-
-pub fn
-process(&self, tbl: &SymbolTable, ret_ty_name: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
-{
-  let  mut blh = lid.make_br_label_holder();
-
-  let  end_label = blh.make_end_label();
-
-  let  txt = evaluate(&self.condition,tbl,Some(scp)).to_text();
-
-    if txt.get_ty_name() == "bool"
-    {
-      output.push_eval_text(txt);
-
-      output.push_brz(blh.get_label());
-
-      self.block.process(tbl,ret_ty_name,lid,clh_opt,scp,output);
-
-      output.push_jmp(&end_label);
-    }
-
-  else
-    {panic!();}
-
-
-    for elif in &self.elif_stmt_list
-    {
-      let  elif_txt = evaluate(&elif.condition,tbl,Some(scp)).to_text();
-
-      output.push_label(blh.get_label());
-
-      blh.increment();
-
-        if elif_txt.get_ty_name() == "bool"
-        {
-          output.push_eval_text(elif_txt);
-
-          output.push_brz(blh.get_label());
-
-          elif.block.process(tbl,ret_ty_name,lid,clh_opt,scp,output);
-
-          output.push_jmp(&end_label);
-        }
-
-      else
-        {panic!();}
-    }
-
-
-    if let Some(blk) = &self.else_block_opt
-    {
-      output.push_label(blh.get_label());
-
-      blk.process(tbl,ret_ty_name,lid,clh_opt,scp,output);
-    }
-
-
-  output.push_label(&end_label);
 }
 
 
@@ -376,79 +192,6 @@ collect(&self, buf: &mut Vec<Collectible>)
 
 
 pub fn
-process(&self, tbl: &SymbolTable, ret_ty_name: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
-{
-  let  clh = lid.make_ctrl_label_holder();
-
-  let  mut new_scp = Scope::new(scp);
-
-
-  let  mut count_max_off = 0usize;
-
-  let  mut count_max_txt = evaluate(&self.expr,tbl,Some(scp)).to_text();
-
-    if count_max_txt.get_ty_name() == "i64"
-    {
-      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>","i64");
-
-      let  mut var_txt = AsmEvalText::new();
-
-      var_txt.push_local_var(count_max_off,"i64");
-
-      output.push_assign(var_txt,count_max_txt,"=");
-    }
-
-  else
-    {panic!();}
-
-
-
-  let  count_cur_off = new_scp.add_var(&self.var_name,"i64");
-
-  let  mut init_txt = AsmEvalText::new();
-
-  init_txt.push_local_var(count_cur_off,"i64");
-  init_txt.push_opcode(Opcode::Push0);
-  init_txt.push_opcode(Opcode::St64);
-
-  output.push_eval_text(init_txt);
-
-  output.push_label(&clh.on_continue);
-
-
-  let  mut inc_txt = AsmEvalText::new();
-
-  inc_txt.push_local_var(count_cur_off,"i64");
-  inc_txt.push_opcode(Opcode::Dup);
-  inc_txt.push_opcode(Opcode::Ld64);
-  inc_txt.push_opcode(Opcode::Push1);
-  inc_txt.push_opcode(Opcode::Addi);
-  inc_txt.push_opcode(Opcode::St64);
-
-  output.push_eval_text(inc_txt);
-
-
-  let  mut cmp_txt = AsmEvalText::new();
-
-  cmp_txt.push_local_var(count_cur_off,"i64");
-  cmp_txt.push_opcode(Opcode::Ld64);
-  cmp_txt.push_local_var(count_max_off,"i64");
-  cmp_txt.push_opcode(Opcode::Ld64);
-  cmp_txt.push_opcode(Opcode::Lti);
-
-  output.push_eval_text(cmp_txt);
-
-  output.push_brz(&clh.on_break);
-
-  self.block.process(tbl,ret_ty_name,lid,Some(&clh),&new_scp,output);
-
-  output.push_jmp(&clh.on_continue);
-
-  output.push_label(&clh.on_break);
-}
-
-
-pub fn
 is_executable_as_const(&self)-> bool
 {
   self.block.is_executable_as_const()
@@ -506,18 +249,6 @@ collect(&self, buf: &mut Vec<Collectible>)
     for stmt in &self.stmt_list
     {
       stmt.collect(buf);
-    }
-}
-
-
-pub fn
-process(&self, tbl: &SymbolTable, ret_ty_name: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmTable)
-{
-  let  mut new_scp = Scope::new(scp);
-
-    for stmt in &self.stmt_list
-    {
-      stmt.process(tbl,ret_ty_name,lid,clh_opt,&mut new_scp,output);
     }
 }
 
@@ -615,16 +346,7 @@ collect(&self, buf: &mut Vec<Collectible>)
     {
   Self::Empty=>{}
   Self::Block(blk)=>{blk.collect(buf);}
-  Self::Decl(decl)=>
-    {
-        match decl.get_kind()
-        {
-      DeclKind::Const(e)=>{e.collect(buf);}
-      DeclKind::Var(e)=>  {e.collect(buf);}
-      DeclKind::Static(_)=>{}
-      _=>{panic!();}
-        }
-    }
+  Self::Decl(decl)=>{decl.collect(buf);}
   Self::Expr(e)=>{e.collect(buf);}
   Self::If(i)=>{i.collect(buf);;}
   Self::Loop(blk)=>{blk.collect(buf);}
@@ -648,161 +370,6 @@ collect(&self, buf: &mut Vec<Collectible>)
     }
   Self::Print(e)=>{e.collect(buf);}
   _=>{}
-    }
-}
-
-
-pub fn
-process(&self, tbl: &SymbolTable, ret_ty_name: &str, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmTable)
-{
-    match self
-    {
-  Self::Empty=>{}
-  Self::Block(blk)=>{blk.process(tbl,ret_ty_name,lid,clh_opt,scp,output);}
-  Self::Decl(decl)=>
-    {
-        match decl.get_kind()
-        {
-      DeclKind::Const(e)=>
-        {
-          let  cres = evaluate_const(e,tbl,Some(scp));
-
-            match cres
-            {
-          EvalConstResult::Void    =>{}
-          EvalConstResult::Bool(b) =>{scp.add_const_bool( decl.get_name(),b);}
-          EvalConstResult::Int(i)  =>{scp.add_const_int(  decl.get_name(),i);}
-          EvalConstResult::Float(f)=>{scp.add_const_float(decl.get_name(),f);}
-          _=>{panic!();}
-            }
-        }
-      DeclKind::Var(e)=>
-        {
-          let  r_txt = evaluate(e,tbl,Some(scp)).to_text();
-
-          let  off = scp.add_var(decl.get_name(),r_txt.get_ty_name());
-
-          let  mut l_txt = AsmEvalText::new();
-
-          l_txt.push_local_var(off,r_txt.get_ty_name());
-
-          output.push_assign(l_txt,r_txt,"=");
-        }
-      DeclKind::Static(_)=>{}
-      _=>{panic!();}
-        }
-    }
-  Self::Expr(e)=>
-    {
-      let  res = evaluate(e,tbl,Some(scp));
-
-        match res
-        {
-      EvalResult::Value(txt)=>
-        {
-          output.push_eval_text(txt);
-
-          output.push_opcode(Opcode::Pop);
-        }
-      _=>{}
-        }
-    }
-  Self::If(i)=>{i.process(tbl,ret_ty_name,lid,clh_opt,scp,output);}
-  Self::Loop(blk)=>
-    {
-      let  clh = lid.make_ctrl_label_holder();
-
-      output.push_label(&clh.on_continue);
-
-      blk.process(tbl,ret_ty_name,lid,Some(&clh),scp,output);
-
-      output.push_jmp(&clh.on_continue);
-
-      output.push_label(&clh.on_break);
-    }
-  Self::While(e,blk)=>
-    {
-      let  clh = lid.make_ctrl_label_holder();
-
-      output.push_label(&clh.on_continue);
-
-      let  txt = evaluate(e,tbl,Some(scp)).to_text();
-
-        if txt.get_ty_name() == "bool"
-        {
-          output.push_eval_text(txt);
-
-          output.push_brz(&clh.on_break);
-
-          blk.process(tbl,ret_ty_name,lid,Some(&clh),scp,output);
-
-          output.push_jmp(&clh.on_continue);
-
-          output.push_label(&clh.on_break);
-        }
-
-      else
-        {panic!();}
-    }
-  Self::For(f)=>{f.process(tbl,ret_ty_name,lid,clh_opt,scp,output);}
-  Self::Return(e_opt)=>
-    {
-        if let Some(e) = e_opt
-        {
-          let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
-
-            if txt.get_ty_name() == ret_ty_name
-            {
-                if txt.is_deref()
-                {
-                  txt.push_load();
-                }
-
-
-              output.push_eval_text(txt);
-            }
-
-          else
-            {panic!("TYPE OF RETURN VALUE and TYPE OF EVALUATED VALUW are mismatched");}
-        }
-
-      else
-        {
-            if ret_ty_name == "void"
-            {
-              output.push_opcode(Opcode::Push0);
-            }
-
-          else{panic!();}
-        }
-
-
-      output.push_opcode(Opcode::Ret);
-    }
-  Self::Assign(l,r,op)=>
-    {
-      let  mut l_asm = evaluate(l,tbl,Some(scp)).to_text();
-      let  mut r_asm = evaluate(r,tbl,Some(scp)).to_text();
-
-todo!();
-      output.push_opcode(Opcode::St64);
-    }
-  Self::Break=>
-    {
-      output.push_jmp(&clh_opt.unwrap().on_break);
-    }
-  Self::Continue=>
-    {
-      output.push_jmp(&clh_opt.unwrap().on_continue);
-    }
-  Self::Print(e)=>
-    {
-      let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
-
-      txt.push_opcode(Opcode::Pri);
-
-      output.push_eval_text(txt);
-    }
     }
 }
 

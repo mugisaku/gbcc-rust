@@ -57,14 +57,19 @@ to_text(self)-> AsmEvalText
     {
         match cres
         {
-      EvalConstResult::Type(ty)=>{panic!();}
+      EvalConstResult::Type(ty_name)=>
+        {
+          let  ty = find_ty(&ty_name).unwrap();
+
+          Self::Const(ty.get_default().clone()).to_text()
+        }
       EvalConstResult::Void=>
         {
           let  mut text = AsmEvalText::new();
 
           text.push_opcode(Opcode::Push0);
 
-          text.set_ty_name("void");
+          text.set_ty_by_name("void");
 
           text
         }
@@ -72,7 +77,7 @@ to_text(self)-> AsmEvalText
         {
           let  mut text = AsmEvalText::new();
 
-          text.push_li_bool(b);
+          text.push_bool(b);
 
           text
         }
@@ -80,7 +85,95 @@ to_text(self)-> AsmEvalText
         {
           let  mut text = AsmEvalText::new();
 
-          text.push_li_int(i);
+          text.push_i64(i);
+
+          text
+        }
+      EvalConstResult::I8(i)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_i8(i);
+
+          text
+        }
+      EvalConstResult::I16(i)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_i16(i);
+
+          text
+        }
+      EvalConstResult::I32(i)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_i32(i);
+
+          text
+        }
+      EvalConstResult::I64(i)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_i64(i);
+
+          text
+        }
+      EvalConstResult::ISize(i)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_isize(i);
+
+          text
+        }
+      EvalConstResult::Uint(u)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_u64(u);
+
+          text
+        }
+      EvalConstResult::U8(u)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_u8(u);
+
+          text
+        }
+      EvalConstResult::U16(u)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_u16(u);
+
+          text
+        }
+      EvalConstResult::U32(u)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_u32(u);
+
+          text
+        }
+      EvalConstResult::U64(u)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_u64(u);
+
+          text
+        }
+      EvalConstResult::USize(u)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_usize(u);
 
           text
         }
@@ -88,12 +181,30 @@ to_text(self)-> AsmEvalText
         {
           let  mut text = AsmEvalText::new();
 
-          text.push_li_float(f);
+          text.push_f64(f);
+
+          text
+        }
+      EvalConstResult::F32(f)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_f32(f);
+
+          text
+        }
+      EvalConstResult::F64(f)=>
+        {
+          let  mut text = AsmEvalText::new();
+
+          text.push_f64(f);
 
           text
         }
       EvalConstResult::String(_)=>{todo!();}
-      EvalConstResult::Binary(_)=>{todo!();}
+      EvalConstResult::NullPointer=>{todo!();}
+      EvalConstResult::Enumerator(_,_)=>{todo!();}
+      EvalConstResult::Complex(_,_)=>{todo!();}
       EvalConstResult::Err=>{panic!();}
         }
     }
@@ -160,7 +271,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
             {
               let  mut txt = AsmEvalText::new();
 
-              txt.push_local_var(lsym.get_offset(),lsym.get_ty_name());
+              txt.push_local_var(lsym.get_offset(),lsym.get_ty());
 
               EvalResult::Value(txt)
             }
@@ -174,23 +285,23 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
     {
       return match sym.get_kind()
         {
-      SymbolKind::Const(_,res)=>
+      SymbolKind::Const(res)=>
         {
           EvalResult::Const(res.clone())
         }
-      SymbolKind::GlobalVar(_,_)=>
+      SymbolKind::GlobalVar(_)=>
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_global_var(sym.get_offset(),sym.get_ty_name());
+          txt.push_global_var(sym.get_offset(),sym.get_ty());
 
           EvalResult::Value(txt)
         }
-      SymbolKind::Fn(fd)=>
+      SymbolKind::Fn(_,_,_)=>
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_fn(sym.get_offset(),sym.get_ty_name());
+          txt.push_fn(sym.get_offset(),sym.get_ty());
 
           EvalResult::Value(txt)
         }
