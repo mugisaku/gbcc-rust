@@ -9,6 +9,18 @@ const  HALT_FLAG: usize = 1;
 
 
 pub struct
+MachineInfo
+{
+       memory_size: usize,
+  local_stack_size: usize,
+   call_stack_size: usize,
+
+}
+
+
+
+
+pub struct
 Machine
 {
   memory: Vec<u8>,

@@ -9,6 +9,52 @@ use std::env;
 
 
 fn
+compile(s: &str)
+{
+  use crate::language::*;
+  use crate::language::decl::*;
+  use crate::language::symbol_table::*;
+  use crate::language::machine::*;
+  use crate::language::ty::*;
+
+    if let Ok(root) = decl::Decl::read_as_root(s)
+    {
+      let  mut ty_table = TyTable::new();
+
+        if let Ok(tbl) = SymbolTable::build(root,&mut ty_table)
+        {
+/*
+          tbl.print();
+
+          println!("");
+
+          let  img = ExecImage::build(&tbl);
+
+          let  mut m = Machine::new();
+
+          println!("machine is reset");
+
+          m.reset(&img);
+
+          println!("machine runs");
+
+          m.run();
+
+          println!("machine is finished");
+*/
+        }
+
+      else
+        {
+          println!("build is failed");
+        }
+    }
+}
+
+
+
+
+fn
 open_and_print_tokens()
 {
   let  args: Vec<String> = env::args().collect();
@@ -44,15 +90,7 @@ open_and_print_tokens()
 fn
 main()
 {
-  use crate::language::*;
-  use crate::language::decl::*;
-  use crate::language::symbol_table::*;
-  use crate::language::machine::*;
-  use crate::language::ty::*;
-
-  install_basic_types();
-
-    if let Ok(root) = decl::Decl::read_as_root(
+  let  codes =
 r#"
 
 const  a = 8;
@@ -95,40 +133,10 @@ main()-> i64
 {
   return add(7,add(40,322));
 }
-"#)
-{
-    if let Ok(tbl) = SymbolTable::build(root)
-    {
-      tbl.print();
-
-      println!("");
-
-      print_tys();
-
-      println!("");
-
-      let  img = ExecImage::build(&tbl);
-
-      let  mut m = Machine::new();
-
-      println!("machine is reset");
-
-      m.reset(&img);
-
-      println!("machine runs");
-
-      m.run();
-
-      println!("machine is finished");
-    }
-
-  else
-    {
-      println!("build is failed");
-    }
-}
+"#;
 
 
+  compile(codes);
 }
 
 

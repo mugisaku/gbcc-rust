@@ -66,7 +66,7 @@ Symbol
 
 
 pub fn
-build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
+build(src: Source, symtbl: &SymbolTable, tytbl: &mut TyTable)-> Self
 {
   let  (name,kind) = src.decl.expire();
 
@@ -78,7 +78,7 @@ build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
   DeclKind::Undef=>{panic!("symbol build error: {} is undef",&name);}
   DeclKind::Const(tn_opt,e)=>
     {
-      let  res = evaluate_const(&e,tbl,None);
+      let  res = evaluate_const(&e,symtbl,tytbl,None);
 
         if let Some(ty_name) = res.get_ty_name()
         {
@@ -86,7 +86,7 @@ build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
             name,
             kind: SymbolKind::Const(res),
             ty_name,
-            offset,
+            offset: 0,
             deps_parent_list,
             deps_child_list,
           }
@@ -102,7 +102,7 @@ build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
     }
   DeclKind::Var(tn_opt,e)=>
     {
-      let  res = evaluate_const(&e,tbl,None);
+      let  res = evaluate_const(&e,symtbl,tytbl,None);
 
         if let Some(ty_name) = res.get_ty_name()
         {
@@ -110,7 +110,7 @@ build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
             name,
             kind: SymbolKind::GlobalVar(res),
             ty_name,
-            offset,
+            offset: 0,
             deps_parent_list,
             deps_child_list,
           }
@@ -126,7 +126,7 @@ build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
     }
   DeclKind::Static(tn_opt,e)=>
     {
-      let  res = evaluate_const(&e,tbl,None);
+      let  res = evaluate_const(&e,symtbl,tytbl,None);
 
         if let Some(ty_name) = res.get_ty_name()
         {
@@ -134,7 +134,7 @@ build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
             name,
             kind: SymbolKind::GlobalVar(res),
             ty_name,
-            offset,
+            offset: 0,
             deps_parent_list,
             deps_child_list,
           }
@@ -152,7 +152,7 @@ build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
     {
       let  tynd = fd.make_ty_node();
 
-      let  ty = add_ty_from_node(&tynd,tbl);
+      let  ty = tytbl.add_from_node(&tynd,symtbl);
 
       let  ty_name = ty.get_name().clone();
 
@@ -160,14 +160,14 @@ build(tbl: &SymbolTable, src: Source, offset: usize)-> Self
         name,
         kind: SymbolKind::Fn(fd,Vec::new(),0),
         ty_name,
-        offset,
+        offset: 0,
         deps_parent_list,
         deps_child_list,
       }
     }
   DeclKind::Ty(tn)=>
     {
-      let  ty = add_ty_from_node(&tn,tbl);
+      let  ty = tytbl.add_from_node(&tn,symtbl);
 
       let  ty_name = ty.get_name().clone();
 
@@ -203,13 +203,6 @@ pub fn
 get_ty_name(&self)-> &String
 {
   &self.ty_name
-}
-
-
-pub fn
-get_ty(&self)-> Rc<Ty>
-{
-  find_ty(&self.ty_name).unwrap()
 }
 
 
@@ -284,7 +277,11 @@ SymbolTable
 
   string_table: Vec<(String,usize)>,
 
-  image_size: usize,
+  data_start: usize,
+  data_end: usize,
+
+  text_start: usize,
+  text_end: usize,
 
 }
 
@@ -300,7 +297,10 @@ new()-> Self
   Self{
     symbols: Vec::new(),
     string_table: Vec::new(),
-    image_size: 0,
+    data_start: 0,
+    data_end: 0,
+    text_start: 0,
+    text_end: 0,
   }
 }
 
@@ -320,59 +320,6 @@ join_child(srcs: &mut Vec<Source>, parent_name: &String, child_name: String)
 
 
   panic!();
-}
-
-
-fn
-process_collectibles(srcs: &mut Vec<Source>)-> Vec<String>
-{
-  let  mut strs = Vec::<String>::new();
-
-    for i in 0..srcs.len()
-    {
-      let  mut buf = Vec::<Collectible>::new();
-
-      srcs[i].decl.collect(&mut buf);
-
-        for co in buf
-        {
-            match co
-            {
-          Collectible::Identifier(s)=>
-            {
-              let  child_name = srcs[i].decl.get_name().clone();
-
-              Self::join_child(srcs,&s,child_name);
-
-              srcs[i].deps_parent_list.push(s);
-            }
-          Collectible::String(s)=>{strs.push(s);}
-            }
-        }
-    }
-
-
-  strs
-}
-
-
-fn
-install_string_literals(&mut self, strs: Vec<String>, mut pos: usize)-> usize
-{
-    for s in strs
-    {
-        if let None = self.find_string_offset(&s)
-        {
-          let  len = s.len();
-
-          self.string_table.push((s,pos));
-
-          pos += len;
-        }
-    }
-
-
-  pos
 }
 
 
@@ -420,58 +367,23 @@ take_source(srcs: &mut Vec<Source>, name: &str)-> Source
 
 
 fn
-install_global_vars(&mut self, mut srcs: Vec<Source>, mut pos: usize)-> usize
+generate_symbols(&mut self, mut srcs: Vec<Source>, tytbl: &mut TyTable)
 {
   let  names = Self::make_tplg_sorted_names(&srcs);
-
-  let  gvar_start = pos;
 
     for name in names
     {
       let  src = Self::take_source(&mut srcs,&name);
 
-      let  sym = Symbol::build(self,src,pos);
-
-      pos += find_ty(&sym.ty_name).unwrap().get_size();
-
-      pos = get_word_aligned(pos);
+      let  sym = Symbol::build(src,self,tytbl);
 
       self.symbols.push(sym);
     }
-
-
-println!("global values are allocated on {} - {}",gvar_start,pos);
-
-  let  prog_start = pos;
-
-    for i in 0..self.symbols.len()
-    {
-      let  mut tmp = Vec::<u8>::new();
-
-        if let SymbolKind::Fn(fd,_,_) = &self.symbols[i].kind
-        {
-          tmp = assemble(fd,self);
-        }
-
-
-        if let SymbolKind::Fn(_,bytes,offset) = &mut self.symbols[i].kind
-        {
-           *bytes = tmp;
-          *offset = pos;
-
-          pos += bytes.len();
-        }
-    }
-
-
-println!("progs are allocated on {} - {}",prog_start,pos);
-
-  pos
 }
 
 
 pub fn
-build(decls: Vec<Decl>)-> Result<Self,()>
+build(decls: Vec<Decl>, tytbl: &mut TyTable)-> Result<Self,()>
 {
   let  mut tbl = Self::new();
 
@@ -485,15 +397,81 @@ build(decls: Vec<Decl>)-> Result<Self,()>
     }
 
 
-  let  strs = Self::process_collectibles(&mut srcs);
+    for i in 0..srcs.len()
+    {
+      let  mut buf = Vec::<Collectible>::new();
 
-  let  mut alloc_pos = 0usize;
+      srcs[i].decl.collect(&mut buf);
 
-  alloc_pos = tbl.install_string_literals(strs,alloc_pos);
+        for co in buf
+        {
+            match co
+            {
+          Collectible::Identifier(s)=>
+            {
+              let  child_name = srcs[i].decl.get_name().clone();
 
-  tbl.image_size = tbl.install_global_vars(srcs,alloc_pos);
+              Self::join_child(&mut srcs,&s,child_name);
+
+              srcs[i].deps_parent_list.push(s);
+            }
+          Collectible::String(s)=>{tbl.string_table.push((s,0));}
+            }
+        }
+    }
+
+
+  tbl.generate_symbols(srcs,tytbl);
 
   Ok(tbl)
+}
+
+
+pub fn
+allocate_data(&mut self, tytbl: &TyTable, mut start_address: usize)
+{
+  self.data_start = get_word_aligned(start_address);
+
+    for sym in &mut self.symbols
+    {
+      start_address = get_word_aligned(start_address);
+
+      sym.offset = get_word_aligned(start_address);
+
+      start_address += tytbl.find(&sym.ty_name).unwrap().get_size();
+    }
+
+
+  self.data_end = start_address;
+}
+
+
+pub fn
+generate_text(&mut self, tytbl: &mut TyTable, mut start_address: usize)
+{
+  self.text_start = start_address;
+
+    for i in 0..self.symbols.len()
+    {
+      let  mut tmp = Vec::<u8>::new();
+
+        if let SymbolKind::Fn(fd,_,_) = &self.symbols[i].kind
+        {
+          tmp = assemble(fd,self,tytbl);
+        }
+
+
+        if let SymbolKind::Fn(_,bytes,offset) = &mut self.symbols[i].kind
+        {
+           *bytes = tmp;
+          *offset = start_address;
+
+          start_address += bytes.len();
+        }
+    }
+
+
+  self.text_end = start_address;
 }
 
 
@@ -623,6 +601,7 @@ build(tbl: &SymbolTable)-> Self
 {
   let  mut img = Self::new();
 
+/*
   img.bytes.resize(tbl.image_size,0);
 
     for sym in &tbl.symbols
@@ -669,7 +648,7 @@ build(tbl: &SymbolTable)-> Self
       _=>{}
         }
     }
-
+*/
 
   img
 }

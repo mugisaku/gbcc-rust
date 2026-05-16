@@ -48,7 +48,7 @@ is_err(&self)-> bool
 
 
 pub fn
-to_text(self)-> AsmEvalText
+to_text(self, tytbl: &TyTable)-> AsmEvalText
 {
     match self
     {
@@ -59,9 +59,9 @@ to_text(self)-> AsmEvalText
         {
       EvalConstResult::Type(ty_name)=>
         {
-          let  ty = find_ty(&ty_name).unwrap();
+          let  ty = tytbl.find(&ty_name).unwrap();
 
-          Self::Const(ty.get_default().clone()).to_text()
+          Self::Const(ty.get_default().clone()).to_text(tytbl)
         }
       EvalConstResult::Void=>
         {
@@ -69,7 +69,7 @@ to_text(self)-> AsmEvalText
 
           text.push_opcode(Opcode::Push0);
 
-          text.set_ty_by_name("void");
+          text.set_ty_name("void");
 
           text
         }
@@ -232,30 +232,30 @@ print(&self)
 
 
 pub fn
-evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, tytbl: &TyTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  res = evaluate(f,tbl,scp_opt);
+  let  res = evaluate(f,tbl,tytbl,scp_opt);
 
-  let  mut txt = res.to_text();
+  let  mut txt = res.to_text(tytbl);
 
   let  mut buf = Vec::<AsmEvalText>::new();
 
     for a in args
     {
-      let  a_res = evaluate(a,tbl,scp_opt);
+      let  a_res = evaluate(a,tbl,tytbl,scp_opt);
 
-      buf.push(a_res.to_text());
+      buf.push(a_res.to_text(tytbl));
     }
 
 
-  txt.push_call(buf);
+  txt.push_call(buf,tytbl);
 
   EvalResult::Value(txt)
 }
 
 
 pub fn
-evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_identifier(s: &str, tbl: &SymbolTable, tytbl: &TyTable, scp_opt: Option<&Scope>)-> EvalResult
 {
     if let Some(scp) = scp_opt
     {
@@ -271,7 +271,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
             {
               let  mut txt = AsmEvalText::new();
 
-              txt.push_local_var(lsym.get_offset(),lsym.get_ty());
+              txt.push_local_var(lsym.get_offset(),lsym.get_ty_name());
 
               EvalResult::Value(txt)
             }
@@ -293,7 +293,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_global_var(sym.get_offset(),sym.get_ty());
+          txt.push_global_var(sym.get_offset(),sym.get_ty_name());
 
           EvalResult::Value(txt)
         }
@@ -301,7 +301,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_fn(sym.get_offset(),sym.get_ty());
+          txt.push_fn(sym.get_offset(),sym.get_ty_name());
 
           EvalResult::Value(txt)
         }
@@ -315,9 +315,9 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
 
 
 pub fn
-evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, tytbl: &TyTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  cres = evaluate_const(o,tbl,scp_opt);
+  let  cres = evaluate_const(o,tbl,tytbl,scp_opt);
 
     if cres.is_ok()
     {
@@ -325,9 +325,9 @@ evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)->
     }
 
 
-  let  res = evaluate(o,tbl,scp_opt);
+  let  res = evaluate(o,tbl,tytbl,scp_opt);
 
-  let  mut txt = res.to_text();
+  let  mut txt = res.to_text(tytbl);
 
   txt.push_unary(op);
 
@@ -336,10 +336,10 @@ evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)->
 
 
 pub fn
-evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, tytbl: &TyTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  lcres = evaluate_const(le,tbl,scp_opt);
-  let  rcres = evaluate_const(re,tbl,scp_opt);
+  let  lcres = evaluate_const(le,tbl,tytbl,scp_opt);
+  let  rcres = evaluate_const(re,tbl,tytbl,scp_opt);
 
   let  mut lres = EvalResult::Err;
   let  mut rres = EvalResult::Err;
@@ -356,26 +356,26 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
       else
         {
           lres = EvalResult::Const(lcres);
-          rres = evaluate(re,tbl,scp_opt);
+          rres = evaluate(re,tbl,tytbl,scp_opt);
         }
     }
 
   else
     if rcres.is_ok()
     {
-      lres = evaluate(le,tbl,scp_opt);
+      lres = evaluate(le,tbl,tytbl,scp_opt);
       rres = EvalResult::Const(rcres);
     }
 
   else
     {
-      lres = evaluate(le,tbl,scp_opt);
-      rres = evaluate(re,tbl,scp_opt);
+      lres = evaluate(le,tbl,tytbl,scp_opt);
+      rres = evaluate(re,tbl,tytbl,scp_opt);
     }
 
 
-  let  mut l_txt = lres.to_text();
-  let      r_txt = rres.to_text();
+  let  mut l_txt = lres.to_text(tytbl);
+  let      r_txt = rres.to_text(tytbl);
 
   l_txt.push_binary(r_txt,op);
 
@@ -384,9 +384,9 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
 
 
 pub fn
-evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate(e: &Expr, tbl: &SymbolTable, tytbl: &TyTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  cres = evaluate_const(e,tbl,scp_opt);
+  let  cres = evaluate_const(e,tbl,tytbl,scp_opt);
 
     if cres.is_ok()
     {
@@ -398,7 +398,7 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
     {
   Expr::Identifier(s)=>
     {
-      evaluate_identifier(s,tbl,scp_opt)
+      evaluate_identifier(s,tbl,tytbl,scp_opt)
     }
   Expr::String(s)=>
     {
@@ -407,31 +407,31 @@ todo!();
     }
   Expr::SelfAccessOp(e,s)=>
     {
-      evaluate(e,tbl,scp_opt)
+      evaluate(e,tbl,tytbl,scp_opt)
     }
   Expr::TypeAccessOp(e,s)=>
     {
-      evaluate(e,tbl,scp_opt)
+      evaluate(e,tbl,tytbl,scp_opt)
     }
   Expr::SubscriptOp(e,i_e)=>
     {
-      evaluate(e,tbl,scp_opt)
+      evaluate(e,tbl,tytbl,scp_opt)
     }
   Expr::CallOp(f,args)=>
     {
-      evaluate_call(f,args,tbl,scp_opt)
+      evaluate_call(f,args,tbl,tytbl,scp_opt)
     }
   Expr::Expr(e)=>
     {
-      evaluate(e,tbl,scp_opt)
+      evaluate(e,tbl,tytbl,scp_opt)
     }
   Expr::UnaryOp(o,op)=>
     {
-      evaluate_unary(o,op,tbl,scp_opt)
+      evaluate_unary(o,op,tbl,tytbl,scp_opt)
     }
   Expr::BinaryOp(l,r,op)=>
     {
-      evaluate_binary(l,r,op,tbl,scp_opt)
+      evaluate_binary(l,r,op,tbl,tytbl,scp_opt)
     }
   _=>{EvalResult::Err}
     }

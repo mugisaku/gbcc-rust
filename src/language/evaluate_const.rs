@@ -202,23 +202,23 @@ print(&self)
 
 
 pub fn
-evaluate_self_access_const(res: EvalConstResult, s: &str)-> EvalConstResult
+evaluate_self_access_const(res: EvalConstResult, s: &str, tytbl: &TyTable)-> EvalConstResult
 {
   EvalConstResult::Err
 }
 
 
 pub fn
-evaluate_type_access_const(res: EvalConstResult, id: &str)-> EvalConstResult
+evaluate_type_access_const(res: EvalConstResult, id: &str, tytbl: &TyTable)-> EvalConstResult
 {
     if let EvalConstResult::Type(ty_name) = res
     {
         match id
         {
       (s) if s ==  "name"=>{return EvalConstResult::String(ty_name);}
-      (s) if s ==  "size"=>{return EvalConstResult::Int(find_ty(&ty_name).unwrap().get_size()  as i64);}
-      (s) if s == "align"=>{return EvalConstResult::Int(find_ty(&ty_name).unwrap().get_align() as i64);}
-      (s) if s == "default"=>{return find_ty(&ty_name).unwrap().get_default().clone();}
+      (s) if s ==  "size"=>{return EvalConstResult::Int(tytbl.find(&ty_name).unwrap().get_size()  as i64);}
+      (s) if s == "align"=>{return EvalConstResult::Int(tytbl.find(&ty_name).unwrap().get_align() as i64);}
+      (s) if s == "default"=>{return tytbl.find(&ty_name).unwrap().get_default().clone();}
       _=>{return EvalConstResult::Err;}
         }
     }
@@ -229,20 +229,20 @@ evaluate_type_access_const(res: EvalConstResult, id: &str)-> EvalConstResult
 
 
 pub fn
-evaluate_subscript_const(res: EvalConstResult, i: EvalConstResult)-> EvalConstResult
+evaluate_subscript_const(res: EvalConstResult, i: EvalConstResult, tytbl: &TyTable)-> EvalConstResult
 {
   EvalConstResult::Err
 }
 
 
 pub fn
-evaluate_call_const(res: EvalConstResult, args: Vec<EvalConstResult>)-> EvalConstResult
+evaluate_call_const(res: EvalConstResult, args: Vec<EvalConstResult>, tytbl: &TyTable)-> EvalConstResult
 {
     match res
     {
   EvalConstResult::Type(ty_name)=>
     {
-      let  ty = find_ty(&ty_name).unwrap();
+      let  ty = tytbl.find(&ty_name).unwrap();
 
       ty.construct(args)
     }
@@ -602,7 +602,7 @@ evaluate_binary_const(l_res: EvalConstResult, r_res: EvalConstResult, op: &str)-
 
 
 pub fn
-evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalConstResult
+evaluate_const(e: &Expr, symtbl: &SymbolTable, tytbl: &TyTable, scp_opt: Option<&Scope>)-> EvalConstResult
 {
     match e
     {
@@ -633,7 +633,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalCo
             {
           SymbolKind::Ty=>
             {
-              let  ty = find_ty(sym.get_ty_name()).unwrap();
+              let  ty = tytbl.find(sym.get_ty_name()).unwrap();
 
               EvalConstResult::Type(ty.get_name().clone())
             }
@@ -646,7 +646,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalCo
         }
 
 
-        if find_ty(s).is_some()
+        if tytbl.find(s).is_some()
         {
           return EvalConstResult::Type(s.clone());
         }
@@ -657,13 +657,13 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalCo
   Expr::Int(u)  =>{EvalConstResult::Uint(*u)}
   Expr::Float(f)=>{EvalConstResult::Float(*f)}
   Expr::String(s)=>{EvalConstResult::String(s.clone())}
-  Expr::SelfAccessOp(e,s)=>{evaluate_self_access_const(evaluate_const(e,symtbl,scp_opt),s)}
-  Expr::TypeAccessOp(e,s)=>{evaluate_type_access_const(evaluate_const(e,symtbl,scp_opt),s)}
+  Expr::SelfAccessOp(e,s)=>{evaluate_self_access_const(evaluate_const(e,symtbl,tytbl,scp_opt),s,tytbl)}
+  Expr::TypeAccessOp(e,s)=>{evaluate_type_access_const(evaluate_const(e,symtbl,tytbl,scp_opt),s,tytbl)}
   Expr::SubscriptOp(e,i_e)=>
     {
-      let  res = evaluate_const(i_e,symtbl,scp_opt);
+      let  res = evaluate_const(i_e,symtbl,tytbl,scp_opt);
 
-      evaluate_subscript_const(evaluate_const(e,symtbl,scp_opt),res)
+      evaluate_subscript_const(evaluate_const(e,symtbl,tytbl,scp_opt),res,tytbl)
     }
   Expr::CallOp(f,args)=>
     {
@@ -671,7 +671,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalCo
 
         for arg_e in args
         {
-          let  res = evaluate_const(arg_e,symtbl,scp_opt);
+          let  res = evaluate_const(arg_e,symtbl,tytbl,scp_opt);
 
             if res.is_err()
             {
@@ -683,14 +683,14 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalCo
         }
 
 
-      evaluate_call_const(evaluate_const(f,symtbl,scp_opt),buf)
+      evaluate_call_const(evaluate_const(f,symtbl,tytbl,scp_opt),buf,tytbl)
     }
-  Expr::Expr(e)=>{evaluate_const(e,symtbl,scp_opt)}
-  Expr::UnaryOp(o,op)=>{evaluate_unary_const(evaluate_const(o,symtbl,scp_opt),op)}
+  Expr::Expr(e)=>{evaluate_const(e,symtbl,tytbl,scp_opt)}
+  Expr::UnaryOp(o,op)=>{evaluate_unary_const(evaluate_const(o,symtbl,tytbl,scp_opt),op)}
   Expr::BinaryOp(l,r,op)=>
     {
-      let  l_res = evaluate_const(l,symtbl,scp_opt);
-      let  r_res = evaluate_const(r,symtbl,scp_opt);
+      let  l_res = evaluate_const(l,symtbl,tytbl,scp_opt);
+      let  r_res = evaluate_const(r,symtbl,tytbl,scp_opt);
 
       evaluate_binary_const(l_res,r_res,op)
     }

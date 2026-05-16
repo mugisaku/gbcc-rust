@@ -533,99 +533,95 @@ print(&self)
 
 
 
-static  mut TABLE: Vec<Rc<Ty>> = Vec::new();
+pub struct
+TyTable
+{
+  core: Vec<Rc<Ty>>,
+
+}
+
+
+impl
+TyTable
+{
 
 
 pub fn
-install_basic_types()
+new()-> Self
 {
-  let   void_ty = Ty::new_basic( "void",TyKind::Void ,0,EvalConstResult::Void);
-  let   bool_ty = Ty::new_basic( "bool",TyKind::Bool ,1,EvalConstResult::Bool(false));
-  let     i8_ty = Ty::new_basic(   "i8",TyKind::Int  ,1,EvalConstResult::I8(0));
-  let    i16_ty = Ty::new_basic(  "i16",TyKind::Int  ,2,EvalConstResult::I16(0));
-  let    i32_ty = Ty::new_basic(  "i32",TyKind::Int  ,4,EvalConstResult::I32(0));
-  let    i64_ty = Ty::new_basic(  "i64",TyKind::Int  ,8,EvalConstResult::I64(0));
-  let  isize_ty = Ty::new_basic("isize",TyKind::Int  ,8,EvalConstResult::ISize(0));
-  let     u8_ty = Ty::new_basic(   "u8",TyKind::Uint ,1,EvalConstResult::U8(0));
-  let    u16_ty = Ty::new_basic(  "u16",TyKind::Uint ,2,EvalConstResult::U16(0));
-  let    u32_ty = Ty::new_basic(  "u32",TyKind::Uint ,4,EvalConstResult::U32(0));
-  let    u64_ty = Ty::new_basic(  "u64",TyKind::Uint ,8,EvalConstResult::U64(0));
-  let  usize_ty = Ty::new_basic("usize",TyKind::Uint ,8,EvalConstResult::USize(0));
-  let    f32_ty = Ty::new_basic(  "f32",TyKind::Float,4,EvalConstResult::F32(0.0));
-  let    f64_ty = Ty::new_basic(  "f64",TyKind::Float,8,EvalConstResult::F64(0.0));
+  let  mut core = Vec::<Rc<Ty>>::new();
 
-    unsafe
-    {
-      TABLE.push(void_ty);
-      TABLE.push(bool_ty);
-      TABLE.push(i8_ty);
-      TABLE.push(i16_ty);
-      TABLE.push(i32_ty);
-      TABLE.push(i64_ty);
-      TABLE.push(isize_ty);
-      TABLE.push(u8_ty);
-      TABLE.push(u16_ty);
-      TABLE.push(u32_ty);
-      TABLE.push(u64_ty);
-      TABLE.push(usize_ty);
-      TABLE.push(f32_ty);
-      TABLE.push(f64_ty);
-    }
+  core.push(Ty::new_basic( "void",TyKind::Void ,0,EvalConstResult::Void));
+  core.push(Ty::new_basic( "bool",TyKind::Bool ,1,EvalConstResult::Bool(false)));
+  core.push(Ty::new_basic(   "i8",TyKind::Int  ,1,EvalConstResult::I8(0)));
+  core.push(Ty::new_basic(  "i16",TyKind::Int  ,2,EvalConstResult::I16(0)));
+  core.push(Ty::new_basic(  "i32",TyKind::Int  ,4,EvalConstResult::I32(0)));
+  core.push(Ty::new_basic(  "i64",TyKind::Int  ,8,EvalConstResult::I64(0)));
+  core.push(Ty::new_basic("isize",TyKind::Int  ,8,EvalConstResult::ISize(0)));
+  core.push(Ty::new_basic(   "u8",TyKind::Uint ,1,EvalConstResult::U8(0)));
+  core.push(Ty::new_basic(  "u16",TyKind::Uint ,2,EvalConstResult::U16(0)));
+  core.push(Ty::new_basic(  "u32",TyKind::Uint ,4,EvalConstResult::U32(0)));
+  core.push(Ty::new_basic(  "u64",TyKind::Uint ,8,EvalConstResult::U64(0)));
+  core.push(Ty::new_basic("usize",TyKind::Uint ,8,EvalConstResult::USize(0)));
+  core.push(Ty::new_basic(  "f32",TyKind::Float,4,EvalConstResult::F32(0.0)));
+  core.push(Ty::new_basic(  "f64",TyKind::Float,8,EvalConstResult::F64(0.0)));
+
+  Self{core}
 }
 
 
 pub fn
-add_ty(ty: Ty)-> Rc<Ty>
+add(&mut self, ty: Ty)-> Rc<Ty>
 {
-    if let Some(existed) = find_ty(&ty.name)
+    if let Some(existed) = self.find(&ty.name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
     {
-      add_ty_unchecked(ty)
+      self.add_unchecked(ty)
     }
 }
 
 
 pub fn
-add_ty_unchecked(ty: Ty)-> Rc<Ty>
+add_unchecked(&mut self, ty: Ty)-> Rc<Ty>
 {
   let  rc = Rc::new(ty);
 
-  unsafe{TABLE.push(Rc::clone(&rc));}
+  self.core.push(Rc::clone(&rc));
 
   rc
 }
 
 
 pub fn
-add_ty_from_node(tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
+add_from_node(&mut self, tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
 {
     match tn
     {
   TyNode::Pointer(tn)=>
     {
-      let  target = add_ty_from_node(tn,symtbl);
+      let  target = self.add_from_node(tn,symtbl);
 
-      get_pointer_ty(target)
+      self.get_pointer_ty(&target)
     }
   TyNode::Reference(tn)=>
     {
-      let  target = add_ty_from_node(tn,symtbl);
+      let  target = self.add_from_node(tn,symtbl);
 
-      get_reference_ty(target)
+      self.get_reference_ty(&target)
     }
   TyNode::Array(tn,e)=>
     {
-      let  res = evaluate_const(e,symtbl,None);
+      let  res = evaluate_const(e,symtbl,self,None);
 
         if let EvalConstResult::Uint(n) = res
         {
-          let  target = add_ty_from_node(tn,symtbl);
+          let  target = self.add_from_node(tn,symtbl);
 
-          get_array_ty(target,n as usize)
+          self.get_array_ty(&target,n as usize)
         }
 
       else
@@ -637,7 +633,7 @@ add_ty_from_node(tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
 
         for p in ls
         {
-          let  ty = add_ty_from_node(p.get_ty_node(),symtbl);
+          let  ty = self.add_from_node(p.get_ty_node(),symtbl);
 
           let  f = Field{name: p.get_name().clone(), ty, offset: 0};
 
@@ -645,7 +641,7 @@ add_ty_from_node(tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
         }
 
 
-      get_struct_ty(fields)
+      self.get_struct_ty(fields)
     }
   TyNode::Union(ls)=>
     {
@@ -653,7 +649,7 @@ add_ty_from_node(tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
 
         for p in ls
         {
-          let  ty = add_ty_from_node(p.get_ty_node(),symtbl);
+          let  ty = self.add_from_node(p.get_ty_node(),symtbl);
 
           let  f = Field{name: p.get_name().clone(), ty, offset: 0};
 
@@ -661,7 +657,7 @@ add_ty_from_node(tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
         }
 
 
-      get_union_ty(fields)
+      self.get_union_ty(fields)
     }
   TyNode::Enum(ls)=>
     {
@@ -677,7 +673,7 @@ add_ty_from_node(tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
         }
 
 
-      get_enum_ty(en_table)
+      self.get_enum_ty(en_table)
     }
   TyNode::Function{parameter_ty_nodes,return_ty_node}=>
     {
@@ -685,26 +681,26 @@ add_ty_from_node(tn: &TyNode, symtbl: &SymbolTable)-> Rc<Ty>
 
         for tn in parameter_ty_nodes
         {
-          let  ty = add_ty_from_node(tn,symtbl);
+          let  ty = self.add_from_node(tn,symtbl);
 
           parameter_tys.push(ty);
         }
 
 
-      let  return_ty = add_ty_from_node(return_ty_node,symtbl);
+      let  return_ty = self.add_from_node(return_ty_node,symtbl);
 
-      get_function_ty(parameter_tys,return_ty)
+      self.get_function_ty(parameter_tys,return_ty)
     }
   TyNode::Root(s)=>
     {
         if let Some(sym) = symtbl.find_symbol(s)
         {
-          find_ty(sym.get_ty_name()).unwrap()
+          Rc::clone(self.find(sym.get_ty_name()).unwrap())
         }
 
       else
         {
-          find_ty(s).unwrap()
+          Rc::clone(self.find(s).unwrap())
         }
     }
     }
@@ -719,19 +715,21 @@ get_pointer_ty_name(base_name: &str)-> String
 
 
 pub fn
-get_pointer_ty_by_name(name: &str)-> Rc<Ty>
+get_pointer_ty_by_name(&mut self, name: &str)-> Rc<Ty>
 {
-  let  ptr_ty_name = get_pointer_ty_name(name);
+  let  ptr_ty_name = Self::get_pointer_ty_name(name);
 
-    if let Some(existed) = find_ty(&ptr_ty_name)
+    if let Some(existed) = self.find(&ptr_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
-    if let Some(base) = find_ty(name)
+    if let Some(base) = self.find(name)
     {
-      get_pointer_ty(base)
+      let  cp = Rc::clone(base);
+
+      self.get_pointer_ty(&cp)
     }
 
   else
@@ -740,18 +738,18 @@ get_pointer_ty_by_name(name: &str)-> Rc<Ty>
 
 
 pub fn
-get_pointer_ty(ty: Rc<Ty>)-> Rc<Ty>
+get_pointer_ty(&mut self, ty: &Rc<Ty>)-> Rc<Ty>
 {
-  let  ptr_ty_name = get_pointer_ty_name(&ty.name);
+  let  ptr_ty_name = Self::get_pointer_ty_name(&ty.name);
 
-    if let Some(existed) = find_ty(&ptr_ty_name)
+    if let Some(existed) = self.find(&ptr_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
     {
-      add_ty(Ty{
+      self.add(Ty{
         name: ptr_ty_name.clone(),
         kind: TyKind::Pointer(Rc::clone(&ty)),
         size: WORD_SIZE,
@@ -770,19 +768,21 @@ get_reference_ty_name(base_name: &str)-> String
 
 
 pub fn
-get_reference_ty_by_name(name: &str)-> Rc<Ty>
+get_reference_ty_by_name(&mut self, name: &str)-> Rc<Ty>
 {
-  let  ref_ty_name = get_reference_ty_name(name);
+  let  ref_ty_name = Self::get_reference_ty_name(name);
 
-    if let Some(existed) = find_ty(&ref_ty_name)
+    if let Some(existed) = self.find(&ref_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
-    if let Some(base) = find_ty(name)
+    if let Some(base) = self.find(name)
     {
-      get_reference_ty(base)
+      let  cp = Rc::clone(base);
+
+      self.get_reference_ty(&cp)
     }
 
   else
@@ -791,18 +791,18 @@ get_reference_ty_by_name(name: &str)-> Rc<Ty>
 
 
 pub fn
-get_reference_ty(ty: Rc<Ty>)-> Rc<Ty>
+get_reference_ty(&mut self, ty: &Rc<Ty>)-> Rc<Ty>
 {
-  let  ref_ty_name = get_reference_ty_name(&ty.name);
+  let  ref_ty_name = Self::get_reference_ty_name(&ty.name);
 
-    if let Some(existed) = find_ty(&ref_ty_name)
+    if let Some(existed) = self.find(&ref_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
     {
-      add_ty(Ty{
+      self.add(Ty{
         name: ref_ty_name.clone(),
         kind: TyKind::Reference(Rc::clone(&ty)),
         size: WORD_SIZE,
@@ -821,19 +821,21 @@ get_array_ty_name(base_name: &str, n: usize)-> String
 
 
 pub fn
-get_array_ty_by_name(name: &str, n: usize)-> Rc<Ty>
+get_array_ty_by_name(&mut self, name: &str, n: usize)-> Rc<Ty>
 {
-  let  arr_ty_name = get_array_ty_name(name,n);
+  let  arr_ty_name = Self::get_array_ty_name(name,n);
 
-    if let Some(existed) = find_ty(&arr_ty_name)
+    if let Some(existed) = self.find(&arr_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
-    if let Some(base) = find_ty(name)
+    if let Some(base) = self.find(name)
     {
-      get_array_ty(base,n)
+      let  cp = Rc::clone(base);
+
+      self.get_array_ty(&cp,n)
     }
 
   else
@@ -842,13 +844,13 @@ get_array_ty_by_name(name: &str, n: usize)-> Rc<Ty>
 
 
 pub fn
-get_array_ty(ty: Rc<Ty>, n: usize)-> Rc<Ty>
+get_array_ty(&mut self, ty: &Rc<Ty>, n: usize)-> Rc<Ty>
 {
-  let  arr_ty_name = get_array_ty_name(&ty.name,n);
+  let  arr_ty_name = Self::get_array_ty_name(&ty.name,n);
 
-    if let Some(existed) = find_ty(&arr_ty_name)
+    if let Some(existed) = self.find(&arr_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
@@ -861,7 +863,7 @@ get_array_ty(ty: Rc<Ty>, n: usize)-> Rc<Ty>
         }
 
 
-      add_ty(Ty{
+      self.add(Ty{
         name: arr_ty_name.clone(),
         kind: TyKind::Array(Rc::clone(&ty),n),
         size: ty.size*n,
@@ -893,13 +895,13 @@ get_struct_ty_name(fields: &Vec<Field>)-> String
 
 
 pub fn
-get_struct_ty(mut fields: Vec<Field>)-> Rc<Ty>
+get_struct_ty(&mut self, mut fields: Vec<Field>)-> Rc<Ty>
 {
-  let  st_ty_name = get_struct_ty_name(&fields);
+  let  st_ty_name = Self::get_struct_ty_name(&fields);
 
-    if let Some(existed) = find_ty(&st_ty_name)
+    if let Some(existed) = self.find(&st_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
@@ -923,7 +925,7 @@ get_struct_ty(mut fields: Vec<Field>)-> Rc<Ty>
         }
 
 
-      add_ty(Ty{
+      self.add(Ty{
         name: st_ty_name.clone(),
         kind: TyKind::Struct(fields),
         size: Align(align).get(offset),
@@ -953,13 +955,13 @@ get_union_ty_name(fields: &Vec<Field>)-> String
 
 
 pub fn
-get_union_ty(mut fields: Vec<Field>)-> Rc<Ty>
+get_union_ty(&mut self, mut fields: Vec<Field>)-> Rc<Ty>
 {
-  let  un_ty_name = get_union_ty_name(&fields);
+  let  un_ty_name = Self::get_union_ty_name(&fields);
 
-    if let Some(existed) = find_ty(&un_ty_name)
+    if let Some(existed) = self.find(&un_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
@@ -978,7 +980,7 @@ get_union_ty(mut fields: Vec<Field>)-> Rc<Ty>
         }
 
 
-      add_ty(Ty{
+      self.add(Ty{
         name: un_ty_name.clone(),
         kind: TyKind::Union(fields),
         size,
@@ -1010,13 +1012,13 @@ get_enum_ty_name(enumers: &Vec<Enumerator>)-> String
 
 
 pub fn
-get_enum_ty(mut enumers: Vec<Enumerator>)-> Rc<Ty>
+get_enum_ty(&mut self, mut enumers: Vec<Enumerator>)-> Rc<Ty>
 {
-  let  en_ty_name = get_enum_ty_name(&enumers);
+  let  en_ty_name = Self::get_enum_ty_name(&enumers);
 
-    if let Some(existed) = find_ty(&en_ty_name)
+    if let Some(existed) = self.find(&en_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
@@ -1029,7 +1031,7 @@ get_enum_ty(mut enumers: Vec<Enumerator>)-> Rc<Ty>
         }
 
 
-      add_ty(Ty{
+      self.add(Ty{
         name: en_ty_name.clone(),
         kind: TyKind::Enum(enumers),
         size: WORD_SIZE,
@@ -1061,18 +1063,18 @@ get_function_ty_name(param_tys: &Vec<Rc<Ty>>, ret_ty: &Rc<Ty>)-> String
 
 
 pub fn
-get_function_ty(parameter_tys: Vec<Rc<Ty>>, return_ty: Rc<Ty>)-> Rc<Ty>
+get_function_ty(&mut self, parameter_tys: Vec<Rc<Ty>>, return_ty: Rc<Ty>)-> Rc<Ty>
 {
-  let  fn_ty_name = get_function_ty_name(&parameter_tys,&return_ty);
+  let  fn_ty_name = Self::get_function_ty_name(&parameter_tys,&return_ty);
 
-    if let Some(existed) = find_ty(&fn_ty_name)
+    if let Some(existed) = self.find(&fn_ty_name)
     {
-      existed
+      Rc::clone(existed)
     }
 
   else
     {
-      add_ty(Ty{
+      self.add(Ty{
         name: fn_ty_name.clone(),
         kind: TyKind::Function{parameter_tys, return_ty},
         size: WORD_SIZE,
@@ -1084,13 +1086,13 @@ get_function_ty(parameter_tys: Vec<Rc<Ty>>, return_ty: Rc<Ty>)-> Rc<Ty>
 
 
 pub fn
-find_ty(name: &str)-> Option<Rc<Ty>>
+find(&self, name: &str)-> Option<&Rc<Ty>>
 {
-    for ty in unsafe{&TABLE}
+    for ty in &self.core
     {
         if &ty.name == name
         {
-          return Some(Rc::clone(ty));
+          return Some(ty);
         }
     }
 
@@ -1100,14 +1102,17 @@ find_ty(name: &str)-> Option<Rc<Ty>>
 
 
 pub fn
-print_tys()
+print(&self)
 {
-    for ty in unsafe{&TABLE}
+    for ty in &self.core
     {
       ty.print();
 
       println!("");
     }
+}
+
+
 }
 
 

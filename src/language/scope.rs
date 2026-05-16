@@ -147,13 +147,6 @@ get_ty_name(&self)-> &String
 
 
 pub fn
-get_ty(&self)-> Rc<Ty>
-{
-  find_ty(&self.ty_name).unwrap()
-}
-
-
-pub fn
 get_offset(&self)-> usize
 {
   self.offset
@@ -185,7 +178,7 @@ Scope<'a>
 
 
 pub fn
-new_root(decl: &FnDecl, tbl: &SymbolTable)-> Self
+new_root(decl: &FnDecl, tbl: &SymbolTable, tytbl: &mut TyTable)-> Self
 {
   let  mut scp = Self{
     previous_opt: None,
@@ -197,7 +190,7 @@ new_root(decl: &FnDecl, tbl: &SymbolTable)-> Self
 
     for pd in decl.get_parameter_decl_list()
     {
-      let  ty = add_ty_from_node(pd.get_ty_node(),tbl);
+      let  ty = tytbl.add_from_node(pd.get_ty_node(),tbl);
 
       scp.add_var(pd.get_name(),ty.get_name());
     }
