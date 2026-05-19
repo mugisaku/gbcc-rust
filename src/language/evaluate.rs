@@ -203,8 +203,10 @@ to_text(self, tytbl: &TyTable)-> AsmEvalText
         }
       EvalConstResult::String(_)=>{todo!();}
       EvalConstResult::NullPointer=>{todo!();}
+      EvalConstResult::Array(_,_)=>{todo!();}
+      EvalConstResult::Struct(_,_)=>{todo!();}
+      EvalConstResult::Union(_,_)=>{todo!();}
       EvalConstResult::Enumerator(_,_)=>{todo!();}
-      EvalConstResult::Complex(_,_)=>{todo!();}
       EvalConstResult::Err=>{panic!();}
         }
     }
@@ -297,7 +299,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, tytbl: &TyTable, scp_opt: Option
 
           EvalResult::Value(txt)
         }
-      SymbolKind::Fn(_,_,_)=>
+      SymbolKind::Fn(_)=>
         {
           let  mut txt = AsmEvalText::new();
 

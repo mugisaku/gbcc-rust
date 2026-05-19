@@ -54,9 +54,11 @@ EvalConstResult
 
   String(String),
 
-  Enumerator(String,String),
+   Array(String,Vec<u8>),
+  Struct(String,Vec<u8>),
+   Union(String,Vec<u8>),
 
-  Complex(String,Vec<Self>),
+  Enumerator(String,String),
 
   Err,
 
@@ -145,9 +147,66 @@ get_ty_name(&self)-> Option<String>
   Self::Float(_)=>{Some("f64".to_string())}
   Self::F32(_)  =>{Some("f32".to_string())}
   Self::F64(_)  =>{Some("f64".to_string())}
+  Self::Array(ty_name,_) =>{Some(ty_name.clone())}
+  Self::Struct(ty_name,_)=>{Some(ty_name.clone())}
+  Self::Union(ty_name,_) =>{Some(ty_name.clone())}
   Self::Enumerator(ty_name,_)=>{Some(ty_name.clone())}
-  Self::Complex(ty_name,_)=>{Some(ty_name.clone())}
   _=>{None}
+    }
+}
+
+
+pub fn
+to_bytes(&self, tytbl: &TyTable)-> Vec<u8>
+{
+    match self
+    {
+  Self::NullPointer=>{0usize.to_ne_bytes().to_vec()}
+
+  Self::Void=>{Vec::new()}
+  Self::Bool(b)=>{vec![(if *b{1u8} else{0u8})]}
+
+  Self::Int(i)  =>{i.to_ne_bytes().to_vec()}
+  Self::I8(i)   =>{i.to_ne_bytes().to_vec()}
+  Self::I16(i)  =>{i.to_ne_bytes().to_vec()}
+  Self::I32(i)  =>{i.to_ne_bytes().to_vec()}
+  Self::I64(i)  =>{i.to_ne_bytes().to_vec()}
+  Self::ISize(i)=>{i.to_ne_bytes().to_vec()}
+
+  Self::Uint(u) =>{u.to_ne_bytes().to_vec()}
+  Self::U8(u)   =>{u.to_ne_bytes().to_vec()}
+  Self::U16(u)  =>{u.to_ne_bytes().to_vec()}
+  Self::U32(u)  =>{u.to_ne_bytes().to_vec()}
+  Self::U64(u)  =>{u.to_ne_bytes().to_vec()}
+  Self::USize(u)=>{u.to_ne_bytes().to_vec()}
+
+  Self::Float(f)=>{f.to_ne_bytes().to_vec()}
+  Self::F32(f)=>{f.to_ne_bytes().to_vec()}
+  Self::F64(f)=>{f.to_ne_bytes().to_vec()}
+
+  Self::String(s)=>{s.as_bytes().to_vec()}
+  Self::Array(ty_name,bytes) =>{bytes.clone()}
+  Self::Struct(ty_name,bytes)=>{bytes.clone()}
+  Self::Union(ty_name,bytes) =>{bytes.clone()}
+  Self::Enumerator(ty_name,id)=>
+    {
+      let  ty = tytbl.find(ty_name).unwrap();
+
+        if let TyKind::Enum(ls) = ty.get_kind()
+        {
+            for e in ls
+            {
+                if e.get_name() == id
+                {
+                  return e.get_value().to_ne_bytes().to_vec();
+                }
+            }
+        }
+
+
+      panic!();
+    }
+  _=>{panic!();}
     }
 }
 
@@ -183,13 +242,21 @@ print(&self)
   Self::F64(f)=>{print!("{}: f64",*f);}
 
   Self::String(s)=>{print!("literal string");}
+  Self::Array(ty_name,_)=>
+    {
+      print!("{}",ty_name);
+    }
+  Self::Struct(ty_name,_)=>
+    {
+      print!("{}",ty_name);
+    }
+  Self::Union(ty_name,_)=>
+    {
+      print!("{}",ty_name);
+    }
   Self::Enumerator(ty_name,id)=>
     {
       print!("{}::{}",ty_name,id);
-    }
-  Self::Complex(ty_name,_)=>
-    {
-      print!("{}",ty_name);
     }
   Self::Err=>{print!("ERR");}
     }

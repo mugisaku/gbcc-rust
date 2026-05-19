@@ -462,6 +462,8 @@ assemble(decl: &FnDecl, tbl: &SymbolTable, tytbl: &mut TyTable)-> Vec<u8>
 
   text.set_xs(scp.get_offset_max());
 
+  text.finalize();
+
   text.to_bytes()
 }
 

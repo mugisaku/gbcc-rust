@@ -9,11 +9,144 @@ const  HALT_FLAG: usize = 1;
 
 
 pub struct
+MachineInfoSetter<'a>(&'a mut MachineInfo,usize);
+
+
+impl<'a>
+MachineInfoSetter<'a>
+{
+
+
+pub fn
+heap(self, size: usize)-> Self
+{
+  self.0.heap_start = get_word_aligned(self.1);
+  self.0.heap_size  = size;
+
+  Self(self.0,self.1+size)
+}
+
+
+pub fn
+data(self, size: usize)-> Self
+{
+  self.0.data_start = get_word_aligned(self.1);
+  self.0.data_size  = size;
+
+  Self(self.0,self.1+size)
+}
+
+
+pub fn
+text(self, size: usize)-> Self
+{
+  self.0.text_start = get_word_aligned(self.1);
+  self.0.text_size  = size;
+
+  Self(self.0,self.1+size)
+}
+
+
+pub fn
+stack(self, size: usize)-> Self
+{
+  self.0.stack_start = get_word_aligned(self.1);
+  self.0.stack_size  = size;
+
+  Self(self.0,self.1+size)
+}
+
+
+pub fn
+callstack(self, size: usize)-> Self
+{
+  self.0.callstack_start = get_word_aligned(self.1);
+  self.0.callstack_size  = size;
+
+  Self(self.0,self.1+size)
+}
+
+
+}
+
+
+
+
+#[derive(Default,Clone)]
+pub struct
 MachineInfo
 {
-       memory_size: usize,
-  local_stack_size: usize,
-   call_stack_size: usize,
+  pub  data_start: usize,
+  pub  data_size: usize,
+
+  pub  text_start: usize,
+  pub  text_size: usize,
+
+  pub  heap_start: usize,
+  pub  heap_size: usize,
+
+  pub  stack_start: usize,
+  pub  stack_size: usize,
+
+  pub  callstack_start: usize,
+  pub  callstack_size: usize,
+
+  pub  frequency: usize,
+
+}
+
+
+impl
+MachineInfo
+{
+
+
+pub fn  get_data_start(&self)-> usize{self.data_start}
+pub fn  get_text_start(&self)-> usize{self.text_start}
+pub fn  get_heap_start(&self)-> usize{self.heap_start}
+pub fn  get_stack_start(&self)-> usize{self.stack_start}
+pub fn  get_callstack_start(&self)-> usize{self.callstack_start}
+
+
+pub fn  get_data_end(&self)-> usize{self.data_start+self.data_size}
+pub fn  get_text_end(&self)-> usize{self.text_start+self.text_size}
+pub fn  get_heap_end(&self)-> usize{self.heap_start+self.heap_size}
+pub fn  get_stack_end(&self)-> usize{self.stack_start+self.stack_size}
+pub fn  get_callstack_end(&self)-> usize{self.callstack_start+self.callstack_size}
+
+
+pub fn
+set_memory_size(&mut self, start: usize)-> MachineInfoSetter
+{
+  MachineInfoSetter(self,start)
+}
+
+
+pub fn
+get_memory_size(&self)-> usize
+{
+  let  mut sz = 0usize;
+
+  sz = std::cmp::max(sz,self.get_data_end());
+  sz = std::cmp::max(sz,self.get_text_end());
+  sz = std::cmp::max(sz,self.get_heap_end());
+  sz = std::cmp::max(sz,self.get_stack_end());
+  sz = std::cmp::max(sz,self.get_callstack_end());
+
+  sz
+}
+
+
+pub fn
+print(&self)
+{
+  println!("data {} - {}",self.data_start,self.get_data_end());
+  println!("text {} - {}",self.text_start,self.get_text_end());
+  println!("heap {} - {}",self.heap_start,self.get_heap_end());
+  println!("stack {} - {}",self.stack_start,self.get_stack_end());
+  println!("callstack {} - {}",self.callstack_start,self.get_callstack_end());
+}
+
 
 }
 
@@ -23,6 +156,8 @@ MachineInfo
 pub struct
 Machine
 {
+  info: MachineInfo,
+
   memory: Vec<u8>,
 
   pc: usize,
@@ -43,10 +178,18 @@ Machine
 
 
 pub fn
-new()-> Self
+new(info: &MachineInfo)-> Self
 {
+  let  mut memory = Vec::<u8>::new();
+
+  memory.resize(info.get_memory_size(),0);
+
+  info.print();
+
   Self{
-    memory: Vec::new(),
+    info: info.clone(),
+
+    memory,
 
     pc: 0,
     fp: 0,
@@ -61,35 +204,39 @@ new()-> Self
 
 
 pub fn
-resize_memory(&mut self, new_size: usize)
+reset(&mut self, exec: &Exec)
 {
-  self.memory.resize(new_size/WORD_SIZE*WORD_SIZE,0);
-}
+  let  data_bytes = exec.get_data_bytes();
+  let  text_bytes = exec.get_text_bytes();
 
-
-pub fn
-reset(&mut self, exeimg: &ExecImage)
-{
-  const  CALL_STACK_SIZE: usize = 256;
-  const LOCAL_STACK_SIZE: usize = 256;
-
-  let  bytes = exeimg.get_bytes();
-
-  self.memory.resize(bytes.len()+LOCAL_STACK_SIZE+CALL_STACK_SIZE,0);
-
-    for i in 0..bytes.len()
+    if data_bytes.len() > self.info.data_size
     {
-//println!("{} {} <= {}",i,self.memory[i],bytes[i]);
-      self.memory[i] = bytes[i];
+      panic!();
     }
 
 
-  let  base = get_word_aligned(bytes.len());
+    if text_bytes.len() > self.info.text_size
+    {
+      panic!();
+    }
 
-  self.pc = exeimg.get_entry_point();
-  self.fp = base;
-  self.sp = base;
-  self.cp = base+LOCAL_STACK_SIZE;
+
+    for i in 0..data_bytes.len()
+    {
+      self.memory[self.info.data_start+i] = data_bytes[i];
+    }
+
+
+    for i in 0..text_bytes.len()
+    {
+      self.memory[self.info.text_start+i] = text_bytes[i];
+    }
+
+
+  self.pc = exec.get_entry_point();
+  self.fp = self.info.stack_start;
+  self.sp = self.info.stack_start;
+  self.cp = self.info.callstack_start;
   self.status = 0;
   self.call_depth = 0;
 }

@@ -10,6 +10,7 @@ use super::ty::*;
 use super::asm::*;
 use super::scope::*;
 use super::assemble::assemble;
+use super::machine::MachineInfo;
 use super::evaluate::*;
 use super::evaluate_const::*;
 use super::tplg_sort::*;
@@ -25,7 +26,7 @@ SymbolKind
       Const(EvalConstResult),
   GlobalVar(EvalConstResult),
 
-  Fn(FnDecl,Vec<u8>,usize),
+  Fn(FnDecl),
 
 }
 
@@ -158,7 +159,7 @@ build(src: Source, symtbl: &SymbolTable, tytbl: &mut TyTable)-> Self
 
       Self{
         name,
-        kind: SymbolKind::Fn(fd,Vec::new(),0),
+        kind: SymbolKind::Fn(fd),
         ty_name,
         offset: 0,
         deps_parent_list,
@@ -227,7 +228,7 @@ print(&self)
     {
   SymbolKind::Const(_)    =>{print!("const");}
   SymbolKind::GlobalVar(_)=>{print!("(g)var");}
-  SymbolKind::Fn(_,_,_)   =>{print!("fn");}
+  SymbolKind::Fn(_)       =>{print!("fn");}
   SymbolKind::Ty          =>{print!("ty");}
     }
 
@@ -238,7 +239,7 @@ print(&self)
     {
   SymbolKind::Const(res)    =>{res.print();}
   SymbolKind::GlobalVar(res)=>{res.print();}
-  SymbolKind::Fn(_,_,_)=>{}
+  SymbolKind::Fn(_,)=>{}
   SymbolKind::Ty=>{}
     }
 
@@ -277,12 +278,6 @@ SymbolTable
 
   string_table: Vec<(String,usize)>,
 
-  data_start: usize,
-  data_end: usize,
-
-  text_start: usize,
-  text_end: usize,
-
 }
 
 
@@ -297,10 +292,6 @@ new()-> Self
   Self{
     symbols: Vec::new(),
     string_table: Vec::new(),
-    data_start: 0,
-    data_end: 0,
-    text_start: 0,
-    text_end: 0,
   }
 }
 
@@ -427,51 +418,129 @@ build(decls: Vec<Decl>, tytbl: &mut TyTable)-> Result<Self,()>
 }
 
 
-pub fn
-allocate_data(&mut self, tytbl: &TyTable, mut start_address: usize)
+fn
+generate_data(&mut self, tytbl: &TyTable, start: usize)-> Vec<u8>
 {
-  self.data_start = get_word_aligned(start_address);
+  let  mut bytes = Vec::<u8>::new();
+  let  mut pos = start;
 
     for sym in &mut self.symbols
     {
-      start_address = get_word_aligned(start_address);
+                   pos = get_word_aligned(pos);
+      sym.offset = pos                        ;
 
-      sym.offset = get_word_aligned(start_address);
-
-      start_address += tytbl.find(&sym.ty_name).unwrap().get_size();
+      pos += tytbl.find(&sym.ty_name).unwrap().get_size();
     }
 
 
-  self.data_end = start_address;
+    for (s,off) in &mut self.string_table
+    {
+      *off = pos           ;
+             pos += s.len();
+    }
+
+
+  bytes.resize(pos-start,0);
+
+    for sym in &self.symbols
+    {
+        match &sym.kind
+        {
+      SymbolKind::Const(res)=>
+        {
+          let  res_bytes = res.to_bytes(tytbl);
+
+            for i in 0..res_bytes.len()
+            {
+              bytes[(sym.offset-start)+i] = res_bytes[i];
+            }
+        }
+      SymbolKind::GlobalVar(res)=>
+        {
+          let  res_bytes = res.to_bytes(tytbl);
+
+            for i in 0..res_bytes.len()
+            {
+              bytes[(sym.offset-start)+i] = res_bytes[i];
+            }
+        }
+      _=>{}
+        }
+    }
+
+
+    for (s,off) in &self.string_table
+    {
+      let  s_bytes = s.as_bytes();
+
+        for i in 0..s_bytes.len()
+        {
+          bytes[((*off)-start)+i] = s_bytes[i];
+        }
+    }
+
+
+  bytes
 }
 
 
 pub fn
-generate_text(&mut self, tytbl: &mut TyTable, mut start_address: usize)
+find_text_offset(ls: &Vec<(String,Vec<u8>,usize)>, name: &str)-> usize
 {
-  self.text_start = start_address;
-
-    for i in 0..self.symbols.len()
+    for (text_name,_,offset) in ls
     {
-      let  mut tmp = Vec::<u8>::new();
-
-        if let SymbolKind::Fn(fd,_,_) = &self.symbols[i].kind
+        if text_name == name
         {
-          tmp = assemble(fd,self,tytbl);
-        }
-
-
-        if let SymbolKind::Fn(_,bytes,offset) = &mut self.symbols[i].kind
-        {
-           *bytes = tmp;
-          *offset = start_address;
-
-          start_address += bytes.len();
+          return *offset;
         }
     }
 
 
-  self.text_end = start_address;
+  panic!();
+}
+
+
+pub fn
+generate_exec(&mut self, tytbl: &mut TyTable, mi: &MachineInfo)-> Exec
+{
+  let  mut exec = Exec::new();
+
+  exec.data_bytes = self.generate_data(tytbl,mi.get_data_start());
+
+  let  mut pos = mi.get_text_start();
+
+    for sym in &self.symbols
+    {
+        if let SymbolKind::Fn(fd) = &sym.kind
+        {
+            if &sym.name == "main"
+            {
+              exec.entry_point = pos;
+            }
+
+
+          let  bytes = assemble(fd,self,tytbl);
+
+            for b in &bytes
+            {
+              exec.text_bytes.push(*b);
+            }
+
+
+          let  pos_bytes = pos.to_ne_bytes();
+
+            for i in 0..pos_bytes.len()
+            {
+              exec.data_bytes[(sym.offset-mi.get_data_start())+i] = pos_bytes[i];
+            }
+
+
+          pos += bytes.len();
+        }
+    }
+
+
+  exec
 }
 
 
@@ -572,9 +641,10 @@ print(&self)
 
 
 pub struct
-ExecImage
+Exec
 {
-  bytes: Vec<u8>,
+  data_bytes: Vec<u8>,
+  text_bytes: Vec<u8>,
 
   entry_point: usize,
 
@@ -582,7 +652,7 @@ ExecImage
 
 
 impl
-ExecImage
+Exec
 {
 
 
@@ -590,74 +660,24 @@ pub fn
 new()-> Self
 {
   Self{
-    bytes: Vec::new(),
+    data_bytes: Vec::new(),
+    text_bytes: Vec::new(),
     entry_point: 0,
   }
 }
 
 
 pub fn
-build(tbl: &SymbolTable)-> Self
+get_data_bytes(&self)-> &Vec<u8>
 {
-  let  mut img = Self::new();
-
-/*
-  img.bytes.resize(tbl.image_size,0);
-
-    for sym in &tbl.symbols
-    {
-        match &sym.kind
-        {
-      SymbolKind::GlobalVar(res)=>
-        {
-            match res
-            {
-          EvalConstResult::Bool(b) =>{img.write_u64(sym.offset,if *b{1} else{0});}
-          EvalConstResult::Int(i)  =>{img.write_u64(sym.offset,*i as u64);}
-          EvalConstResult::Float(f)=>{img.write_u64(sym.offset,f.to_bits());}
-          _=>{}
-            }
-        }
-      SymbolKind::Fn(_,_,offset)=>
-        {
-          img.write_u64(sym.offset,*offset as u64);
-
-            if &sym.name == "main"
-            {
-              img.entry_point = *offset;
-
-              println!("entry_point: {}",img.entry_point);
-            }
-        }
-      _=>{}
-        }
-    }
-
-
-    for sym in &tbl.symbols
-    {
-        match &sym.kind
-        {
-      SymbolKind::Fn(_,bytes,offset)=>
-        {
-            for i in 0..bytes.len()
-            {
-              img.bytes[offset+i] = bytes[i];
-            }
-        }
-      _=>{}
-        }
-    }
-*/
-
-  img
+  &self.data_bytes
 }
 
 
 pub fn
-get_bytes(&self)-> &Vec<u8>
+get_text_bytes(&self)-> &Vec<u8>
 {
-  &self.bytes
+  &self.text_bytes
 }
 
 
@@ -665,36 +685,6 @@ pub fn
 get_entry_point(&self)-> usize
 {
   self.entry_point
-}
-
-
-pub fn
-write_u64(&mut self, offset: usize, v: u64)
-{
-  let  src_bytes = v.to_ne_bytes();
-
-  let  mut ptr = unsafe{self.bytes.as_mut_ptr().add(offset)};
-
-    for b in src_bytes
-    {
-      unsafe{*ptr = b};
-
-      ptr = unsafe{ptr.add(1)};
-    }
-}
-
-
-pub fn
-write_str(&mut self, offset: usize, s: &str)
-{
-  let  mut ptr = unsafe{self.bytes.as_mut_ptr().add(offset)};
-
-    for b in s.as_bytes()
-    {
-      unsafe{*ptr = *b};
-
-      ptr = unsafe{ptr.add(1)};
-    }
 }
 
 

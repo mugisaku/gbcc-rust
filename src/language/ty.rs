@@ -754,7 +754,7 @@ get_pointer_ty(&mut self, ty: &Rc<Ty>)-> Rc<Ty>
         kind: TyKind::Pointer(Rc::clone(&ty)),
         size: WORD_SIZE,
         align: WORD_SIZE,
-        default_data: EvalConstResult::Complex(ptr_ty_name,vec![EvalConstResult::NullPointer]),
+        default_data: EvalConstResult::NullPointer,
       })
     }
 }
@@ -807,7 +807,7 @@ get_reference_ty(&mut self, ty: &Rc<Ty>)-> Rc<Ty>
         kind: TyKind::Reference(Rc::clone(&ty)),
         size: WORD_SIZE,
         align: WORD_SIZE,
-        default_data: EvalConstResult::Complex(ref_ty_name,vec![EvalConstResult::NullPointer]),
+        default_data: EvalConstResult::NullPointer,
       })
     }
 }
@@ -863,12 +863,18 @@ get_array_ty(&mut self, ty: &Rc<Ty>, n: usize)-> Rc<Ty>
         }
 
 
+      let  size = ty.size*n;
+
+      let  mut bytes = Vec::<u8>::new();
+
+      bytes.resize(size,0);
+
       self.add(Ty{
         name: arr_ty_name.clone(),
         kind: TyKind::Array(Rc::clone(&ty),n),
-        size: ty.size*n,
+        size,
         align: ty.align,
-        default_data: EvalConstResult::Complex(arr_ty_name,buf),
+        default_data: EvalConstResult::Array(arr_ty_name,bytes),
       })
     }
 }
@@ -925,12 +931,18 @@ get_struct_ty(&mut self, mut fields: Vec<Field>)-> Rc<Ty>
         }
 
 
+      let  mut bytes = Vec::<u8>::new();
+
+      let  size = Align(align).get(offset);
+
+      bytes.resize(size,0);
+
       self.add(Ty{
         name: st_ty_name.clone(),
         kind: TyKind::Struct(fields),
-        size: Align(align).get(offset),
-        align: align,
-        default_data: EvalConstResult::Complex(st_ty_name,buf),
+        size,
+        align,
+        default_data: EvalConstResult::Struct(st_ty_name,bytes),
       })
     }
 }
@@ -980,12 +992,16 @@ get_union_ty(&mut self, mut fields: Vec<Field>)-> Rc<Ty>
         }
 
 
+      let  mut bytes = Vec::<u8>::new();
+
+      bytes.resize(size,0);
+
       self.add(Ty{
         name: un_ty_name.clone(),
         kind: TyKind::Union(fields),
         size,
         align,
-        default_data: EvalConstResult::Complex(un_ty_name,buf),
+        default_data: EvalConstResult::Union(un_ty_name,bytes),
       })
     }
 }
@@ -1079,7 +1095,7 @@ get_function_ty(&mut self, parameter_tys: Vec<Rc<Ty>>, return_ty: Rc<Ty>)-> Rc<T
         kind: TyKind::Function{parameter_tys, return_ty},
         size: WORD_SIZE,
         align: WORD_SIZE,
-        default_data: EvalConstResult::Complex(fn_ty_name,vec![EvalConstResult::NullPointer]),
+        default_data: EvalConstResult::NullPointer,
       })
     }
 }

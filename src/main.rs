@@ -19,29 +19,36 @@ compile(s: &str)
 
     if let Ok(root) = decl::Decl::read_as_root(s)
     {
-      let  mut ty_table = TyTable::new();
+      let  mut tytbl = TyTable::new();
 
-        if let Ok(tbl) = SymbolTable::build(root,&mut ty_table)
+        if let Ok(mut symtbl) = SymbolTable::build(root,&mut tytbl)
         {
-/*
-          tbl.print();
+          let  mut mi = MachineInfo::default();
+
+          mi.set_memory_size(256)
+            .data(1000*32)
+            .text(1000*32)
+            .heap(1000*32)
+            .stack(1000*32)
+            .callstack(1000*32)
+          ;
+
+
+          let  exec = symtbl.generate_exec(&mut tytbl,&mi);
+
+          symtbl.print();
 
           println!("");
 
-          let  img = ExecImage::build(&tbl);
+          let  mut m = Machine::new(&mi);
 
-          let  mut m = Machine::new();
-
-          println!("machine is reset");
-
-          m.reset(&img);
+          m.reset(&exec);
 
           println!("machine runs");
 
           m.run();
 
           println!("machine is finished");
-*/
         }
 
       else
