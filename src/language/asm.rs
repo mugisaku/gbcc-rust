@@ -1,9 +1,6 @@
 
 
-use std::rc::Rc;
-
 use super::*;
-use super::ty::*;
 
 
 #[derive(Clone)]
@@ -12,28 +9,14 @@ Opcode
 {
   Nop,
 
-  Push0,
-  Push1,
-  Push2,
-  Push3,
-  Push4,
-  Push5,
-  Push6,
-  Push7,
-  Push8,
-
   Pushpc,
   Pushfp,
   Pushsp,
 
-  Pushi8,
-  Pushi16,
-  Pushi32,
-  Pushu8,
-  Pushu16,
-  Pushu32,
-  Pushu64,
-  Pushf32,
+  Push8,
+  Push16,
+  Push32,
+  Push64,
 
   Xs8,
   Xs16,
@@ -54,35 +37,14 @@ Opcode
   Pop,
   Dup,
 
-  Sx8, Sx16, Sx32,
-  Tr8, Tr16, Tr32,
+  Ld_i8, Ld_i16, Ld_i32, Ld_i64, 
+  St_i8, St_i16, St_i32, St_i64,
 
-  B32toF,
-  FtoB32,
+  Neg, Not,
 
-  Ld8, Ld16, Ld32, Ld64,
-  St8, St16, St32, St64,
-
-  Neg, Negf,
-  Not, Notl,
-
-  Itof, Ftoi,
-
-
-  Addi, Subi, Muli, Divi, Remi,
-  Addu, Subu, Mulu, Divu, Remu,
-  Addf, Subf, Mulf, Divf, Remf,
-
+  Add, Sub, Mul, Div, Rem,
   Shl, Shr, And, Or, Xor,
-
-  Eq,  Neq,
-  Eqf, Neqf,
-
-  Lti, Lteqi, Gti, Gteqi,
-  Ltu, Ltequ, Gtu, Gtequ,
-  Ltf, Lteqf, Gtf, Gteqf,
-
-  Land, Lor,
+  Eq, Neq, Lt, Lteq, Gt, Gteq,
 
   Prcal,
     Cal,
@@ -107,29 +69,14 @@ to_str(&self)-> &'static str
     {
   Self::Nop=>{"nop"}
 
-  Self::Push0=>{"push0"}
-  Self::Push1=>{"push1"}
-  Self::Push2=>{"push2"}
-  Self::Push3=>{"push3"}
-  Self::Push4=>{"push4"}
-  Self::Push5=>{"push5"}
-  Self::Push6=>{"push6"}
-  Self::Push7=>{"push7"}
-  Self::Push8=>{"push8"}
-
   Self::Pushpc=>{"pushpc"}
   Self::Pushfp=>{"pushfp"}
   Self::Pushsp=>{"pushsp"}
 
-  Self::Pushi8 =>{"pushi8"}
-  Self::Pushi16=>{"pushi16"}
-  Self::Pushi32=>{"pushi32"}
-  Self::Pushu8 =>{"pushu8"}
-  Self::Pushu16=>{"pushu16"}
-  Self::Pushu32=>{"pushu32"}
-  Self::Pushu64=>{"pushu64"}
-  Self::Pushf32=>{"pushf32"}
-
+  Self::Push8 =>{"push8"}
+  Self::Push16=>{"push16"}
+  Self::Push32=>{"push32"}
+  Self::Push64=>{"push64"}
 
   Self::Xs8 =>{"xs8"}
   Self::Xs16=>{"xs16"}
@@ -150,49 +97,23 @@ to_str(&self)-> &'static str
   Self::Pop=>{"pop"}
   Self::Dup=>{"dup"}
 
-  Self::Sx8 =>{"sx8"}
-  Self::Sx16=>{"sx16"}
-  Self::Sx32=>{"sx32"}
-  Self::Tr8 =>{"tr8"}
-  Self::Tr16=>{"tr16"}
-  Self::Tr32=>{"tr32"}
-
-  Self::B32toF=>{"b32tof"}
-  Self::FtoB32=>{"ftob32"}
-
-  Self::Ld8 =>{"ld8"}
-  Self::Ld16=>{"ld16"}
-  Self::Ld32=>{"ld32"}
-  Self::Ld64=>{"ld64"}
-  Self::St8 =>{"st8"}
-  Self::St16=>{"st16"}
-  Self::St32=>{"st32"}
-  Self::St64=>{"st64"}
+  Self::Ld_i8=>{"ld_i8"}
+  Self::Ld_i16=>{"ld_i16"}
+  Self::Ld_i32=>{"ld_i32"}
+  Self::Ld_i64=>{"ld_i64"}
+  Self::St_i8=>{"st_i8"}
+  Self::St_i16=>{"st_i16"}
+  Self::St_i32=>{"st_i32"}
+  Self::St_i64=>{"st_i64"}
 
   Self::Neg =>{"neg"}
-  Self::Negf=>{"negf"}
   Self::Not =>{"not"}
-  Self::Notl=>{"notl"}
 
-  Self::Itof=>{"itof"}
-  Self::Ftoi=>{"ftoi"}
-
-
-  Self::Addi=>{"addi"}
-  Self::Subi=>{"subi"}
-  Self::Muli=>{"muli"}
-  Self::Divi=>{"divi"}
-  Self::Remi=>{"remi"}
-  Self::Addu=>{"addu"}
-  Self::Subu=>{"subu"}
-  Self::Mulu=>{"mulu"}
-  Self::Divu=>{"divu"}
-  Self::Remu=>{"remu"}
-  Self::Addf=>{"addf"}
-  Self::Subf=>{"subf"}
-  Self::Mulf=>{"mulf"}
-  Self::Divf=>{"divf"}
-  Self::Remf=>{"remf"}
+  Self::Add=>{"add"}
+  Self::Sub=>{"sub"}
+  Self::Mul=>{"mul"}
+  Self::Div=>{"div"}
+  Self::Rem=>{"rem"}
 
   Self::Shl=>{"shl"}
   Self::Shr=>{"shr"}
@@ -202,24 +123,11 @@ to_str(&self)-> &'static str
 
   Self::Eq  =>{"eq"}
   Self::Neq =>{"neq"}
-  Self::Eqf =>{"eqf"}
-  Self::Neqf=>{"neqf"}
 
-  Self::Lti  =>{"lti"}
-  Self::Lteqi=>{"lteqi"}
-  Self::Gti  =>{"gti"}
-  Self::Gteqi=>{"gteqi"}
-  Self::Ltu  =>{"ltu"}
-  Self::Ltequ=>{"ltequ"}
-  Self::Gtu  =>{"gtu"}
-  Self::Gtequ=>{"gtequ"}
-  Self::Ltf  =>{"ltf"}
-  Self::Lteqf=>{"lteqf"}
-  Self::Gtf  =>{"gtf"}
-  Self::Gteqf=>{"gteqf"}
-
-  Self::Land=>{"land"}
-  Self::Lor=>{"lor"}
+  Self::Lt  =>{"lt"}
+  Self::Lteq=>{"lteq"}
+  Self::Gt  =>{"gt"}
+  Self::Gteq=>{"gteq"}
 
   Self::Prcal=>{"prcal"}
   Self::Cal=>{"cal"}
@@ -253,18 +161,13 @@ from(b: u8)-> Self
     match b
     {
   (op) if op == Self::Nop as u8=>{Self::Nop}
-  (op) if op == Self::Push0 as u8=>{Self::Push0}
-  (op) if op == Self::Push1 as u8=>{Self::Push1}
-  (op) if op == Self::Push2 as u8=>{Self::Push2}
-  (op) if op == Self::Push3 as u8=>{Self::Push3}
-  (op) if op == Self::Push4 as u8=>{Self::Push4}
-  (op) if op == Self::Push5 as u8=>{Self::Push5}
-  (op) if op == Self::Push6 as u8=>{Self::Push6}
-  (op) if op == Self::Push7 as u8=>{Self::Push7}
-  (op) if op == Self::Push8 as u8=>{Self::Push8}
   (op) if op == Self::Pushpc as u8=>{Self::Pushpc}
   (op) if op == Self::Pushfp as u8=>{Self::Pushfp}
   (op) if op == Self::Pushsp as u8=>{Self::Pushsp}
+  (op) if op == Self::Push8 as u8=>{Self::Push8}
+  (op) if op == Self::Push16 as u8=>{Self::Push16}
+  (op) if op == Self::Push32 as u8=>{Self::Push32}
+  (op) if op == Self::Push64 as u8=>{Self::Push64}
   (op) if op == Self::Xs8 as u8=>{Self::Xs8}
   (op) if op == Self::Xs16 as u8=>{Self::Xs16}
   (op) if op == Self::Xs32 as u8=>{Self::Xs32}
@@ -279,43 +182,21 @@ from(b: u8)-> Self
   (op) if op == Self::Brnz32 as u8=>{Self::Brnz32}
   (op) if op == Self::Pop as u8=>{Self::Pop}
   (op) if op == Self::Dup as u8=>{Self::Dup}
-  (op) if op == Self::Ld8 as u8=>{Self::Ld8}
-  (op) if op == Self::Ld16 as u8=>{Self::Ld16}
-  (op) if op == Self::Ld32 as u8=>{Self::Ld32}
-  (op) if op == Self::Ld64 as u8=>{Self::Ld64}
-  (op) if op == Self::St8 as u8=>{Self::St8}
-  (op) if op == Self::St16 as u8=>{Self::St16}
-  (op) if op == Self::St32 as u8=>{Self::St32}
-  (op) if op == Self::St64 as u8=>{Self::St64}
-  (op) if op == Self::Sx8 as u8=>{Self::Sx8}
-  (op) if op == Self::Sx16 as u8=>{Self::Sx16}
-  (op) if op == Self::Sx32 as u8=>{Self::Sx32}
-  (op) if op == Self::Tr8 as u8=>{Self::Tr8}
-  (op) if op == Self::Tr16 as u8=>{Self::Tr16}
-  (op) if op == Self::Tr32 as u8=>{Self::Tr32}
-  (op) if op == Self::B32toF as u8=>{Self::B32toF}
-  (op) if op == Self::FtoB32 as u8=>{Self::FtoB32}
+  (op) if op == Self::Ld_i8 as u8=>{Self::Ld_i8}
+  (op) if op == Self::Ld_i16 as u8=>{Self::Ld_i16}
+  (op) if op == Self::Ld_i32 as u8=>{Self::Ld_i32}
+  (op) if op == Self::Ld_i64 as u8=>{Self::Ld_i64}
+  (op) if op == Self::St_i8 as u8=>{Self::St_i8}
+  (op) if op == Self::St_i16 as u8=>{Self::St_i16}
+  (op) if op == Self::St_i32 as u8=>{Self::St_i32}
+  (op) if op == Self::St_i64 as u8=>{Self::St_i64}
   (op) if op == Self::Neg  as u8=>{Self::Neg}
-  (op) if op == Self::Negf as u8=>{Self::Negf}
   (op) if op == Self::Not  as u8=>{Self::Not}
-  (op) if op == Self::Notl as u8=>{Self::Notl}
-  (op) if op == Self::Itof as u8=>{Self::Itof}
-  (op) if op == Self::Ftoi as u8=>{Self::Ftoi}
-  (op) if op == Self::Addi as u8=>{Self::Addi}
-  (op) if op == Self::Subi as u8=>{Self::Subi}
-  (op) if op == Self::Muli as u8=>{Self::Muli}
-  (op) if op == Self::Divi as u8=>{Self::Divi}
-  (op) if op == Self::Remi as u8=>{Self::Remi}
-  (op) if op == Self::Addu as u8=>{Self::Addu}
-  (op) if op == Self::Subu as u8=>{Self::Subu}
-  (op) if op == Self::Mulu as u8=>{Self::Mulu}
-  (op) if op == Self::Divu as u8=>{Self::Divu}
-  (op) if op == Self::Remu as u8=>{Self::Remu}
-  (op) if op == Self::Addf as u8=>{Self::Addf}
-  (op) if op == Self::Subf as u8=>{Self::Subf}
-  (op) if op == Self::Mulf as u8=>{Self::Mulf}
-  (op) if op == Self::Divf as u8=>{Self::Divf}
-  (op) if op == Self::Remf as u8=>{Self::Remf}
+  (op) if op == Self::Add as u8=>{Self::Add}
+  (op) if op == Self::Sub as u8=>{Self::Sub}
+  (op) if op == Self::Mul as u8=>{Self::Mul}
+  (op) if op == Self::Div as u8=>{Self::Div}
+  (op) if op == Self::Rem as u8=>{Self::Rem}
   (op) if op == Self::Shl as u8=>{Self::Shl}
   (op) if op == Self::Shr as u8=>{Self::Shr}
   (op) if op == Self::And as u8=>{Self::And}
@@ -323,22 +204,10 @@ from(b: u8)-> Self
   (op) if op == Self::Xor as u8=>{Self::Xor}
   (op) if op == Self::Eq  as u8=>{Self::Eq}
   (op) if op == Self::Neq as u8=>{Self::Neq}
-  (op) if op == Self::Eqf  as u8=>{Self::Eqf}
-  (op) if op == Self::Neqf as u8=>{Self::Neqf}
-  (op) if op == Self::Lti   as u8=>{Self::Lti}
-  (op) if op == Self::Lteqi as u8=>{Self::Lteqi}
-  (op) if op == Self::Gti   as u8=>{Self::Gti}
-  (op) if op == Self::Gteqi as u8=>{Self::Gteqi}
-  (op) if op == Self::Ltu   as u8=>{Self::Ltu}
-  (op) if op == Self::Ltequ as u8=>{Self::Ltequ}
-  (op) if op == Self::Gtu   as u8=>{Self::Gtu}
-  (op) if op == Self::Gtequ as u8=>{Self::Gtequ}
-  (op) if op == Self::Ltf   as u8=>{Self::Ltf}
-  (op) if op == Self::Lteqf as u8=>{Self::Lteqf}
-  (op) if op == Self::Gtf   as u8=>{Self::Gtf}
-  (op) if op == Self::Gteqf as u8=>{Self::Gteqf}
-  (op) if op == Self::Land as u8=>{Self::Land}
-  (op) if op == Self::Lor  as u8=>{Self::Lor}
+  (op) if op == Self::Lt   as u8=>{Self::Lt}
+  (op) if op == Self::Lteq as u8=>{Self::Lteq}
+  (op) if op == Self::Gt   as u8=>{Self::Gt}
+  (op) if op == Self::Gteq as u8=>{Self::Gteq}
   (op) if op == Self::Prcal as u8=>{Self::Prcal}
   (op) if op == Self::Cal as u8=>{Self::Cal}
   (op) if op == Self::Ret as u8=>{Self::Ret}
@@ -384,18 +253,14 @@ AsmLine
 
   Opcode(Opcode),
 
-   Pushi8(i8),
-  Pushi16(i16),
-  Pushi32(i32),
-   Pushu8(u8),
-  Pushu16(u16),
-  Pushu32(u32),
-  Pushu64(u64),
-  Pushf32(f32),
+  Push8(i8),
+  Push16(i16),
+  Push32(i32),
+  Push64(i64),
 
-   Xs8(u8),
-  Xs16(u16),
-  Xs32(u32),
+    Xs8(u8),
+   Xs16(u16),
+   Xs32(u32),
 
    Jmp(i32,Destination),
    Brz(i32,Destination),
@@ -410,45 +275,17 @@ AsmLine
 
 
 pub fn
-make_pushi(i: i64)-> Self
+make_push(i: i64)-> Self
 {
-    if i >= 0
-    {
-      Self::make_pushu(i as u64)
-    }
+  let  iabs = i.abs();
 
-  else if i >= ( i8::MIN as i64){Self::Pushi8( i as i8)}
-  else if i >= (i16::MIN as i64){Self::Pushi16(i as i16)}
-  else if i >= (i32::MIN as i64){Self::Pushi32(i as i32)}
-  else                          {Self::Pushu64(i as u64)}
+       if iabs <= ( i8::MAX as i64){Self::Push8( i as i8)}
+  else if iabs <= (i16::MAX as i64){Self::Push16(i as i16)}
+  else if iabs <= (i32::MAX as i64){Self::Push32(i as i32)}
+  else                             {Self::Push64(i as i64)}
 }
 
 
-pub fn
-make_pushu(u: u64)-> Self
-{
-       if u == 0{Self::Opcode(Opcode::Push0)}
-  else if u == 1{Self::Opcode(Opcode::Push1)}
-  else if u == 2{Self::Opcode(Opcode::Push2)}
-  else if u == 3{Self::Opcode(Opcode::Push3)}
-  else if u == 4{Self::Opcode(Opcode::Push4)}
-  else if u == 5{Self::Opcode(Opcode::Push5)}
-  else if u == 6{Self::Opcode(Opcode::Push6)}
-  else if u == 7{Self::Opcode(Opcode::Push7)}
-  else if u == 8{Self::Opcode(Opcode::Push8)}
-  else if u <= ( u8::MAX as u64){Self::Pushu8( u as u8)}
-  else if u <= (u16::MAX as u64){Self::Pushu16(u as u16)}
-  else if u <= (u32::MAX as u64){Self::Pushu32(u as u32)}
-  else                          {Self::Pushu64(u       )}
-}
-
-
-pub fn
-make_pushf(f: f64)-> Self
-{
-      if f.abs() <= (f32::MAX as f64){Self::Pushf32(f as f32)}
-  else                               {Self::Pushu64(f.to_bits())}
-}
 
 
 pub fn
@@ -499,6 +336,7 @@ get_size_of_i(i: i32)-> usize
     }
 }
 
+
 pub fn
 get_size(&self)-> usize
 {
@@ -508,20 +346,16 @@ get_size(&self)-> usize
 
   Self::Opcode(_)=>{1}
 
-  Self::Pushi8(_)
- |Self::Pushu8(_)
+  Self::Push8(_)
  |Self::Xs8(_)=>{2}
 
-  Self::Pushi16(_)
- |Self::Pushu16(_)
+  Self::Push16(_)
  |Self::Xs16(_)=>{3}
 
-  Self::Pushi32(_)
- |Self::Pushu32(_)
- |Self::Pushf32(_)
+  Self::Push32(_)
  |Self::Xs32(_)=>{5}
 
-  Self::Pushu64(_)=>{9}
+  Self::Push64(_)=>{9}
 
   Self::Jmp(i,_) =>{1+Self::get_size_of_i(*i)}
   Self::Brz(i,_) =>{1+Self::get_size_of_i(*i)}
@@ -590,14 +424,10 @@ write_to(&self, buf: &mut Vec<u8>)
 
   Self::Opcode(op)=>{buf.push(op.clone() as u8);}
 
-  Self::Pushi8(i) =>{Self::write_u8_to(Opcode::Pushi8 ,*i as u8,buf);}
-  Self::Pushi16(i)=>{Self::write_u16_to(Opcode::Pushi16,*i as u16,buf);}
-  Self::Pushi32(i)=>{Self::write_u32_to(Opcode::Pushi32,*i as u32,buf);}
-  Self::Pushu8(u) =>{Self::write_u8_to(Opcode::Pushu8 ,*u,buf);}
-  Self::Pushu16(u)=>{Self::write_u16_to(Opcode::Pushu16,*u,buf);}
-  Self::Pushu32(u)=>{Self::write_u32_to(Opcode::Pushu32,*u,buf);}
-  Self::Pushu64(u)=>{Self::write_u64_to(Opcode::Pushu64,*u,buf);}
-  Self::Pushf32(f)=>{Self::write_u32_to(Opcode::Pushf32,f.to_bits(),buf);}
+  Self::Push8(i) =>{Self::write_u8_to(Opcode::Push8 ,*i as u8,buf);}
+  Self::Push16(i)=>{Self::write_u16_to(Opcode::Push16,*i as u16,buf);}
+  Self::Push32(i)=>{Self::write_u32_to(Opcode::Push32,*i as u32,buf);}
+  Self::Push64(i)=>{Self::write_u64_to(Opcode::Push64,*i as u64,buf);}
   Self::Xs8(u) =>{Self::write_u8_to(Opcode::Xs8 ,*u,buf);}
   Self::Xs16(u)=>{Self::write_u16_to(Opcode::Xs16,*u,buf);}
   Self::Xs32(u)=>{Self::write_u32_to(Opcode::Xs32,*u,buf);}
@@ -644,14 +474,10 @@ print(&self)
 
   Self::Opcode(op)=>{op.print();}
 
-  Self::Pushi8(i) =>{print!("pushi8 {}",*i);}
-  Self::Pushi16(i)=>{print!("pushi16 {}",*i);}
-  Self::Pushi32(i)=>{print!("pushi32 {}",*i);}
-  Self::Pushu8(u) =>{print!("pushu8 {}",*u);}
-  Self::Pushu16(u)=>{print!("pushu16 {}",*u);}
-  Self::Pushu32(u)=>{print!("pushu32 {}",*u);}
-  Self::Pushu64(u)=>{print!("pushu64 {}",*u);}
-  Self::Pushf32(f)=>{print!("pushf32 {}",*f);}
+  Self::Push8(i) =>{print!("push8 {}",*i);}
+  Self::Push16(i)=>{print!("push16 {}",*i);}
+  Self::Push32(i)=>{print!("push32 {}",*i);}
+  Self::Push64(i)=>{print!("push64 {}",*i);}
 
   Self::Xs8(u) =>{print!("xs8 {}",*u);}
   Self::Xs16(u)=>{print!("xs16 {}",*u);}
@@ -675,8 +501,6 @@ AsmEvalText
 {
   lines: Vec<AsmLine>,
 
-  ty_name: String,
-
   is_deref: bool,
 
 }
@@ -690,21 +514,7 @@ AsmEvalText
 pub fn
 new()-> Self
 {
-  Self{lines: Vec::new(), ty_name: "void".to_string(), is_deref: false}
-}
-
-
-pub fn
-get_ty_name(&self)-> &String
-{
-  &self.ty_name
-}
-
-
-pub fn
-set_ty_name(&mut self, s: &str)
-{
-  self.ty_name = s.to_string();
+  Self{lines: Vec::new(), is_deref: false}
 }
 
 
@@ -733,186 +543,61 @@ push_2opcodes(&mut self, a: Opcode, b: Opcode)
 pub fn
 push_bool(&mut self, b: bool)
 {
-  self.lines.push(AsmLine::Opcode(if b{Opcode::Push1} else{Opcode::Push0}));
-
-  self.set_ty_name("bool");
-}
-
-
-pub fn
-push_i8(&mut self, i: i8)
-{
-  self.lines.push(AsmLine::make_pushi(i as i64));
-
-  self.set_ty_name("i8");
-}
-
-
-pub fn
-push_i16(&mut self, i: i16)
-{
-  self.lines.push(AsmLine::make_pushi(i as i64));
-
-  self.set_ty_name("i16");
-}
-
-
-pub fn
-push_i32(&mut self, i: i32)
-{
-  self.lines.push(AsmLine::make_pushi(i as i64));
-
-  self.set_ty_name("i32");
+  self.lines.push(AsmLine::Push8(if b{1} else{0}));
 }
 
 
 pub fn
 push_i64(&mut self, i: i64)
 {
-  self.lines.push(AsmLine::make_pushi(i as i64));
-
-  self.set_ty_name("i64");
+  self.lines.push(AsmLine::make_push(i));
 }
 
 
 pub fn
-push_isize(&mut self, i: isize)
+push_global_var(&mut self, off: usize)
 {
-  self.lines.push(AsmLine::make_pushi(i as i64));
-
-  self.set_ty_name("isize");
-}
-
-
-pub fn
-push_u8(&mut self, u: u8)
-{
-  self.lines.push(AsmLine::make_pushu(u as u64));
-
-  self.set_ty_name("u8");
-}
-
-
-pub fn
-push_u16(&mut self, u: u16)
-{
-  self.lines.push(AsmLine::make_pushu(u as u64));
-
-  self.set_ty_name("u16");
-}
-
-
-pub fn
-push_u32(&mut self, u: u32)
-{
-  self.lines.push(AsmLine::make_pushu(u as u64));
-
-  self.set_ty_name("u32");
-}
-
-
-pub fn
-push_u64(&mut self, u: u64)
-{
-  self.lines.push(AsmLine::make_pushu(u as u64));
-
-  self.set_ty_name("u64");
-}
-
-
-pub fn
-push_usize(&mut self, u: usize)
-{
-  self.lines.push(AsmLine::make_pushu(u as u64));
-
-  self.set_ty_name("usize");
-}
-
-
-pub fn
-push_f32(&mut self, f: f32)
-{
-  self.lines.push(AsmLine::make_pushf(f as f64));
-
-  self.set_ty_name("f32");
-}
-
-
-pub fn
-push_f64(&mut self, f: f64)
-{
-  self.lines.push(AsmLine::make_pushf(f as f64));
-
-  self.set_ty_name("f64");
-}
-
-
-pub fn
-push_global_var(&mut self, off: usize, ty_name: &str)
-{
-  self.push_usize(off);
-
-  self.set_ty_name(ty_name);
+  self.push_i64(off as i64);
 
   self.is_deref = true;
 }
 
 
 pub fn
-push_fn(&mut self, off: usize, ty_name: &str)
+push_fn(&mut self, off: usize)
 {
-  self.push_usize(off);
-  self.push_opcode(Opcode::Ld64);
-
-  self.set_ty_name(ty_name);
+  self.push_i64(off as i64);
+  self.push_opcode(Opcode::Ld_i64);
 
   self.is_deref = true;
 }
 
 
 pub fn
-push_local_var(&mut self, off: usize, ty_name: &str)
+push_local_var(&mut self, off: usize)
 {
   self.push_opcode(Opcode::Pushfp);
-  self.push_usize(off);
-  self.push_opcode(Opcode::Addi);
-
-  self.set_ty_name(ty_name);
+  self.push_i64(off as i64);
+  self.push_opcode(Opcode::Add);
 
   self.is_deref = true;
 }
 
 
 pub fn
-push_call(&mut self, args: Vec<Self>, tytbl: &TyTable)
+push_call(&mut self, args: Vec<Self>)
 {
-  let  ty = tytbl.find(&self.ty_name).unwrap();
+  self.push_opcode(Opcode::Prcal);
 
-    if let TyKind::Function{parameter_tys, return_ty} = ty.get_kind()
+    for a in args
     {
-        if parameter_tys.len() != args.len()
-        {
-          panic!();
-        }
-
-
-      self.push_opcode(Opcode::Prcal);
-
-        for a in args
-        {
-          self.lines.extend(a.lines);
-        }
-
-
-      self.push_opcode(Opcode::Cal);
-
-      self.ty_name = return_ty.get_name().clone();
-
-      self.is_deref = false;
+      self.lines.extend(a.lines);
     }
 
-  else
-    {panic!();}
+
+  self.push_opcode(Opcode::Cal);
+
+  self.is_deref = false;
 }
 
 
@@ -925,24 +610,7 @@ push_load(&mut self)
     }
 
 
-    match &self.ty_name
-    {
-  (s) if s == "bool" =>{self.push_opcode(Opcode::Ld8);}
-  (s) if s == "i8"   =>{self.push_2opcodes(Opcode::Ld8 ,Opcode::Sx8 );}
-  (s) if s == "i16"  =>{self.push_2opcodes(Opcode::Ld16,Opcode::Sx16);}
-  (s) if s == "i32"  =>{self.push_2opcodes(Opcode::Ld32,Opcode::Sx32);}
-  (s) if s == "i64"  =>{self.push_opcode(Opcode::Ld64);}
-  (s) if s == "isize"=>{self.push_opcode(Opcode::Ld64);}
-  (s) if s == "u8"   =>{self.push_opcode(Opcode::Ld8 );}
-  (s) if s == "u16"  =>{self.push_opcode(Opcode::Ld16);}
-  (s) if s == "u32"  =>{self.push_opcode(Opcode::Ld32);}
-  (s) if s == "u64"  =>{self.push_opcode(Opcode::Ld64);}
-  (s) if s == "usize"=>{self.push_opcode(Opcode::Ld64);}
-  (s) if s == "f32"  =>{self.push_2opcodes(Opcode::Ld32,Opcode::B32toF);}
-  (s) if s == "f64"  =>{self.push_opcode(Opcode::Ld64);}
-  _=>{panic!();}
-    }
-
+  self.push_opcode(Opcode::Ld_i64);
 
   self.is_deref = false;
 }
@@ -951,40 +619,13 @@ push_load(&mut self)
 pub fn
 push_store(&mut self)
 {
-    if !self.is_deref
-    {
-      panic!();
-    }
-
-
-    match &self.ty_name
-    {
-  (s) if s == "bool" =>{self.push_opcode(Opcode::St8);}
-  (s) if s == "i8"   =>{self.push_opcode(Opcode::St8 );}
-  (s) if s == "i16"  =>{self.push_opcode(Opcode::St16);}
-  (s) if s == "i32"  =>{self.push_opcode(Opcode::St32);}
-  (s) if s == "i64"  =>{self.push_opcode(Opcode::St64);}
-  (s) if s == "isize"=>{self.push_opcode(Opcode::St64);}
-  (s) if s == "u8"   =>{self.push_opcode(Opcode::St8 );}
-  (s) if s == "u16"  =>{self.push_opcode(Opcode::St16);}
-  (s) if s == "u32"  =>{self.push_opcode(Opcode::St32);}
-  (s) if s == "u64"  =>{self.push_opcode(Opcode::St64);}
-  (s) if s == "usize"=>{self.push_opcode(Opcode::St64);}
-  (s) if s == "f32"  =>{self.push_2opcodes(Opcode::FtoB32,Opcode::Ld32);}
-  (s) if s == "f64"  =>{self.push_opcode(Opcode::St64);}
-  _=>{panic!();}
-    }
-
-
-  self.set_ty_name("void");
+  self.push_opcode(Opcode::St_i64);
 }
 
 
 pub fn
 push_unary(&mut self, op: &str)
 {
-  let  ty_name = self.ty_name.clone();
-
     match op
     {
   (s) if s == "-"=>
@@ -995,21 +636,7 @@ push_unary(&mut self, op: &str)
         }
 
 
-        if (&ty_name == "i8")
-        || (&ty_name == "i16")
-        || (&ty_name == "i32")
-        || (&ty_name == "i64")
-        || (&ty_name == "isize")
-        {
-          self.push_opcode(Opcode::Neg);
-        }
-
-      else
-        if (&ty_name == "f32")
-        || (&ty_name == "f64")
-        {
-          self.push_opcode(Opcode::Negf);
-        }
+      self.push_opcode(Opcode::Neg);
     }
   (s) if s == "!"=>
     {
@@ -1019,25 +646,7 @@ push_unary(&mut self, op: &str)
         }
 
 
-        if (&ty_name == "i8")
-        || (&ty_name == "i16")
-        || (&ty_name == "i32")
-        || (&ty_name == "i64")
-        || (&ty_name == "isize")
-        || (&ty_name == "u8")
-        || (&ty_name == "u16")
-        || (&ty_name == "u32")
-        || (&ty_name == "u64")
-        || (&ty_name == "usize")
-        {
-          self.push_opcode(Opcode::Not);
-        }
-
-      else
-        if (&ty_name == "bool")
-        {
-          self.push_opcode(Opcode::Notl);
-        }
+      self.push_opcode(Opcode::Not);
     }
   (s) if s == "&"=>
     {
@@ -1045,22 +654,6 @@ push_unary(&mut self, op: &str)
     }
   (s) if s == "*"=>
     {
-/*
-        match self.ty.get_kind()
-        {
-      TyKind::Pointer(ty)=>
-        {
-          self.ty_name = ty_name.clone();
-          self.is_deref = true;
-        }
-      TyKind::Reference(ty_name)=>
-        {
-          self.ty_name = ty_name.clone();
-          self.is_deref = true;
-        }
-      _=>{panic!();}
-        }
-*/
 todo!();
     }
   _=>{panic!();}
@@ -1068,73 +661,8 @@ todo!();
 }
 
 
-fn
-push_ari_or_cmp(&mut self, other: Self, i_op: Opcode, u_op: Opcode, f_op: Opcode, new_ty_name_opt: Option<&str>)
-{
-    if &self.ty_name != &other.ty_name
-    {
-      panic!();
-    }
-
-
-  let  op = match &self.ty_name
-    {
-  (s) if s == "i8"   =>{i_op}
-  (s) if s == "i16"  =>{i_op}
-  (s) if s == "i32"  =>{i_op}
-  (s) if s == "i64"  =>{i_op}
-  (s) if s == "isize"=>{i_op}
-  (s) if s == "u8"   =>{u_op}
-  (s) if s == "u16"  =>{u_op}
-  (s) if s == "u32"  =>{u_op}
-  (s) if s == "u64"  =>{u_op}
-  (s) if s == "usize"=>{u_op}
-  (s) if s == "f32"  =>{f_op}
-  (s) if s == "f64"  =>{f_op}
-  _=>{Opcode::Hlt}
-    };
-
-
-    if let Opcode::Hlt = op
-    {
-      panic!();
-    }
-
-
-  self.lines.extend(other.lines);
-
-  self.push_opcode(op);
-
-    if let Some(new_ty_name) = new_ty_name_opt
-    {
-      self.set_ty_name(new_ty_name);
-    }
-}
-
-
-fn
-push_log(&mut self, other: Self, op: Opcode)
-{
-    if &self.ty_name != &other.ty_name
-    {
-      panic!();
-    }
-
-
-    if &self.ty_name != "bool"
-    {
-      panic!();
-    }
-
-
-  self.lines.extend(other.lines);
-
-  self.push_opcode(op);
-}
-
-
 pub fn
-push_binary(&mut self, mut other: Self, op: &str)
+push_binary(&mut self, mut other: Self, op_s: &str)
 {
     if self.is_deref
     {
@@ -1148,30 +676,31 @@ push_binary(&mut self, mut other: Self, op: &str)
     }
 
 
-  let  bool_ty_name = "bool";
+  self.lines.extend(other.lines);
 
-    match op
+  let  op = match op_s
     {
-  (s) if s ==  "+"=>{self.push_ari_or_cmp(other,Opcode::Addi ,Opcode::Addu ,Opcode::Addf ,None)}
-  (s) if s ==  "-"=>{self.push_ari_or_cmp(other,Opcode::Subi ,Opcode::Subu ,Opcode::Subf ,None)}
-  (s) if s ==  "*"=>{self.push_ari_or_cmp(other,Opcode::Muli ,Opcode::Mulu ,Opcode::Mulf ,None)}
-  (s) if s ==  "/"=>{self.push_ari_or_cmp(other,Opcode::Divi ,Opcode::Divu ,Opcode::Divf ,None)}
-  (s) if s ==  "%"=>{self.push_ari_or_cmp(other,Opcode::Remi ,Opcode::Remu ,Opcode::Remf ,None)}
-  (s) if s == "<<"=>{self.push_ari_or_cmp(other,Opcode::Shl  ,Opcode::Shl  ,Opcode::Hlt  ,None)}
-  (s) if s == ">>"=>{self.push_ari_or_cmp(other,Opcode::Shr  ,Opcode::Shr  ,Opcode::Hlt  ,None)}
-  (s) if s ==  "&"=>{self.push_ari_or_cmp(other,Opcode::And  ,Opcode::And  ,Opcode::Hlt  ,None)}
-  (s) if s ==  "|"=>{self.push_ari_or_cmp(other,Opcode::Or   ,Opcode::Or   ,Opcode::Hlt  ,None)}
-  (s) if s ==  "^"=>{self.push_ari_or_cmp(other,Opcode::Xor  ,Opcode::Xor  ,Opcode::Hlt  ,None)}
-  (s) if s == "=="=>{self.push_ari_or_cmp(other,Opcode::Eq   ,Opcode::Eq   ,Opcode::Eqf  ,Some(bool_ty_name))}
-  (s) if s == "!="=>{self.push_ari_or_cmp(other,Opcode::Neq  ,Opcode::Neq  ,Opcode::Neqf ,Some(bool_ty_name))}
-  (s) if s ==  "<"=>{self.push_ari_or_cmp(other,Opcode::Lti  ,Opcode::Ltu  ,Opcode::Ltf  ,Some(bool_ty_name))}
-  (s) if s == "<="=>{self.push_ari_or_cmp(other,Opcode::Lteqi,Opcode::Ltequ,Opcode::Lteqf,Some(bool_ty_name))}
-  (s) if s ==  ">"=>{self.push_ari_or_cmp(other,Opcode::Gti  ,Opcode::Gtu  ,Opcode::Gtf  ,Some(bool_ty_name))}
-  (s) if s == ">="=>{self.push_ari_or_cmp(other,Opcode::Gteqi,Opcode::Gtequ,Opcode::Gteqf,Some(bool_ty_name))}
-  (s) if s == "&&"=>{self.push_log(other,Opcode::Land)}
-  (s) if s == "||"=>{self.push_log(other,Opcode::Lor )}
+  (s) if s ==  "+"=>{Opcode::Add}
+  (s) if s ==  "-"=>{Opcode::Sub}
+  (s) if s ==  "*"=>{Opcode::Mul}
+  (s) if s ==  "/"=>{Opcode::Div}
+  (s) if s ==  "%"=>{Opcode::Rem}
+  (s) if s == "<<"=>{Opcode::Shl}
+  (s) if s == ">>"=>{Opcode::Shr}
+  (s) if s ==  "&"=>{Opcode::And}
+  (s) if s ==  "|"=>{Opcode::Or}
+  (s) if s ==  "^"=>{Opcode::Xor}
+  (s) if s == "=="=>{Opcode::Eq}
+  (s) if s == "!="=>{Opcode::Neq}
+  (s) if s ==  "<"=>{Opcode::Lt}
+  (s) if s == "<="=>{Opcode::Lteq}
+  (s) if s ==  ">"=>{Opcode::Gt}
+  (s) if s == ">="=>{Opcode::Gteq}
   _=>{panic!();}
-    }
+    };
+
+
+  self.push_opcode(op);
 }
 
 
@@ -1262,6 +791,13 @@ push_eval_text(&mut self, et: AsmEvalText)
 
 
 pub fn
+push_i64(&mut self, i: i64)
+{
+  self.push_line(AsmLine::make_push(i));
+}
+
+
+pub fn
 push_jmp(&mut self, s: &str)
 {
   self.push_line(AsmLine::make_jmp(s));
@@ -1291,27 +827,29 @@ push_assign(&mut self, mut l: AsmEvalText, r: AsmEvalText, op: &str)
     }
 
 
-    if &l.ty_name != &r.ty_name
+    if op == "="
     {
-      panic!();
+      l.push_text(r);
     }
 
+  else
+    {
+      l.push_opcode(Opcode::Dup);
+      l.push_load();
 
-  l.push_opcode(Opcode::Dup);
-  l.push_load();
+           if op ==  "+="{l.push_binary(r,"+");}
+      else if op ==  "-="{l.push_binary(r,"-");}
+      else if op ==  "*="{l.push_binary(r,"*");}
+      else if op ==  "/="{l.push_binary(r,"/");}
+      else if op ==  "%="{l.push_binary(r,"%");}
+      else if op == "<<="{l.push_binary(r,"<<");}
+      else if op == ">>="{l.push_binary(r,">>");}
+      else if op ==  "&="{l.push_binary(r,"&");}
+      else if op ==  "|="{l.push_binary(r,"|");}
+      else if op ==  "^="{l.push_binary(r,"^");}
+      else{panic!()}
+    }
 
-       if op ==  "+="{l.push_binary(r,"+");}
-  else if op ==  "-="{l.push_binary(r,"-");}
-  else if op ==  "*="{l.push_binary(r,"*");}
-  else if op ==  "/="{l.push_binary(r,"/");}
-  else if op ==  "%="{l.push_binary(r,"%");}
-  else if op == "<<="{l.push_binary(r,"<<");}
-  else if op == ">>="{l.push_binary(r,">>");}
-  else if op ==  "&="{l.push_binary(r,"&");}
-  else if op ==  "|="{l.push_binary(r,"|");}
-  else if op ==  "^="{l.push_binary(r,"^");}
-  else if op ==   "="{                     }
-  else{panic!()}
 
   l.push_store();
 
@@ -1362,13 +900,13 @@ prepare_for_finalize(&mut self)-> Vec<usize>
 
     for i in 0..self.lines.len()
     {
-      let  mut i = 0usize;
+      let  mut dst_i = 0usize;
 
         match &self.lines[i].0
         {
-      AsmLine::Jmp(_,dst) =>{i = self.get_label_index(&dst.label);}
-      AsmLine::Brnz(_,dst)=>{i = self.get_label_index(&dst.label);}
-      AsmLine::Brz(_,dst) =>{i = self.get_label_index(&dst.label);}
+      AsmLine::Jmp(_,dst) =>{dst_i = self.get_label_index(&dst.label);}
+      AsmLine::Brnz(_,dst)=>{dst_i = self.get_label_index(&dst.label);}
+      AsmLine::Brz(_,dst) =>{dst_i = self.get_label_index(&dst.label);}
       _=>{}
         }
 
@@ -1378,19 +916,19 @@ prepare_for_finalize(&mut self)-> Vec<usize>
       AsmLine::Jmp(jmp_off,dst)=>
         {
           *jmp_off = i32::MAX;
-          dst.index = i;
+          dst.index = dst_i;
           ls.push(i);
         }
       AsmLine::Brnz(jmp_off,dst)=>
         {
           *jmp_off = i32::MAX;
-          dst.index = i;
+          dst.index = dst_i;
           ls.push(i);
         }
       AsmLine::Brz(jmp_off,dst)=>
         {
           *jmp_off = i32::MAX;
-          dst.index = i;
+          dst.index = dst_i;
           ls.push(i);
         }
       _=>{}
@@ -1413,7 +951,7 @@ prepare_for_finalize(&mut self)-> Vec<usize>
 fn
 update_info(&mut self)-> bool
 {
-  let  mut off = 0usize;
+  let  mut  off = 0usize;
   let  mut flag = 0usize;
 
     for (ln,li) in &mut self.lines
@@ -1428,9 +966,8 @@ update_info(&mut self)-> bool
         }
 
 
-      li.size = sz;
-
-      off += sz;
+      li.size  = sz;
+          off += sz;
     }
 
 
@@ -1488,6 +1025,7 @@ finalize(&mut self)
     {
       self.update_jump_offset(&ls);
     }
+self.print();
 }
 
 
@@ -1496,18 +1034,18 @@ print(&self)
 {
   let  mut n = 0usize;
 
-    for (ln,_) in &self.lines
+    for (ln,li) in &self.lines
     {
         if let AsmLine::Label(s) = ln
         {
-          print!("[{}] ",s);
+          print!("[{}]",s);
         }
 
       else
         {
-          ln.print();
+          print!("  {:05} ",li.offset);
 
-          n += 1;
+          ln.print();
         }
 
 

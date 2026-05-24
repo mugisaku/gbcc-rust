@@ -5,7 +5,6 @@ use std::rc::Rc;
 use crate::node::*;
 use super::expr::*;
 use super::decl::*;
-use super::ty::*;
 use super::evaluate::*;
 use super::evaluate_const::*;
 use super::asm::*;
@@ -16,54 +15,9 @@ use super::symbol_table::*;
 
 
 pub struct
-ElifStmt
-{
-  condition: Expr,
-
-  block: Block,
-
-}
-
-
-impl
-ElifStmt
-{
-
-
-pub fn  get_condition(&self)-> &Expr{&self.condition}
-pub fn  get_block(&self)-> &Block{&self.block}
-
-
-pub fn
-is_executable_as_const(&self)-> bool
-{
-  self.block.is_executable_as_const()
-}
-
-
-pub fn
-print(&self)
-{
-  print!("else if ");
-
-  self.condition.print();
-  self.block.print();
-}
-
-
-}
-
-
-
-
-pub struct
 IfStmt
 {
-  condition: Expr,
-
-  block: Block,
-
-  elif_stmt_list: Vec<ElifStmt>,
+  cond_block_list: Vec<(Expr,Block)>,
 
   else_block_opt: Option<Block>,
 
@@ -75,21 +29,16 @@ IfStmt
 {
 
 
-pub fn  get_condition(&self)-> &Expr{&self.condition}
-pub fn  get_block(&self)-> &Block{&self.block}
-pub fn  get_elif_stmt_list(&self)-> &Vec<ElifStmt>{&self.elif_stmt_list}
+pub fn  get_cond_block_list(&self)-> &Vec<(Expr,Block)>{&self.cond_block_list}
 pub fn  get_else_block_opt(&self)-> &Option<Block>{&self.else_block_opt}
 
 pub fn
 collect(&self, buf: &mut Vec<Collectible>)
 {
-  self.condition.collect(buf);
-  self.block.collect(buf);
-
-    for elif in &self.elif_stmt_list
+    for (e,blk) in &self.cond_block_list
     {
-      elif.condition.collect(buf);
-      elif.block.collect(buf);
+        e.collect(buf);
+      blk.collect(buf);
     }
 
 
@@ -103,15 +52,9 @@ collect(&self, buf: &mut Vec<Collectible>)
 pub fn
 is_executable_as_const(&self)-> bool
 {
-    if !self.block.is_executable_as_const()
+    for (_,blk) in &self.cond_block_list
     {
-      return false;
-    }
-
-
-    for elif in &self.elif_stmt_list
-    {
-        if elif.is_executable_as_const()
+        if blk.is_executable_as_const()
         {
           return false;
         }
@@ -133,15 +76,26 @@ is_executable_as_const(&self)-> bool
 pub fn
 print(&self)
 {
-  print!("if ");
+  let  mut iter = self.cond_block_list.iter();
 
-  self.condition.print();
 
-  self.block.print();
-
-    for elif in &self.elif_stmt_list
+    if let Some((e,blk)) = iter.next()
     {
-      elif.print();
+      print!("if ");
+
+      e.print();
+      blk.print();
+
+      print!("\n");
+    }
+
+
+    while let Some((e,blk)) = iter.next()
+    {
+      print!("else if ");
+
+      e.print();
+      blk.print();
 
       print!("\n");
     }
@@ -533,11 +487,11 @@ read_print(start_nd: &Node)-> Stmt
 
 
 pub fn
-read_elif_stmt(start_nd: &Node)-> ElifStmt
+read_if_block(start_nd: &Node)-> (Expr,Block)
 {
   let  mut cur = start_nd.cursor();
 
-  cur.advance(2);
+  cur.advance(1);
 
     if let Some(expr_d) = cur.select_node("expression")
     {
@@ -549,25 +503,8 @@ read_elif_stmt(start_nd: &Node)-> ElifStmt
         {
           let  block = read_block(blk_d);
 
-          return ElifStmt{condition, block};
+          return (condition,block);
         }
-    }
-
-
-  panic!();
-}
-
-
-pub fn
-read_else(start_nd: &Node)-> Block
-{
-  let  mut cur = start_nd.cursor();
-
-  cur.advance(1);
-
-    if let Some(blk_d) = cur.select_node("block")
-    {
-      return read_block(blk_d);
     }
 
 
@@ -580,40 +517,41 @@ read_if_stmt(start_nd: &Node)-> IfStmt
 {
   let  mut cur = start_nd.cursor();
 
-  cur.advance(1);
+  let  mut cond_block_list = Vec::<(Expr,Block)>::new();
 
-    if let Some(expr_d) = cur.select_node("expression")
+    if let Some(first_d) = cur.select_node("if_block")
     {
-      let  condition = read_expr(expr_d);
+      let  mut else_block_opt = None;
+
+      cond_block_list.push(read_if_block(first_d));
 
       cur.advance(1);
 
-        if let Some(blk_d) = cur.select_node("block")
+        while cur.is_keyword()
         {
-          let  block = read_block(blk_d);
-
-          let  mut elif_stmt_list = Vec::<ElifStmt>::new();
-
           cur.advance(1);
 
-            while let Some(elif_d) = cur.select_node("else_if")
+            if let Some(ifblk_d) = cur.select_node("if_block")
             {
-              elif_stmt_list.push(read_elif_stmt(elif_d));
+              cond_block_list.push(read_if_block(ifblk_d));
 
               cur.advance(1);
             }
 
-
-          let  mut else_block_opt = None;
-
-            if let Some(el_d) = cur.select_node("else")
+          else
+            if let Some(blk_d) = cur.select_node("block")
             {
-              else_block_opt = Some(read_else(el_d));
+              else_block_opt = Some(read_block(blk_d));
+
+              break;
             }
 
-
-          return IfStmt{condition, block, elif_stmt_list, else_block_opt};
+          else
+            {panic!();}
         }
+
+
+      return IfStmt{cond_block_list, else_block_opt};
     }
 
 

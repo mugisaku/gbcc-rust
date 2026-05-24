@@ -3,25 +3,23 @@ mod source_file;
 mod syntax;
 mod language;
 mod node;
+mod object;
 mod debug;
 
 use std::env;
 
 
 fn
-compile(s: &str)
+compile_and_run(s: &str)
 {
   use crate::language::*;
   use crate::language::decl::*;
   use crate::language::symbol_table::*;
   use crate::language::machine::*;
-  use crate::language::ty::*;
 
     if let Ok(root) = decl::Decl::read_as_root(s)
     {
-      let  mut tytbl = TyTable::new();
-
-        if let Ok(mut symtbl) = SymbolTable::build(root,&mut tytbl)
+        if let Ok(mut symtbl) = SymbolTable::build(root)
         {
           let  mut mi = MachineInfo::default();
 
@@ -34,7 +32,7 @@ compile(s: &str)
           ;
 
 
-          let  exec = symtbl.generate_exec(&mut tytbl,&mi);
+          let  exec = symtbl.generate_exec(&mi);
 
           symtbl.print();
 
@@ -49,6 +47,8 @@ compile(s: &str)
           m.run();
 
           println!("machine is finished");
+
+          m.print();
         }
 
       else
@@ -100,50 +100,39 @@ main()
   let  codes =
 r#"
 
-const  a = 8;
-const  b = a+4;
-const  c = b+8;
 
-var  test: St = St::default;
-
-struct St{
-a: i64,
-b: u16,
-c: i8,
-d: f32
-
-}
-
-union Un{
-a: i16,
-b: u8,
-c: f32
-
-}
-
-
-enum En
-{
-  Apple, Grape, Peach
-}
+var
+value = 888;
 
 
 fn
-add(a: i64, b: i64)-> i64
+add(a,b)
 {
   return a+b;
 }
 
 
 fn
-main()-> i64
+main()
 {
-  return add(7,add(40,322));
+  if 0{
+  value = 0;
+  }
+
+ else if 0{
+  value = 2;
+  }
+
+ else{
+  value = 4;
+  }
+
+  return 0;
 }
 "#;
 
 
-  compile(codes);
+  compile_and_run(codes);
 }
 
 

@@ -6,7 +6,6 @@ use super::*;
 use super::decl::*;
 use super::expr::*;
 use super::stmt::*;
-use super::ty::*;
 use super::asm::*;
 use super::scope::*;
 use super::assemble::assemble;
@@ -21,10 +20,8 @@ use super::tplg_sort::*;
 pub enum
 SymbolKind
 {
-  Ty,
-
-      Const(EvalConstResult),
-  GlobalVar(EvalConstResult),
+      Const(i64),
+  GlobalVar(i64),
 
   Fn(FnDecl),
 
@@ -51,8 +48,6 @@ Symbol
 
   kind: SymbolKind,
 
-  ty_name: String,
-
   offset: usize,
 
   deps_parent_list: Vec<String>,
@@ -67,7 +62,7 @@ Symbol
 
 
 pub fn
-build(src: Source, symtbl: &SymbolTable, tytbl: &mut TyTable)-> Self
+build(src: Source, symtbl: &SymbolTable)-> Self
 {
   let  (name,kind) = src.decl.expire();
 
@@ -77,105 +72,35 @@ build(src: Source, symtbl: &SymbolTable, tytbl: &mut TyTable)-> Self
     match kind
     {
   DeclKind::Undef=>{panic!("symbol build error: {} is undef",&name);}
-  DeclKind::Const(tn_opt,e)=>
+  DeclKind::Const(e)=>
     {
-      let  res = evaluate_const(&e,symtbl,tytbl,None);
-
-        if let Some(ty_name) = res.get_ty_name()
-        {
-          Self{
-            name,
-            kind: SymbolKind::Const(res),
-            ty_name,
-            offset: 0,
-            deps_parent_list,
-            deps_child_list,
-          }
-        }
-
-      else
-        {
-          println!("build const error: {} ",&name);
-          e.print();
-
-          panic!();
-        }
-    }
-  DeclKind::Var(tn_opt,e)=>
-    {
-      let  res = evaluate_const(&e,symtbl,tytbl,None);
-
-        if let Some(ty_name) = res.get_ty_name()
-        {
-          Self{
-            name,
-            kind: SymbolKind::GlobalVar(res),
-            ty_name,
-            offset: 0,
-            deps_parent_list,
-            deps_child_list,
-          }
-        }
-
-      else
-        {
-          println!("build var error: {} ",&name);
-          e.print();
-
-          panic!();
-        }
-    }
-  DeclKind::Static(tn_opt,e)=>
-    {
-      let  res = evaluate_const(&e,symtbl,tytbl,None);
-
-        if let Some(ty_name) = res.get_ty_name()
-        {
-          Self{
-            name,
-            kind: SymbolKind::GlobalVar(res),
-            ty_name,
-            offset: 0,
-            deps_parent_list,
-            deps_child_list,
-          }
-        }
-
-      else
-        {
-          println!("build var error: {} ",&name);
-          e.print();
-
-          panic!();
-        }
-    }
-  DeclKind::Fn(fd)=>
-    {
-      let  tynd = fd.make_ty_node();
-
-      let  ty = tytbl.add_from_node(&tynd,symtbl);
-
-      let  ty_name = ty.get_name().clone();
+      let  res = evaluate_const(&e,symtbl,None);
 
       Self{
         name,
-        kind: SymbolKind::Fn(fd),
-        ty_name,
+        kind: SymbolKind::Const(res.unwrap()),
         offset: 0,
         deps_parent_list,
         deps_child_list,
       }
     }
-  DeclKind::Ty(tn)=>
+  DeclKind::Var(e)=>
     {
-      let  ty = tytbl.add_from_node(&tn,symtbl);
-
-      let  ty_name = ty.get_name().clone();
+      let  res = evaluate_const(&e,symtbl,None);
 
       Self{
         name,
-        kind: SymbolKind::Ty,
-        ty_name,
+        kind: SymbolKind::GlobalVar(res.unwrap()),
+        offset: 0,
+        deps_parent_list,
+        deps_child_list,
+      }
+    }
+  DeclKind::Fn(fd)=>
+    {
+      Self{
+        name,
+        kind: SymbolKind::Fn(fd),
         offset: 0,
         deps_parent_list,
         deps_child_list,
@@ -201,13 +126,6 @@ get_kind(&self)-> &SymbolKind
 
 
 pub fn
-get_ty_name(&self)-> &String
-{
-  &self.ty_name
-}
-
-
-pub fn
 get_offset(&self)-> usize
 {
   self.offset
@@ -229,7 +147,6 @@ print(&self)
   SymbolKind::Const(_)    =>{print!("const");}
   SymbolKind::GlobalVar(_)=>{print!("(g)var");}
   SymbolKind::Fn(_)       =>{print!("fn");}
-  SymbolKind::Ty          =>{print!("ty");}
     }
 
 
@@ -237,10 +154,9 @@ print(&self)
 
     match &self.kind
     {
-  SymbolKind::Const(res)    =>{res.print();}
-  SymbolKind::GlobalVar(res)=>{res.print();}
+  SymbolKind::Const(res)    =>{print!("{}",res);}
+  SymbolKind::GlobalVar(res)=>{print!("{}",res);}
   SymbolKind::Fn(_,)=>{}
-  SymbolKind::Ty=>{}
     }
 
 
@@ -276,8 +192,6 @@ SymbolTable
 {
   symbols: Vec<Symbol>,
 
-  string_table: Vec<(String,usize)>,
-
 }
 
 
@@ -291,7 +205,6 @@ new()-> Self
 {
   Self{
     symbols: Vec::new(),
-    string_table: Vec::new(),
   }
 }
 
@@ -310,7 +223,7 @@ join_child(srcs: &mut Vec<Source>, parent_name: &String, child_name: String)
     }
 
 
-  panic!();
+  panic!("join_child error: {} and {}",parent_name,&child_name);
 }
 
 
@@ -358,7 +271,7 @@ take_source(srcs: &mut Vec<Source>, name: &str)-> Source
 
 
 fn
-generate_symbols(&mut self, mut srcs: Vec<Source>, tytbl: &mut TyTable)
+generate_symbols(&mut self, mut srcs: Vec<Source>)
 {
   let  names = Self::make_tplg_sorted_names(&srcs);
 
@@ -366,7 +279,7 @@ generate_symbols(&mut self, mut srcs: Vec<Source>, tytbl: &mut TyTable)
     {
       let  src = Self::take_source(&mut srcs,&name);
 
-      let  sym = Symbol::build(src,self,tytbl);
+      let  sym = Symbol::build(src,self);
 
       self.symbols.push(sym);
     }
@@ -374,7 +287,7 @@ generate_symbols(&mut self, mut srcs: Vec<Source>, tytbl: &mut TyTable)
 
 
 pub fn
-build(decls: Vec<Decl>, tytbl: &mut TyTable)-> Result<Self,()>
+build(decls: Vec<Decl>)-> Result<Self,()>
 {
   let  mut tbl = Self::new();
 
@@ -406,37 +319,27 @@ build(decls: Vec<Decl>, tytbl: &mut TyTable)-> Result<Self,()>
 
               srcs[i].deps_parent_list.push(s);
             }
-          Collectible::String(s)=>{tbl.string_table.push((s,0));}
             }
         }
     }
 
 
-  tbl.generate_symbols(srcs,tytbl);
+  tbl.generate_symbols(srcs);
 
   Ok(tbl)
 }
 
 
 fn
-generate_data(&mut self, tytbl: &TyTable, start: usize)-> Vec<u8>
+generate_data(&mut self, start: usize)-> Vec<u8>
 {
   let  mut bytes = Vec::<u8>::new();
   let  mut pos = start;
 
     for sym in &mut self.symbols
     {
-                   pos = get_word_aligned(pos);
-      sym.offset = pos                        ;
-
-      pos += tytbl.find(&sym.ty_name).unwrap().get_size();
-    }
-
-
-    for (s,off) in &mut self.string_table
-    {
-      *off = pos           ;
-             pos += s.len();
+      sym.offset = get_word_aligned(pos)             ;
+                   pos += WORD_SIZE;
     }
 
 
@@ -448,7 +351,7 @@ generate_data(&mut self, tytbl: &TyTable, start: usize)-> Vec<u8>
         {
       SymbolKind::Const(res)=>
         {
-          let  res_bytes = res.to_bytes(tytbl);
+          let  res_bytes = res.to_ne_bytes();
 
             for i in 0..res_bytes.len()
             {
@@ -457,7 +360,7 @@ generate_data(&mut self, tytbl: &TyTable, start: usize)-> Vec<u8>
         }
       SymbolKind::GlobalVar(res)=>
         {
-          let  res_bytes = res.to_bytes(tytbl);
+          let  res_bytes = res.to_ne_bytes();
 
             for i in 0..res_bytes.len()
             {
@@ -465,17 +368,6 @@ generate_data(&mut self, tytbl: &TyTable, start: usize)-> Vec<u8>
             }
         }
       _=>{}
-        }
-    }
-
-
-    for (s,off) in &self.string_table
-    {
-      let  s_bytes = s.as_bytes();
-
-        for i in 0..s_bytes.len()
-        {
-          bytes[((*off)-start)+i] = s_bytes[i];
         }
     }
 
@@ -501,25 +393,33 @@ find_text_offset(ls: &Vec<(String,Vec<u8>,usize)>, name: &str)-> usize
 
 
 pub fn
-generate_exec(&mut self, tytbl: &mut TyTable, mi: &MachineInfo)-> Exec
+generate_exec(&mut self, mi: &MachineInfo)-> Exec
 {
   let  mut exec = Exec::new();
 
-  exec.data_bytes = self.generate_data(tytbl,mi.get_data_start());
+  exec.data_bytes = self.generate_data(mi.get_data_start());
 
   let  mut pos = mi.get_text_start();
 
     for sym in &self.symbols
     {
-        if let SymbolKind::Fn(fd) = &sym.kind
+        match &sym.kind
         {
+      SymbolKind::Fn(fd)=>
+        {
+          let   ptr_minsym = MiniSymbol{offset: sym.offset, name: format!("{}( ptr)",&sym.name), is_text: false};
+          let  text_minsym = MiniSymbol{offset:        pos, name: format!("{}(text)",&sym.name), is_text:  true};
+
+          exec.mini_symbols.push( ptr_minsym);
+          exec.mini_symbols.push(text_minsym);
+
             if &sym.name == "main"
             {
               exec.entry_point = pos;
             }
 
 
-          let  bytes = assemble(fd,self,tytbl);
+          let  bytes = assemble(fd,self);
 
             for b in &bytes
             {
@@ -537,6 +437,12 @@ generate_exec(&mut self, tytbl: &mut TyTable, mi: &MachineInfo)-> Exec
 
           pos += bytes.len();
         }
+      SymbolKind::GlobalVar(_)=>
+        {
+          exec.mini_symbols.push(MiniSymbol{offset: sym.offset, name: sym.name.clone(), is_text: false});
+        }
+      _=>{}
+        }
     }
 
 
@@ -544,22 +450,6 @@ generate_exec(&mut self, tytbl: &mut TyTable, mi: &MachineInfo)-> Exec
 }
 
 
-
-
-pub fn
-find_string_offset(&self, s: &str)-> Option<usize>
-{
-    for (stored_s,off) in &self.string_table
-    {
-        if stored_s == s
-        {
-          return Some(*off);
-        }
-    }
-
-
-  None
-}
 
 
 pub fn
@@ -613,14 +503,6 @@ find_symbol_mut(&mut self, name: &str)-> Option<&mut Symbol>
 pub fn
 print(&self)
 {
-  println!("string literals{{");
-
-    for (s,off) in &self.string_table
-    {
-      println!("{} {}",s,off);
-    }
-
-
   println!("}}\nglobal symbols{{");
 
     for sym in &self.symbols
@@ -640,9 +522,38 @@ print(&self)
 
 
 
+#[derive(Clone)]
+pub struct
+MiniSymbol
+{
+  offset: usize,
+    name: String,
+
+  is_text: bool,
+
+}
+
+
+impl
+MiniSymbol
+{
+
+
+pub fn  get_offset(&self)-> usize{self.offset}
+pub fn  get_name(&self)-> &String{&self.name}
+pub fn  is_text(&self)-> bool{self.is_text}
+
+
+}
+
+
+
+
 pub struct
 Exec
 {
+  mini_symbols: Vec<MiniSymbol>,
+
   data_bytes: Vec<u8>,
   text_bytes: Vec<u8>,
 
@@ -660,10 +571,18 @@ pub fn
 new()-> Self
 {
   Self{
+    mini_symbols: Vec::new(),
     data_bytes: Vec::new(),
     text_bytes: Vec::new(),
     entry_point: 0,
   }
+}
+
+
+pub fn
+get_mini_symbols(&self)-> &Vec<MiniSymbol>
+{
+  &self.mini_symbols
 }
 
 

@@ -158,7 +158,12 @@ Machine
 {
   info: MachineInfo,
 
+  mini_symbols: Vec<MiniSymbol>,
+
   memory: Vec<u8>,
+
+  memory_ptr: *mut u8,
+  memory_size: usize,
 
   pc: usize,
   fp: usize,
@@ -182,14 +187,22 @@ new(info: &MachineInfo)-> Self
 {
   let  mut memory = Vec::<u8>::new();
 
-  memory.resize(info.get_memory_size(),0);
+  let  memory_size = info.get_memory_size();
+
+  memory.resize(memory_size,0);
+
+  let  memory_ptr = memory.as_mut_ptr();
 
   info.print();
 
   Self{
     info: info.clone(),
 
+    mini_symbols: Vec::new(),
+
     memory,
+    memory_ptr,
+    memory_size,
 
     pc: 0,
     fp: 0,
@@ -204,8 +217,46 @@ new(info: &MachineInfo)-> Self
 
 
 pub fn
+get_byte(&self, offset: usize)-> u8
+{
+  unsafe{*self.memory_ptr.add(offset%self.memory_size)}
+}
+
+
+pub fn
+get_byte_unchecked(&self, offset: usize)-> u8
+{
+  unsafe{*self.memory_ptr.add(offset)}
+}
+
+
+pub fn
+put_byte(&self, offset: usize, byte: u8)
+{
+  unsafe{*self.memory_ptr.add(offset%self.memory_size) = byte;}
+}
+
+
+pub fn
+put_byte_unchecked(&self, offset: usize, byte: u8)
+{
+  unsafe{*self.memory_ptr.add(offset) = byte;}
+}
+
+
+pub fn
+use_external_memory(&mut self, ptr: *mut u8, sz: usize)
+{
+  self.memory_ptr = ptr;
+  self.memory_size = sz;
+}
+
+
+pub fn
 reset(&mut self, exec: &Exec)
 {
+  self.mini_symbols = exec.get_mini_symbols().clone();
+
   let  data_bytes = exec.get_data_bytes();
   let  text_bytes = exec.get_text_bytes();
 
@@ -223,13 +274,13 @@ reset(&mut self, exec: &Exec)
 
     for i in 0..data_bytes.len()
     {
-      self.memory[self.info.data_start+i] = data_bytes[i];
+      self.put_byte_unchecked(self.info.data_start+i,data_bytes[i]);
     }
 
 
     for i in 0..text_bytes.len()
     {
-      self.memory[self.info.text_start+i] = text_bytes[i];
+      self.put_byte_unchecked(self.info.text_start+i,text_bytes[i]);
     }
 
 
@@ -245,12 +296,6 @@ reset(&mut self, exec: &Exec)
 pub fn
 push(&mut self, v: u64)
 {
-    if (self.sp+WORD_SIZE) >= self.memory.len()
-    {
-      self.memory.resize(self.sp+(WORD_SIZE*256),0);
-    }
-
-
   self.put_u64(self.sp,v);
 
   self.sp += WORD_SIZE;
@@ -304,21 +349,21 @@ pop2_f(&mut self)-> (f64,f64)
 pub fn
 get_last(&self)-> u64
 {
-  unsafe{*(self.get_ptr(self.sp-WORD_SIZE) as *const u64)}
+  unsafe{*(self.memory_ptr.add(self.sp-WORD_SIZE) as *const u64)}
 }
 
 
 pub fn
 ref_last_mut(&mut self)-> &mut u64
 {
-  unsafe{&mut *(self.get_mut_ptr(self.sp-WORD_SIZE) as *mut u64)}
+  unsafe{&mut *(self.memory_ptr.add(self.sp-WORD_SIZE) as *mut u64)}
 }
 
 
 pub fn
 get_ptr(&self, off: usize)-> *const u8
 {
-  unsafe{self.memory.as_ptr().add(off) as *const u8}
+  unsafe{self.memory_ptr.add(off) as *const u8}
 }
 
 
@@ -331,7 +376,7 @@ fn  get_u64(&self, off: usize)-> u64{unsafe{*(self.get_ptr(off) as *const u64)}}
 pub fn
 get_mut_ptr(&mut self, off: usize)-> *mut u8
 {
-  unsafe{self.memory.as_mut_ptr().add(off) as *mut u8}
+  unsafe{self.memory_ptr.add(off) as *mut u8}
 }
 
 
@@ -488,7 +533,7 @@ branch_if_non_zero(&mut self, offset: isize)
 pub fn
 step(&mut self)
 {
-  println!("PC: {}, FP: {}, SP: {}, CP: {}",self.pc,self.fp,self.sp,self.cp);
+//  println!("PC: {}, FP: {}, SP: {}, CP: {}",self.pc,self.fp,self.sp,self.cp);
 
   let  b = self.get_next_byte();
 
@@ -498,15 +543,6 @@ step(&mut self)
     {
   (op) if op == Opcode::Nop as u8=>{}
 
-  (op) if op == Opcode::Push0 as u8=>{self.push(0);}
-  (op) if op == Opcode::Push1 as u8=>{self.push(1);}
-  (op) if op == Opcode::Push2 as u8=>{self.push(2);}
-  (op) if op == Opcode::Push3 as u8=>{self.push(3);}
-  (op) if op == Opcode::Push4 as u8=>{self.push(4);}
-  (op) if op == Opcode::Push5 as u8=>{self.push(5);}
-  (op) if op == Opcode::Push6 as u8=>{self.push(6);}
-  (op) if op == Opcode::Push7 as u8=>{self.push(7);}
-  (op) if op == Opcode::Push8 as u8=>{self.push(8);}
   (op) if op == Opcode::Pushpc as u8=>
     {
       self.push(self.pc as u64);
@@ -519,51 +555,27 @@ step(&mut self)
     {
       self.push(self.sp as u64);
     }
-  (op) if op == Opcode::Pushi8 as u8=>
+  (op) if op == Opcode::Push8 as u8=>
     {
       let  v = self.get_imm_i8() as i64 as u64;
 
       self.push(v);
     }
-  (op) if op == Opcode::Pushi16 as u8=>
+  (op) if op == Opcode::Push16 as u8=>
     {
       let  v = self.get_imm_i16() as i64 as u64;
 
       self.push(v);
     }
-  (op) if op == Opcode::Pushi32 as u8=>
+  (op) if op == Opcode::Push32 as u8=>
     {
       let  v = self.get_imm_i32() as i64 as u64;
 
       self.push(v);
     }
-  (op) if op == Opcode::Pushu8 as u8=>
-    {
-      let  v = self.get_imm_u8() as u64;
-
-      self.push(v);
-    }
-  (op) if op == Opcode::Pushu16 as u8=>
-    {
-      let  v = self.get_imm_u16() as u64;
-
-      self.push(v);
-    }
-  (op) if op == Opcode::Pushu32 as u8=>
-    {
-      let  v = self.get_imm_u32() as u64;
-
-      self.push(v);
-    }
-  (op) if op == Opcode::Pushu64 as u8=>
+  (op) if op == Opcode::Push64 as u8=>
     {
       let  v = self.get_imm_u64();
-
-      self.push(v);
-    }
-  (op) if op == Opcode::Pushf32 as u8=>
-    {
-      let  v = (self.get_imm_f32() as f64).to_bits();
 
       self.push(v);
     }
@@ -646,133 +658,70 @@ step(&mut self)
 
       self.push(v);
     }
-  (op) if op == Opcode::Ld8 as u8=>
+  (op) if op == Opcode::Ld_i8 as u8=>
     {
       let  addr = self.pop() as usize;
-      let     v = self.get_u8(addr) as u64;
+      let     v = self.get_u8(addr) as i8 as u64;
 
       self.push(v);
     }
-  (op) if op == Opcode::Ld16 as u8=>
+  (op) if op == Opcode::Ld_i16 as u8=>
     {
       let  addr = self.pop() as usize;
-      let     v = self.get_u16(addr) as u64;
+      let     v = self.get_u16(addr) as i16 as u64;
 
       self.push(v);
     }
-  (op) if op == Opcode::Ld32 as u8=>
+  (op) if op == Opcode::Ld_i32 as u8=>
     {
       let  addr = self.pop() as usize;
-      let     v = self.get_u32(addr) as u64;
+      let     v = self.get_u32(addr) as i32 as u64;
 
       self.push(v);
     }
-  (op) if op == Opcode::Ld64 as u8=>
+  (op) if op == Opcode::Ld_i64 as u8=>
     {
       let  addr = self.pop() as usize;
       let     v = self.get_u64(addr);
 
       self.push(v);
     }
-  (op) if op == Opcode::St8 as u8=>
+  (op) if op == Opcode::St_i8 as u8=>
     {
-      let     v = self.pop() as u8;
+      let     v = self.pop() as i8 as u8;
       let  addr = self.pop() as usize;
 
       self.put_u8(addr,v);
     }
-  (op) if op == Opcode::St16 as u8=>
+  (op) if op == Opcode::St_i16 as u8=>
     {
-      let     v = self.pop() as u16;
+      let     v = self.pop() as i16 as u16;
       let  addr = self.pop() as usize;
 
       self.put_u16(addr,v);
     }
-  (op) if op == Opcode::St32 as u8=>
+  (op) if op == Opcode::St_i32 as u8=>
     {
-      let     v = self.pop() as u32;
+      let     v = self.pop() as i32 as u32;
       let  addr = self.pop() as usize;
 
       self.put_u32(addr,v);
     }
-  (op) if op == Opcode::St64 as u8=>
+  (op) if op == Opcode::St_i64 as u8=>
     {
       let     v = self.pop() as u64;
       let  addr = self.pop() as usize;
 
       self.put_u64(addr,v);
     }
-  (op) if op == Opcode::Sx8 as u8=>
-    {
-      let  v = self.get_last() as u8 as i8 as i64 as u64;
+  (op) if op == Opcode::Neg as u8=>{let  v = self.ref_last_mut();  *v = (-((*v) as i64)) as u64;}
+  (op) if op == Opcode::Not as u8=>{let  v = self.ref_last_mut();  *v = !*v;}
 
-      *self.ref_last_mut() = v;
-    }
-  (op) if op == Opcode::Sx16 as u8=>
-    {
-      let  v = self.get_last() as u16 as i16 as i64 as u64;
-
-      *self.ref_last_mut() = v;
-    }
-  (op) if op == Opcode::Sx32 as u8=>
-    {
-      let  v = self.get_last() as u32 as i32 as i64 as u64;
-
-      *self.ref_last_mut() = v;
-    }
-  (op) if op == Opcode::Tr8 as u8=>
-    {
-      let  v = self.get_last() as u8 as u64;
-
-      *self.ref_last_mut() = v;
-    }
-  (op) if op == Opcode::Tr16 as u8=>
-    {
-      let  v = self.get_last() as u16 as u64;
-
-      *self.ref_last_mut() = v;
-    }
-  (op) if op == Opcode::Tr32 as u8=>
-    {
-      let  v = self.get_last() as u32 as u64;
-
-      *self.ref_last_mut() = v;
-    }
-  (op) if op == Opcode::B32toF as u8=>
-    {
-      let  v = f32::from_bits(self.get_last() as u32) as f64;
-
-      *self.ref_last_mut() = v.to_bits();
-    }
-  (op) if op == Opcode::FtoB32 as u8=>
-    {
-      let  v = f64::from_bits(self.get_last()) as f32;
-
-      *self.ref_last_mut() = v.to_bits() as u64;
-    }
-  (op) if op == Opcode::Neg  as u8=>{let  v = self.ref_last_mut();  *v = (-((*v) as i64)) as u64;}
-  (op) if op == Opcode::Negf as u8=>{let  v = self.ref_last_mut();  *v = (-f64::from_bits(*v)).to_bits();}
-  (op) if op == Opcode::Not  as u8=>{let  v = self.ref_last_mut();  *v = !*v;}
-  (op) if op == Opcode::Notl as u8=>{let  v = self.ref_last_mut();  *v = if *v != 0{0} else{1};}
-
-  (op) if op == Opcode::Itof as u8=>{let  v = self.ref_last_mut();  *v = ((*v) as i64 as f64).to_bits();}
-  (op) if op == Opcode::Ftoi as u8=>{let  v = self.ref_last_mut();  *v = (f64::from_bits(*v) as f64).to_bits();}
-
-  (op) if op == Opcode::Addi as u8=>{let  (l,r) = self.pop2_i();  self.push((l+r) as u64);}
-  (op) if op == Opcode::Subi as u8=>{let  (l,r) = self.pop2_i();  self.push((l-r) as u64);}
-  (op) if op == Opcode::Muli as u8=>{let  (l,r) = self.pop2_i();  self.push((l*r) as u64);}
-  (op) if op == Opcode::Divi as u8=>{let  (l,r) = self.pop2_i();  self.push((l/r) as u64);}
-  (op) if op == Opcode::Remi as u8=>{let  (l,r) = self.pop2_i();  self.push((l%r) as u64);}
-  (op) if op == Opcode::Addu as u8=>{let  (l,r) = self.pop2();  self.push(l+r);}
-  (op) if op == Opcode::Subu as u8=>{let  (l,r) = self.pop2();  self.push(l-r);}
-  (op) if op == Opcode::Mulu as u8=>{let  (l,r) = self.pop2();  self.push(l*r);}
-  (op) if op == Opcode::Divu as u8=>{let  (l,r) = self.pop2();  self.push(l/r);}
-  (op) if op == Opcode::Remu as u8=>{let  (l,r) = self.pop2();  self.push(l%r);}
-  (op) if op == Opcode::Addf as u8=>{let  (l,r) = self.pop2_f();  self.push((l+r).to_bits());}
-  (op) if op == Opcode::Subf as u8=>{let  (l,r) = self.pop2_f();  self.push((l-r).to_bits());}
-  (op) if op == Opcode::Mulf as u8=>{let  (l,r) = self.pop2_f();  self.push((l*r).to_bits());}
-  (op) if op == Opcode::Divf as u8=>{let  (l,r) = self.pop2_f();  self.push((l/r).to_bits());}
-  (op) if op == Opcode::Remf as u8=>{let  (l,r) = self.pop2_f();  self.push((l%r).to_bits());}
+  (op) if op == Opcode::Add as u8=>{let  (l,r) = self.pop2_i();  self.push((l+r) as u64);}
+  (op) if op == Opcode::Sub as u8=>{let  (l,r) = self.pop2_i();  self.push((l-r) as u64);}
+  (op) if op == Opcode::Mul as u8=>{let  (l,r) = self.pop2_i();  self.push((l*r) as u64);}
+  (op) if op == Opcode::Div as u8=>{let  (l,r) = self.pop2_i();  self.push((l/r) as u64);}
+  (op) if op == Opcode::Rem as u8=>{let  (l,r) = self.pop2_i();  self.push((l%r) as u64);}
 
   (op) if op == Opcode::Shl as u8=>{let  (l,r) = self.pop2();  self.push(l<<r);}
   (op) if op == Opcode::Shr as u8=>{let  (l,r) = self.pop2();  self.push(l>>r);}
@@ -782,24 +731,12 @@ step(&mut self)
 
   (op) if op == Opcode::Eq  as u8=>{let  (l,r) = self.pop2();  self.push_b(l == r);}
   (op) if op == Opcode::Neq as u8=>{let  (l,r) = self.pop2();  self.push_b(l != r);}
-  (op) if op == Opcode::Eqf  as u8=>{let  (l,r) = self.pop2_f();  self.push_b(l == r);}
-  (op) if op == Opcode::Neqf as u8=>{let  (l,r) = self.pop2_f();  self.push_b(l != r);}
 
-  (op) if op == Opcode::Lti   as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l <  r);}
-  (op) if op == Opcode::Lteqi as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l <= r);}
-  (op) if op == Opcode::Gti   as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l >  r);}
-  (op) if op == Opcode::Gteqi as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l >= r);}
-  (op) if op == Opcode::Ltu   as u8=>{let  (l,r) = self.pop2();  self.push_b(l <  r);}
-  (op) if op == Opcode::Ltequ as u8=>{let  (l,r) = self.pop2();  self.push_b(l <= r);}
-  (op) if op == Opcode::Gtu   as u8=>{let  (l,r) = self.pop2();  self.push_b(l >  r);}
-  (op) if op == Opcode::Gtequ as u8=>{let  (l,r) = self.pop2();  self.push_b(l >= r);}
-  (op) if op == Opcode::Ltf   as u8=>{let  (l,r) = self.pop2_f();  self.push_b(l <  r);}
-  (op) if op == Opcode::Lteqf as u8=>{let  (l,r) = self.pop2_f();  self.push_b(l <= r);}
-  (op) if op == Opcode::Gtf   as u8=>{let  (l,r) = self.pop2_f();  self.push_b(l >  r);}
-  (op) if op == Opcode::Gteqf as u8=>{let  (l,r) = self.pop2_f();  self.push_b(l >= r);}
+  (op) if op == Opcode::Lt   as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l <  r);}
+  (op) if op == Opcode::Lteq as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l <= r);}
+  (op) if op == Opcode::Gt   as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l >  r);}
+  (op) if op == Opcode::Gteq as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l >= r);}
 
-  (op) if op == Opcode::Land as u8=>{let  (l,r) = self.pop2();  self.push_b((l != 0) && (r != 0));}
-  (op) if op == Opcode::Lor  as u8=>{let  (l,r) = self.pop2();  self.push_b((l != 0) || (r != 0));}
   (op) if op == Opcode::Prcal as u8=>
     {
       let  f_addr = self.pop();
@@ -897,6 +834,28 @@ run(&mut self)
 
 
       thread::sleep(tm);
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    for sym in &self.mini_symbols
+    {
+      let  off = sym.get_offset();
+
+      print!("{}({})",sym.get_name(),off);
+
+        if sym.is_text()
+        {
+          println!("");
+        }
+
+      else
+        {
+          println!(": {}",self.get_u64(off));
+        }
     }
 }
 

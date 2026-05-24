@@ -7,7 +7,6 @@ use super::*;
 use super::decl::*;
 use super::expr::*;
 use super::stmt::*;
-use super::ty::*;
 use super::evaluate_const::*;
 use super::symbol_table::*;
 
@@ -17,11 +16,10 @@ use super::symbol_table::*;
 pub enum
 LocalSymbolKind
 {
-  Static,
   Const,
     Var,
 
-  IntV(Cell<usize>),
+  IntV(Cell<i64>),
 
 }
 
@@ -33,12 +31,9 @@ LocalSymbol
 
   kind: LocalSymbolKind,
 
-  value: EvalConstResult,
-
-  ty_name: String,
+  value: i64,
 
   offset: usize,
-    size: usize,
 
 }
 
@@ -54,10 +49,8 @@ new_const_bool(name: &str, b: bool)-> Self
   Self{
     name: name.to_string(),
     kind: LocalSymbolKind::Const,
-    value: EvalConstResult::Bool(b),
-    ty_name: "bool".to_string(),
+    value: if b{1} else{0},
     offset: 0,
-    size: WORD_SIZE,
   }
 }
 
@@ -68,10 +61,8 @@ new_const_int(name: &str, i: i64)-> Self
   Self{
     name: name.to_string(),
     kind: LocalSymbolKind::Const,
-    value: EvalConstResult::Int(i),
-    ty_name: "i64".to_string(),
+    value: i,
     offset: 0,
-    size: WORD_SIZE,
   }
 }
 
@@ -82,38 +73,20 @@ new_int_v(name: &str)-> Self
   Self{
     name: name.to_string(),
     kind: LocalSymbolKind::IntV(Cell::new(0)),
-    value: EvalConstResult::Void,
-    ty_name: "i64".to_string(),
+    value: 0,
     offset: 0,
-    size: WORD_SIZE,
   }
 }
 
 
 pub fn
-new_const_float(name: &str, f: f64)-> Self
-{
-  Self{
-    name: name.to_string(),
-    kind: LocalSymbolKind::Const,
-    value: EvalConstResult::Float(f),
-    ty_name: "f64".to_string(),
-    offset: 0,
-    size: WORD_SIZE,
-  }
-}
-
-
-pub fn
-new_var(name: &str, ty_name: &str, offset: usize)-> Self
+new_var(name: &str, offset: usize)-> Self
 {
   Self{
     name: name.to_string(),
     kind: LocalSymbolKind::Var,
-    value: EvalConstResult::Void,
-    ty_name: ty_name.to_string(),
+    value: 0,
     offset,
-    size: WORD_SIZE,
   }
 }
 
@@ -133,16 +106,9 @@ get_kind(&self)-> &LocalSymbolKind
 
 
 pub fn
-get_value(&self)-> &EvalConstResult
+get_value(&self)-> i64
 {
-  &self.value
-}
-
-
-pub fn
-get_ty_name(&self)-> &String
-{
-  &self.ty_name
+  self.value
 }
 
 
@@ -178,7 +144,7 @@ Scope<'a>
 
 
 pub fn
-new_root(decl: &FnDecl, tbl: &SymbolTable, tytbl: &mut TyTable)-> Self
+new_root(decl: &FnDecl, tbl: &SymbolTable)-> Self
 {
   let  mut scp = Self{
     previous_opt: None,
@@ -188,11 +154,9 @@ new_root(decl: &FnDecl, tbl: &SymbolTable, tytbl: &mut TyTable)-> Self
   };
 
 
-    for pd in decl.get_parameter_decl_list()
+    for name in decl.get_parameter_names()
     {
-      let  ty = tytbl.add_from_node(pd.get_ty_node(),tbl);
-
-      scp.add_var(pd.get_name(),ty.get_name());
+      scp.add_var(name);
     }
 
 
@@ -257,24 +221,15 @@ add_const_int(&mut self, name: &str, i: i64)
 
 
 pub fn
-add_const_float(&mut self, name: &str, f: f64)
-{
-  let  sym = LocalSymbol::new_const_float(name,f);
-
-  self.symbol_list.push(sym);
-}
-
-
-pub fn
-add_var(&mut self, name: &str, ty_name: &str)-> usize
+add_var(&mut self, name: &str)-> usize
 {
   let  offset = self.offset;
 
-  let  sym = LocalSymbol::new_var(name,ty_name,offset);
-
-  self.offset = get_word_aligned(offset+sym.size);
+  let  sym = LocalSymbol::new_var(name,offset);
 
   self.symbol_list.push(sym);
+
+  self.offset += WORD_SIZE;
 
   self.update_offset_max();
 

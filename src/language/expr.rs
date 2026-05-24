@@ -1,7 +1,6 @@
 
 
 use crate::node::*;
-use super::ty::*;
 use super::asm::*;
 
 
@@ -11,7 +10,6 @@ pub enum
 Collectible
 {
   Identifier(String),
-      String(String),
 
 }
 
@@ -22,18 +20,10 @@ Collectible
 pub enum
 Expr
 {
-  Void,
-
   Identifier(String),
 
-    Int(u64),
-  Float(f64),
+  Int(i64),
 
-  String(String),
-
-  SelfAccessOp(Box<Expr>,String),
-  TypeAccessOp(Box<Expr>,String),
-  SubscriptOp(Box<Expr>,Box<Expr>),
   CallOp(Box<Expr>,Vec<Expr>),
 
   Expr(Box<Expr>),
@@ -72,14 +62,6 @@ collect(&self, buf: &mut Vec<Collectible>)
     match self
     {
   Self::Identifier(s)=>{buf.push(Collectible::Identifier(s.clone()));}
-  Self::String(s)    =>{buf.push(Collectible::String(    s.clone()));}
-  Self::SelfAccessOp(e,s)=>{e.collect(buf);}
-  Self::TypeAccessOp(e,s)=>{e.collect(buf);}
-  Self::SubscriptOp(e,i_e)=>
-    {
-        e.collect(buf);
-      i_e.collect(buf);
-    }
   Self::CallOp(f,args)=>
     {
       f.collect(buf);
@@ -106,38 +88,9 @@ print_to(&self, buf: &mut String)
 {
     match self
     {
-  Self::Void=>{buf.push_str("void");}
-
   Self::Identifier(s)=>{buf.push_str(s);}
 
-    Self::Int(u)=>{buf.push_str(&format!("{}",*u));}
-  Self::Float(f)=>{buf.push_str(&format!("{}",*f));}
-
-  Self::String(s)=>
-    {
-      buf.push('\"');
-      buf.push_str(s);
-      buf.push('\"');
-    }
-  Self::SelfAccessOp(e,s)=>
-    {
-      e.print_to(buf);
-      buf.push('.');
-      buf.push_str(s);
-    }
-  Self::TypeAccessOp(e,s)=>
-    {
-      e.print_to(buf);
-      buf.push_str("::");
-      buf.push_str(s);
-    }
-  Self::SubscriptOp(e,i_e)=>
-    {
-      e.print_to(buf);
-      buf.push('[');
-      i_e.print_to(buf);
-      buf.push(']');
-    }
+  Self::Int(i)=>{buf.push_str(&format!("{}",*i));}
   Self::CallOp(f,args)=>
     {
       f.print_to(buf);
@@ -267,47 +220,8 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
   let  nd = cur.get_node().unwrap();
   let  name = nd.get_name();
 
-       if name == "self_access"{return Expr::SelfAccessOp(o,read_access_op(nd));}
-  else if name == "type_access"{return Expr::TypeAccessOp(o,read_access_op(nd));}
-  else if name == "subscript"{return read_subscript_op(nd,o);}
-  else if name == "call"     {return read_call_op(nd,o);}
+    if name == "call"{return read_call_op(nd,o);}
   else{panic!();}
-}
-
-
-pub fn
-read_access_op(start_nd: &Node)-> String
-{
-  let  mut cur = start_nd.cursor();
-
-  cur.advance(1);
-
-    if let Some(s) = cur.get_identifier()
-    {
-      return s.clone();
-    }
-
-
-  panic!();
-}
-
-
-pub fn
-read_subscript_op(start_nd: &Node, o: Box<Expr>)-> Expr
-{
-  let  mut cur = start_nd.cursor();
-
-  cur.advance(1);
-
-    if let Some(e_nd) = cur.select_node("expression")
-    {
-      let  e = read_expr(e_nd);
-
-      return Expr::SubscriptOp(o,Box::new(e));
-    }
-
-
-  panic!();
 }
 
 
@@ -352,12 +266,7 @@ read_operand_core(start_nd: &Node)-> Expr
         match v
         {
       Value::Identifier(s)=>{return Expr::Identifier(s.clone());}
-      Value::Uint(u) =>{return Expr::Int(*u);}
-      Value::Float(f)=>{return Expr::Float(*f);}
-      Value::String(s)=>
-        {
-          return Expr::String(s.to_string());
-        },
+      Value::Uint(u) =>{return Expr::Int(*u as i64);}
       Value::SemiString(s)=>
           {
               if s == "("

@@ -8,16 +8,9 @@ r##"
 #dynamic
 
 
-type: ["*" | "&"] & .Identifier;
+operand_core: .Identifier | .Number | ("(" & expression & ")");
 
-
-table_element: .Identifier & ":" & expression;
-
-table: "[" & [{table_element & [","]}] & "]";
-
-operand_core: .Identifier | .Number | .Character | .String | table | ("(" & expression & ")");
-
-unary_operator: "!" | "++" | "--" | "-" | "~";
+unary_operator: "!" | "-" | "~";
 
 binary_operator:
     "+"
@@ -35,14 +28,11 @@ binary_operator:
   ;
 
 
-self_access    : "."  & .Identifier;
-type_access    : "::" & .Identifier;
-subscript      : "[" & expression & "]";
-call           : "(" & [{expression & [","]}] & ")";
-increment      : "++";
-decrement      : "++";
 
-postfix_op: self_access | type_access | subscript | call | increment | decrement;
+access: "." & ("i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32");
+call: "(" & [{expression & [","]}] & ")";
+
+postfix_op: call | access;
 
 operand: [{unary_operator}] & operand_core & [{postfix_op}];
 
@@ -91,10 +81,9 @@ return  : 'return -> [expression];
 print: 'print & expression;
 
 
-else: 'else -> block;
-else_if: 'else & 'if -> expression & block;
+if_block: 'if -> expression & block;
 
-if: 'if -> expression & block & [{else_if}] & [else];
+if: if_block -> [{'else & if_block}] & ['else & block];
 
 block: "{" & [{statement}] & "}";
 
@@ -103,34 +92,18 @@ while: 'while -> expression & block;
 for  : 'for -> .Identifier & 'in -> expression & block;
 
 
-parameter: .Identifier & ":" & type;
-parameter_list: "(" & [{parameter & [","]}] & ")";
+parameter_list: "(" & [{.Identifier & [","]}] & ")";
 
-fn: 'fn -> .Identifier & parameter_list & ["->" & type] & block;
+fn: 'fn -> .Identifier & parameter_list & block;
 
-initialize: [":" & type] & "=" & expression;
+initialize: "=" & expression;
 
 var  :   'var   -> .Identifier & initialize;
 const:   'const -> .Identifier & initialize;
-static: 'static -> .Identifier & initialize;
-
-
-field_list: "{" & [{parameter & [","]}] & "}";
-
-enumerator: .Identifier;
-enumerator_list: "{" & [{enumerator & [","]}] & "}";
-
-struct: 'struct -> .Identifier & field_list;
-union:  'union  -> .Identifier & field_list;
-enum:   'enum   -> .Identifier & enumerator_list;
 
 declaration: fn
            | var
-           | static
            | const
-           | struct
-           | union
-           | enum
            | ";";
 
 

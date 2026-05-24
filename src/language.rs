@@ -4,7 +4,6 @@ pub mod machine;
 pub mod asm;
 pub mod expr;
 pub mod stmt;
-pub mod ty;
 pub mod evaluate_const;
 pub mod evaluate;
 pub mod decl;
