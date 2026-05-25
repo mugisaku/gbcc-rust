@@ -23,7 +23,8 @@ compile_and_run(s: &str)
         {
           let  mut mi = MachineInfo::default();
 
-          mi.set_memory_size(256)
+          mi.set_frequency(1000*1000*128)
+            .set_memory_size(256)
             .data(1000*32)
             .text(1000*32)
             .heap(1000*32)
@@ -115,16 +116,11 @@ add(a,b)
 fn
 main()
 {
-  if 0{
-  value = 0;
-  }
+  for x in 112
+  {
+    value += 1;
 
- else if 0{
-  value = 2;
-  }
-
- else{
-  value = 4;
+    print x;
   }
 
   return 0;

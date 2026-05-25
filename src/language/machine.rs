@@ -116,6 +116,15 @@ pub fn  get_callstack_end(&self)-> usize{self.callstack_start+self.callstack_siz
 
 
 pub fn
+set_frequency(&mut self, freq: usize)-> &mut Self
+{
+  self.frequency = freq;
+
+  self
+}
+
+
+pub fn
 set_memory_size(&mut self, start: usize)-> MachineInfoSetter
 {
   MachineInfoSetter(self,start)
@@ -145,6 +154,7 @@ print(&self)
   println!("heap {} - {}",self.heap_start,self.get_heap_end());
   println!("stack {} - {}",self.stack_start,self.get_stack_end());
   println!("callstack {} - {}",self.callstack_start,self.get_callstack_end());
+  println!("frequency {}",self.frequency);
 }
 
 
@@ -173,6 +183,8 @@ Machine
   status: usize,
 
   call_depth: usize,
+
+  time_counter: usize,
 
 }
 
@@ -212,6 +224,8 @@ new(info: &MachineInfo)-> Self
     status: 0,
 
     call_depth: 0,
+
+    time_counter: 0
   }
 }
 
@@ -817,23 +831,37 @@ step(&mut self)
 pub fn
 run(&mut self)
 {
-  use std::{thread,time};
+    if self.info.frequency == 0
+    {
+      println!("machine is set zero frequency");
+
+      return;
+    }
+
+
+  use std::time::{Duration,Instant};
+  use std::thread::sleep;
 
   self.unhalt();
 
-  let  tm = time::Duration::from_millis(80);
-
     loop
     {
-      self.step();
+      let  now = Instant::now();
 
-        if self.is_halted()
+        for _ in 0..self.info.frequency
         {
-          break;
+          self.step();
+
+            if self.is_halted()
+            {
+              return;
+            }
         }
 
 
-      thread::sleep(tm);
+      let  tm = Duration::from_secs(1)-now.elapsed();
+
+      sleep(tm);
     }
 }
 

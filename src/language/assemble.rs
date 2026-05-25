@@ -131,7 +131,7 @@ new(id: usize)-> Self
 {
   Self{
        on_break: format!("L{}_END",id),
-    on_continue: format!("L{}_RESTART",id),
+    on_continue: format!("L{}_START",id),
   }
 }
 
@@ -185,6 +185,8 @@ process_for(forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Op
 {
   let  clh = lid.make_ctrl_label_holder();
 
+  let  cmp_label = format!("{}_AT_FIRST",clh.on_continue);
+
   let  mut new_scp = Scope::new(scp);
 
 
@@ -210,9 +212,10 @@ process_for(forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Op
   init_txt.push_opcode(Opcode::St_i64);
 
   output.push_eval_text(init_txt);
+  output.push_jmp(&cmp_label);
+
 
   output.push_label(&clh.on_continue);
-
 
   let  mut inc_txt = AsmEvalText::new();
 
@@ -225,6 +228,8 @@ process_for(forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Op
 
   output.push_eval_text(inc_txt);
 
+
+  output.push_label(&cmp_label);
 
   let  mut cmp_txt = AsmEvalText::new();
 
@@ -386,6 +391,12 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     {
       let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
 
+        if txt.is_deref()
+        {
+          txt.push_load();
+        }
+
+
       txt.push_opcode(Opcode::Pri);
 
       output.push_eval_text(txt);
@@ -397,7 +408,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
 
 pub fn
-assemble(decl: &FnDecl, tbl: &SymbolTable)-> Vec<u8>
+assemble(decl: &FnDecl, tbl: &SymbolTable)-> AsmText
 {
   let  mut text = AsmText::new();
   let   mut lid = LabelID::new();
@@ -410,7 +421,7 @@ assemble(decl: &FnDecl, tbl: &SymbolTable)-> Vec<u8>
 
   text.finalize();
 
-  text.to_bytes()
+  text
 }
 
 

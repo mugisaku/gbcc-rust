@@ -338,8 +338,8 @@ generate_data(&mut self, start: usize)-> Vec<u8>
 
     for sym in &mut self.symbols
     {
-      sym.offset = get_word_aligned(pos)             ;
-                   pos += WORD_SIZE;
+      sym.offset = get_word_aligned(pos)            ;
+                                    pos += WORD_SIZE;
     }
 
 
@@ -419,7 +419,16 @@ generate_exec(&mut self, mi: &MachineInfo)-> Exec
             }
 
 
-          let  bytes = assemble(fd,self);
+          let  text = assemble(fd,self);
+
+          println!("fn {} is assembled",&sym.name);
+
+          text.print();
+
+          println!("");
+
+
+          let  bytes = text.to_bytes();
 
             for b in &bytes
             {

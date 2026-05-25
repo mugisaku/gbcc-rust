@@ -1025,7 +1025,6 @@ finalize(&mut self)
     {
       self.update_jump_offset(&ls);
     }
-self.print();
 }
 
 
