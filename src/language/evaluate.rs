@@ -107,6 +107,22 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Sc
 
 
 pub fn
+evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+{
+  let  res = evaluate(ins,tbl,scp_opt);
+
+  let  mut txt = res.to_text();
+
+       if s ==   "ptr"{txt.unset_deref();}
+  else if s == "deref"{txt.set_deref();}
+  else{panic!();}
+
+
+  EvalResult::Value(txt)
+}
+
+
+pub fn
 evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
     if let Some(scp) = scp_opt
@@ -259,6 +275,10 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
   Expr::CallOp(f,args)=>
     {
       evaluate_call(f,args,tbl,scp_opt)
+    }
+  Expr::AccessOp(ins,s)=>
+    {
+      evaluate_access(ins,s,tbl,scp_opt)
     }
   Expr::Expr(e)=>
     {

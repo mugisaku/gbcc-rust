@@ -29,7 +29,7 @@ binary_operator:
 
 
 
-access: "." & ("i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32");
+access: "." & .Identifier;
 call: "(" & [{expression & [","]}] & ")";
 
 postfix_op: call | access;

@@ -526,6 +526,26 @@ is_deref(&self)-> bool
 
 
 pub fn
+set_deref(&mut self)
+{
+    if self.is_deref
+    {
+      self.push_load();
+    }
+
+
+  self.is_deref = true;
+}
+
+
+pub fn
+unset_deref(&mut self)
+{
+  self.is_deref = false;
+}
+
+
+pub fn
 push_opcode(&mut self, opcode: Opcode)
 {
   self.lines.push(AsmLine::Opcode(opcode));

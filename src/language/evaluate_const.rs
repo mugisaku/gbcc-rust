@@ -118,6 +118,10 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> Result
           Err(())
         }
     }
+  Expr::AccessOp(ins,s)=>
+    {
+      Err(())
+    }
   Expr::Expr(e)=>{evaluate_const(e,symtbl,scp_opt)}
   Expr::UnaryOp(o,op)=>
     {

@@ -25,6 +25,7 @@ Expr
   Int(i64),
 
   CallOp(Box<Expr>,Vec<Expr>),
+  AccessOp(Box<Expr>,String),
 
   Expr(Box<Expr>),
 
@@ -71,6 +72,10 @@ collect(&self, buf: &mut Vec<Collectible>)
           e.collect(buf);
         }
     }
+  Self::AccessOp(ins,_)=>
+    {
+      ins.collect(buf);
+    }
   Self::Expr(e)=>{e.collect(buf);}
   Self::UnaryOp(o,op)=>{o.collect(buf);}
   Self::BinaryOp(l,r,op)=>
@@ -106,6 +111,12 @@ print_to(&self, buf: &mut String)
 
 
       buf.push(')');
+    }
+  Self::AccessOp(ins,s)=>
+    {
+      ins.print_to(buf);
+      buf.push('.');
+      buf.push_str(s);
     }
   Self::Expr(e)=>
     {
@@ -220,7 +231,8 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
   let  nd = cur.get_node().unwrap();
   let  name = nd.get_name();
 
-    if name == "call"{return read_call_op(nd,o);}
+       if name ==   "call"{return read_call_op(nd,o);}
+  else if name == "access"{return read_access_op(nd,o);}
   else{panic!();}
 }
 
@@ -257,6 +269,23 @@ read_call_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
 
 pub fn
+read_access_op(start_nd: &Node, o: Box<Expr>)-> Expr
+{
+  let  mut cur = start_nd.cursor();
+
+  cur.advance(1);
+
+    if let Some(id) = cur.get_identifier()
+    {
+      return Expr::AccessOp(o,id.clone());
+    }
+
+
+  panic!();
+}
+
+
+pub fn
 read_operand_core(start_nd: &Node)-> Expr
 {
   let  mut cur = start_nd.cursor();
@@ -267,6 +296,7 @@ read_operand_core(start_nd: &Node)-> Expr
         {
       Value::Identifier(s)=>{return Expr::Identifier(s.clone());}
       Value::Uint(u) =>{return Expr::Int(*u as i64);}
+      Value::Float(_) =>{panic!("do not use floating point number");}
       Value::SemiString(s)=>
           {
               if s == "("

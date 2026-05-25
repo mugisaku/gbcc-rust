@@ -105,6 +105,9 @@ r#"
 var
 value = 888;
 
+var
+value2 = 0;
+
 
 fn
 add(a,b)
@@ -116,12 +119,9 @@ add(a,b)
 fn
 main()
 {
-  for x in 112
-  {
-    value += 1;
+  value2 = (272).deref;
 
-    print x;
-  }
+  
 
   return 0;
 }
