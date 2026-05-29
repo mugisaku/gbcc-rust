@@ -405,6 +405,12 @@ generate_exec(&mut self)-> Exec
   exec.callstack_start = self.find_const("CALLSTACK_START").unwrap() as usize;
   exec.callstack_size  = self.find_const("CALLSTACK_SIZE").unwrap() as usize;
 
+  exec.data_start      = get_word_aligned(exec.data_start);
+  exec.text_start      = get_word_aligned(exec.text_start);
+  exec.heap_start      = get_word_aligned(exec.heap_start);
+  exec.stack_start     = get_word_aligned(exec.stack_start);
+  exec.callstack_start = get_word_aligned(exec.callstack_start);
+
   exec.data_bytes = self.generate_data(exec.data_start);
 
   let  mut pos = exec.text_start;

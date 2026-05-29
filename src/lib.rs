@@ -160,6 +160,20 @@ process()
 }
 
 
+const src: &'static str =
+r#"
+const DATA_START = 800*400;
+const TEXT_START = 800*400+(1024*1);
+const HEAP_START = 0;
+const HEAP_SIZE  = 800*400;
+const STACK_START = 800*400+(1024*2);
+const STACK_SIZE  = 800*400+(1024);
+const CALLSTACK_START = 800*400+(1024*3);
+const CALLSTACK_SIZE  = 800*400+(1024);
+"#;
+
+
+
 #[wasm_bindgen]
 pub fn
 setup(s: &str)
