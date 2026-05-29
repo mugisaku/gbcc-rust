@@ -115,6 +115,8 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
 
        if s ==   "ptr"{txt.unset_deref();}
   else if s == "deref"{txt.set_deref();}
+  else if s ==  "word"{txt.set_deref();}
+  else if s ==  "byte"{txt.set_byte();}
   else{panic!();}
 
 

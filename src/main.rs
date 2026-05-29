@@ -134,11 +134,7 @@ add(a,b)
 fn
 main()
 {
-  for _ in 4
-  {
-    value += 1;
-  }
-  
+  (value2.ptr+1).byte = 0xFF;
 
   return 0;
 }

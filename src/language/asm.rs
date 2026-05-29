@@ -502,6 +502,7 @@ AsmEvalText
   lines: Vec<AsmLine>,
 
   is_deref: bool,
+  is_byte: bool,
 
 }
 
@@ -514,7 +515,7 @@ AsmEvalText
 pub fn
 new()-> Self
 {
-  Self{lines: Vec::new(), is_deref: false}
+  Self{lines: Vec::new(), is_deref: false, is_byte: false}
 }
 
 
@@ -522,6 +523,13 @@ pub fn
 is_deref(&self)-> bool
 {
   self.is_deref
+}
+
+
+pub fn
+is_byte(&self)-> bool
+{
+  self.is_byte
 }
 
 
@@ -542,6 +550,14 @@ pub fn
 unset_deref(&mut self)
 {
   self.is_deref = false;
+}
+
+
+pub fn
+set_byte(&mut self)
+{
+  self.is_deref = true;
+  self.is_byte  = true;
 }
 
 
@@ -630,7 +646,7 @@ push_load(&mut self)
     }
 
 
-  self.push_opcode(Opcode::Ld_i64);
+  self.push_opcode(if self.is_byte{Opcode::Ld_i8} else{Opcode::Ld_i64});
 
   self.is_deref = false;
 }
@@ -639,7 +655,7 @@ push_load(&mut self)
 pub fn
 push_store(&mut self)
 {
-  self.push_opcode(Opcode::St_i64);
+  self.push_opcode(if self.is_byte{Opcode::St_i8} else{Opcode::St_i64});
 }
 
 
