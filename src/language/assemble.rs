@@ -387,6 +387,10 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     {
       output.push_jmp(&clh_opt.unwrap().on_continue);
     }
+  Stmt::Halt=>
+    {
+      output.push_opcode(Opcode::Hlt);
+    }
   Stmt::Print(e)=>
     {
       let  mut txt = evaluate(e,tbl,Some(scp)).to_text();

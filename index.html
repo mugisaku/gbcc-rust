@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>hello-wasm example</title>
+  </head>
+  <body>
+  <canvas id="display"></canvas>
+  <button id="audio_btn">audio</button>
+    <script>function  check(s){console.log(s);}</script>
+    <script type="module">
+      import init, {
+        get_width,
+        get_height,
+        get_pixel,
+        get_audio_freq,
+        get_audio_volume,
+        set_input_up,
+        unset_input_up,
+        set_input_left,
+        unset_input_left,
+        set_input_right,
+        unset_input_right,
+        set_input_down,
+        unset_input_down,
+        set_input_enter,
+        unset_input_enter,
+        process,
+        start } from "./pkg/gblib.js";
+
+      let  g_cv;
+      let  g_cvctx;
+      let  g_imgdat;
+
+      let  g_actx;
+      let  g_osc;
+      let  g_gain;
+
+      function
+      update_audio()
+      {
+          if(g_actx)
+          {
+            g_osc.frequency.value = get_audio_freq();
+            g_gain.gain.value     = get_audio_volume();
+          }
+      }
+
+      function
+      switch_audio()
+      {
+          if(!g_actx)
+          {
+            g_actx = new AudioContext();
+
+            g_osc = new OscillatorNode(g_actx,{type: "sine", frequency: 440});
+
+            g_gain = g_actx.createGain();
+            g_gain.gain.value = 0.05;
+
+            g_osc.connect(g_gain).connect(g_actx.destination);
+
+            g_osc.start();
+          }
+
+        else
+          if(g_actx.state === "running")
+          {
+            g_actx.suspend();
+          }
+
+        else
+          {
+            g_actx.resume();
+          }
+      }
+
+
+      function
+      refresh()
+      {
+        process();
+
+          for(let  y = 0|0;  y < g_imgdat.height;  ++y){
+          for(let  x = 0|0;  x < g_imgdat.width;   ++x){
+            let  i = ((4*g_imgdat.width)*y)+(4*x);
+
+            const  pix = get_pixel(x,y);
+
+            g_imgdat.data[i+0] = pix;
+            g_imgdat.data[i+1] = pix;
+            g_imgdat.data[i+2] = pix;
+            g_imgdat.data[i+3] = 255;
+          }}
+
+
+        g_cvctx.putImageData(g_imgdat,0,0);
+
+        update_audio();
+      }
+
+
+      init().then(() => {
+        start();
+
+        g_cv = document.getElementById("display");
+
+        g_cv.width  = get_width();
+        g_cv.height = get_height();
+
+        g_cvctx = g_cv.getContext("2d");
+
+        g_imgdat = g_cvctx.createImageData(g_cv.width,g_cv.height);
+
+        g_cvctx.fillStyle = "black";
+        g_cvctx.fillRect(0,0,g_cv.width,g_cv.height);
+
+        document.getElementById("audio_btn").addEventListener("click",switch_audio);
+
+        document.addEventListener("keydown",function(evt){
+            switch(evt.key)
+            {
+          case    "ArrowUp":    set_input_up();break;
+          case  "ArrowLeft":  set_input_left();break;
+          case "ArrowRight": set_input_right();break;
+          case  "ArrowDown":  set_input_down();break;
+          case      "Enter": set_input_enter();break;
+            }
+        });
+
+        document.addEventListener("keyup",function(evt){
+            switch(evt.key)
+            {
+          case    "ArrowUp":    unset_input_up();break;
+          case  "ArrowLeft":  unset_input_left();break;
+          case "ArrowRight": unset_input_right();break;
+          case  "ArrowDown":  unset_input_down();break;
+          case      "Enter": unset_input_enter();break;
+            }
+        });
+
+
+        setInterval(refresh,1000/20);
+      });
+    </script>
+  </body>
+</html>
+
+
+
+

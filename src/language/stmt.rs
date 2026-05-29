@@ -261,6 +261,7 @@ Stmt
   For(ForStmt),
   Break,
   Continue,
+  Halt,
 
   Return(Option<Expr>),
 
@@ -377,6 +378,7 @@ print(&self)
   Self::For(f)=>{f.print();}
   Self::Break=>{print!("break");}
   Self::Continue=>{print!("continue");}
+  Self::Halt=>{print!("halt");}
 
   Self::Return(e_opt)=>
     {
@@ -677,6 +679,18 @@ read_stmt(start_nd: &Node)-> Stmt
         {
           return Stmt::Empty;
         }
+    }
+
+  else
+    if let Some(s) = cur.get_keyword()
+    {
+        if s == "halt"
+        {
+          return Stmt::Halt;
+        }
+
+      else
+        {panic!();}
     }
 
   else

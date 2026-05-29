@@ -513,6 +513,22 @@ is_keyword(&self)-> bool
 
 
 pub fn
+get_keyword(&self)-> Option<&String>
+{
+    if let Some(v) = self.current()
+    {
+        if let Value::Keyword(k) = v
+        {
+          return Some(k);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
 select_keyword(&self, s: &str)-> bool
 {
     if let Some(v) = self.current()

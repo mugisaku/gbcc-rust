@@ -72,6 +72,7 @@ statement: ";"
   | print
   | assign
   | expression
+  | 'halt
   ;
 
 

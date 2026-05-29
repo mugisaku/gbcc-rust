@@ -21,27 +21,19 @@ compile_and_run(s: &str)
     {
         if let Ok(mut symtbl) = SymbolTable::build(root)
         {
-          let  mut mi = MachineInfo::default();
+          let  exec = symtbl.generate_exec();
 
-          mi.set_frequency(1000*1000*128)
-            .set_memory_size(256)
-            .data(1000*32)
-            .text(1000*32)
-            .heap(1000*32)
-            .stack(1000*32)
-            .callstack(1000*32)
-          ;
+          let  mut mem = exec.generate_memory();
 
-
-          let  exec = symtbl.generate_exec(&mi);
-
-          symtbl.print();
+//          symtbl.print();
 
           println!("");
 
-          let  mut m = Machine::new(&mi);
+          let  mut m = Machine::new();
 
-          m.reset(&exec);
+          m.connect_memory(mem.as_mut_ptr(),mem.len());
+
+          m.reset(1024,&exec,"main");
 
           println!("machine runs");
 
@@ -49,7 +41,7 @@ compile_and_run(s: &str)
 
           println!("machine is finished");
 
-          m.print();
+          exec.print_memory(&mem);
         }
 
       else
@@ -108,6 +100,29 @@ value = 888;
 var
 value2 = 0;
 
+var
+xorshift_state = 12345678;
+
+
+const DATA_START = 0;
+const TEXT_START = 1024*1;
+const HEAP_START = 0;
+const HEAP_SIZE  = 0;
+const STACK_START = 1024*2;
+const STACK_SIZE  = 1024;
+const CALLSTACK_START = 1024*3;
+const CALLSTACK_SIZE  = 1024;
+
+
+fn
+rand()
+{
+  xorshift_state ^= xorshift_state<<7;
+  xorshift_state ^= xorshift_state>>9;
+
+  return xorshift_state;
+}
+
 
 fn
 add(a,b)
@@ -119,8 +134,10 @@ add(a,b)
 fn
 main()
 {
-  value2 = (272).deref;
-
+  for _ in 4
+  {
+    value += 1;
+  }
   
 
   return 0;

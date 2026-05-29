@@ -9,7 +9,6 @@ use super::stmt::*;
 use super::asm::*;
 use super::scope::*;
 use super::assemble::assemble;
-use super::machine::MachineInfo;
 use super::evaluate::*;
 use super::evaluate_const::*;
 use super::tplg_sort::*;
@@ -200,7 +199,7 @@ SymbolTable
 {
 
 
-pub fn
+pub const fn
 new()-> Self
 {
   Self{
@@ -393,13 +392,22 @@ find_text_offset(ls: &Vec<(String,Vec<u8>,usize)>, name: &str)-> usize
 
 
 pub fn
-generate_exec(&mut self, mi: &MachineInfo)-> Exec
+generate_exec(&mut self)-> Exec
 {
   let  mut exec = Exec::new();
 
-  exec.data_bytes = self.generate_data(mi.get_data_start());
+  exec.data_start      = self.find_const("DATA_START").unwrap() as usize;
+  exec.text_start      = self.find_const("TEXT_START").unwrap() as usize;
+  exec.heap_start      = self.find_const("HEAP_START").unwrap() as usize;
+  exec.heap_size       = self.find_const("HEAP_SIZE").unwrap() as usize;
+  exec.stack_start     = self.find_const("STACK_START").unwrap() as usize;
+  exec.stack_size      = self.find_const("STACK_SIZE").unwrap() as usize;
+  exec.callstack_start = self.find_const("CALLSTACK_START").unwrap() as usize;
+  exec.callstack_size  = self.find_const("CALLSTACK_SIZE").unwrap() as usize;
 
-  let  mut pos = mi.get_text_start();
+  exec.data_bytes = self.generate_data(exec.data_start);
+
+  let  mut pos = exec.text_start;
 
     for sym in &self.symbols
     {
@@ -407,25 +415,22 @@ generate_exec(&mut self, mi: &MachineInfo)-> Exec
         {
       SymbolKind::Fn(fd)=>
         {
-          let   ptr_minsym = MiniSymbol{offset: sym.offset, name: format!("{}( ptr)",&sym.name), is_text: false};
-          let  text_minsym = MiniSymbol{offset:        pos, name: format!("{}(text)",&sym.name), is_text:  true};
+          let   ptr_minsym = MiniSymbol{offset: sym.offset, name: sym.name.clone(), is_text: false};
+          let  text_minsym = MiniSymbol{offset:        pos, name: sym.name.clone(), is_text:  true};
 
           exec.mini_symbols.push( ptr_minsym);
           exec.mini_symbols.push(text_minsym);
 
-            if &sym.name == "main"
-            {
-              exec.entry_point = pos;
-            }
-
 
           let  text = assemble(fd,self);
 
+/*
           println!("fn {} is assembled",&sym.name);
 
           text.print();
 
           println!("");
+*/
 
 
           let  bytes = text.to_bytes();
@@ -440,7 +445,7 @@ generate_exec(&mut self, mi: &MachineInfo)-> Exec
 
             for i in 0..pos_bytes.len()
             {
-              exec.data_bytes[(sym.offset-mi.get_data_start())+i] = pos_bytes[i];
+              exec.data_bytes[(sym.offset-exec.data_start)+i] = pos_bytes[i];
             }
 
 
@@ -510,6 +515,22 @@ find_symbol_mut(&mut self, name: &str)-> Option<&mut Symbol>
 
 
 pub fn
+find_const(&self, name: &str)-> Option<i64>
+{
+    if let Some(sym) = self.find_symbol(name)
+    {
+        if let SymbolKind::Const(v) = &sym.kind
+        {
+          return Some(*v);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
 print(&self)
 {
   println!("}}\nglobal symbols{{");
@@ -563,10 +584,20 @@ Exec
 {
   mini_symbols: Vec<MiniSymbol>,
 
+  data_start: usize,
   data_bytes: Vec<u8>,
+
+  text_start: usize,
   text_bytes: Vec<u8>,
 
-  entry_point: usize,
+  heap_start: usize,
+  heap_size: usize,
+
+  stack_start: usize,
+  stack_size: usize,
+
+  callstack_start: usize,
+  callstack_size: usize,
 
 }
 
@@ -576,14 +607,21 @@ Exec
 {
 
 
-pub fn
+pub const fn
 new()-> Self
 {
   Self{
     mini_symbols: Vec::new(),
+    data_start: 0,
     data_bytes: Vec::new(),
+    text_start: 0,
     text_bytes: Vec::new(),
-    entry_point: 0,
+    heap_start: 0,
+    heap_size: 0,
+    stack_start: 0,
+    stack_size: 0,
+    callstack_start: 0,
+    callstack_size: 0,
   }
 }
 
@@ -596,9 +634,23 @@ get_mini_symbols(&self)-> &Vec<MiniSymbol>
 
 
 pub fn
+get_data_start(&self)-> usize
+{
+  self.data_start
+}
+
+
+pub fn
 get_data_bytes(&self)-> &Vec<u8>
 {
   &self.data_bytes
+}
+
+
+pub fn
+get_text_start(&self)-> usize
+{
+  self.text_start
 }
 
 
@@ -610,9 +662,143 @@ get_text_bytes(&self)-> &Vec<u8>
 
 
 pub fn
-get_entry_point(&self)-> usize
+get_heap_start(&self)-> usize
 {
-  self.entry_point
+  self.heap_start
+}
+
+
+pub fn
+get_heap_size(&self)-> usize
+{
+  self.heap_size
+}
+
+
+pub fn
+get_stack_start(&self)-> usize
+{
+  self.stack_start
+}
+
+
+pub fn
+get_stack_size(&self)-> usize
+{
+  self.stack_size
+}
+
+
+pub fn
+get_callstack_start(&self)-> usize
+{
+  self.callstack_start
+}
+
+
+pub fn
+get_callstack_size(&self)-> usize
+{
+  self.callstack_size
+}
+
+
+pub fn
+get_memory_size(&self)-> usize
+{
+  let  mut sz = 0usize;
+
+  sz = std::cmp::max(sz,self.data_start+self.data_bytes.len());
+  sz = std::cmp::max(sz,self.text_start+self.text_bytes.len());
+  sz = std::cmp::max(sz,self.heap_start+self.heap_size);
+  sz = std::cmp::max(sz,self.stack_start+self.stack_size);
+  sz = std::cmp::max(sz,self.callstack_start+self.callstack_size);
+
+  sz
+}
+
+
+pub fn
+generate_memory(&self)-> Vec<u8>
+{
+  let  mut mem = Vec::<u8>::new();
+
+  let  memsz = self.get_memory_size();
+
+    if self.data_start+self.data_bytes.len() >= memsz
+    {
+      panic!();
+    }
+
+
+    if self.text_start+self.text_bytes.len() >= memsz
+    {
+      panic!();
+    }
+
+
+  mem.resize(memsz,0);
+
+    unsafe
+    {
+        for i in 0..self.data_bytes.len()
+        {
+          let  v = *self.data_bytes.get_unchecked(i);
+
+          *mem.get_unchecked_mut(self.data_start+i) = v;
+        }
+
+
+        for i in 0..self.text_bytes.len()
+        {
+          let  v = *self.text_bytes.get_unchecked(i);
+
+          *mem.get_unchecked_mut(self.text_start+i) = v;
+        }
+    }
+
+
+  mem
+}
+
+
+pub fn
+find_entry_point(&self, name: &str)-> Option<usize>
+{
+    for sym in &self.mini_symbols
+    {
+        if sym.is_text && (&sym.name == name)
+        {
+          return Some(sym.offset);
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+print_memory(&self, mem: &Vec<u8>)
+{
+    for sym in &self.mini_symbols
+    {
+      let  off = sym.get_offset();
+
+      print!("{}({})",sym.get_name(),off);
+
+        if sym.is_text()
+        {
+          println!("");
+        }
+
+      else
+        {
+          let  i64_ptr = unsafe{mem.as_ptr().add(off)} as *const i64;
+
+          println!(": {}",unsafe{*i64_ptr});
+        }
+    }
 }
 
 

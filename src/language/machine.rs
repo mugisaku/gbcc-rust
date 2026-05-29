@@ -9,171 +9,12 @@ const  HALT_FLAG: usize = 1;
 
 
 pub struct
-MachineInfoSetter<'a>(&'a mut MachineInfo,usize);
-
-
-impl<'a>
-MachineInfoSetter<'a>
-{
-
-
-pub fn
-heap(self, size: usize)-> Self
-{
-  self.0.heap_start = get_word_aligned(self.1);
-  self.0.heap_size  = size;
-
-  Self(self.0,self.1+size)
-}
-
-
-pub fn
-data(self, size: usize)-> Self
-{
-  self.0.data_start = get_word_aligned(self.1);
-  self.0.data_size  = size;
-
-  Self(self.0,self.1+size)
-}
-
-
-pub fn
-text(self, size: usize)-> Self
-{
-  self.0.text_start = get_word_aligned(self.1);
-  self.0.text_size  = size;
-
-  Self(self.0,self.1+size)
-}
-
-
-pub fn
-stack(self, size: usize)-> Self
-{
-  self.0.stack_start = get_word_aligned(self.1);
-  self.0.stack_size  = size;
-
-  Self(self.0,self.1+size)
-}
-
-
-pub fn
-callstack(self, size: usize)-> Self
-{
-  self.0.callstack_start = get_word_aligned(self.1);
-  self.0.callstack_size  = size;
-
-  Self(self.0,self.1+size)
-}
-
-
-}
-
-
-
-
-#[derive(Default,Clone)]
-pub struct
-MachineInfo
-{
-  pub  data_start: usize,
-  pub  data_size: usize,
-
-  pub  text_start: usize,
-  pub  text_size: usize,
-
-  pub  heap_start: usize,
-  pub  heap_size: usize,
-
-  pub  stack_start: usize,
-  pub  stack_size: usize,
-
-  pub  callstack_start: usize,
-  pub  callstack_size: usize,
-
-  pub  frequency: usize,
-
-}
-
-
-impl
-MachineInfo
-{
-
-
-pub fn  get_data_start(&self)-> usize{self.data_start}
-pub fn  get_text_start(&self)-> usize{self.text_start}
-pub fn  get_heap_start(&self)-> usize{self.heap_start}
-pub fn  get_stack_start(&self)-> usize{self.stack_start}
-pub fn  get_callstack_start(&self)-> usize{self.callstack_start}
-
-
-pub fn  get_data_end(&self)-> usize{self.data_start+self.data_size}
-pub fn  get_text_end(&self)-> usize{self.text_start+self.text_size}
-pub fn  get_heap_end(&self)-> usize{self.heap_start+self.heap_size}
-pub fn  get_stack_end(&self)-> usize{self.stack_start+self.stack_size}
-pub fn  get_callstack_end(&self)-> usize{self.callstack_start+self.callstack_size}
-
-
-pub fn
-set_frequency(&mut self, freq: usize)-> &mut Self
-{
-  self.frequency = freq;
-
-  self
-}
-
-
-pub fn
-set_memory_size(&mut self, start: usize)-> MachineInfoSetter
-{
-  MachineInfoSetter(self,start)
-}
-
-
-pub fn
-get_memory_size(&self)-> usize
-{
-  let  mut sz = 0usize;
-
-  sz = std::cmp::max(sz,self.get_data_end());
-  sz = std::cmp::max(sz,self.get_text_end());
-  sz = std::cmp::max(sz,self.get_heap_end());
-  sz = std::cmp::max(sz,self.get_stack_end());
-  sz = std::cmp::max(sz,self.get_callstack_end());
-
-  sz
-}
-
-
-pub fn
-print(&self)
-{
-  println!("data {} - {}",self.data_start,self.get_data_end());
-  println!("text {} - {}",self.text_start,self.get_text_end());
-  println!("heap {} - {}",self.heap_start,self.get_heap_end());
-  println!("stack {} - {}",self.stack_start,self.get_stack_end());
-  println!("callstack {} - {}",self.callstack_start,self.get_callstack_end());
-  println!("frequency {}",self.frequency);
-}
-
-
-}
-
-
-
-
-pub struct
 Machine
 {
-  info: MachineInfo,
-
-  mini_symbols: Vec<MiniSymbol>,
-
-  memory: Vec<u8>,
-
   memory_ptr: *mut u8,
   memory_size: usize,
+
+  frequency: usize,
 
   pc: usize,
   fp: usize,
@@ -194,27 +35,14 @@ Machine
 {
 
 
-pub fn
-new(info: &MachineInfo)-> Self
+pub const fn
+new()-> Self
 {
-  let  mut memory = Vec::<u8>::new();
-
-  let  memory_size = info.get_memory_size();
-
-  memory.resize(memory_size,0);
-
-  let  memory_ptr = memory.as_mut_ptr();
-
-  info.print();
-
   Self{
-    info: info.clone(),
+    memory_ptr: std::ptr::null_mut(),
+    memory_size: 0,
 
-    mini_symbols: Vec::new(),
-
-    memory,
-    memory_ptr,
-    memory_size,
+    frequency: 0,
 
     pc: 0,
     fp: 0,
@@ -259,7 +87,7 @@ put_byte_unchecked(&self, offset: usize, byte: u8)
 
 
 pub fn
-use_external_memory(&mut self, ptr: *mut u8, sz: usize)
+connect_memory(&mut self, ptr: *mut u8, sz: usize)
 {
   self.memory_ptr = ptr;
   self.memory_size = sz;
@@ -267,41 +95,14 @@ use_external_memory(&mut self, ptr: *mut u8, sz: usize)
 
 
 pub fn
-reset(&mut self, exec: &Exec)
+reset(&mut self, freq: usize, exec: &Exec, entry_fn_name: &str)
 {
-  self.mini_symbols = exec.get_mini_symbols().clone();
+  self.frequency = freq;
 
-  let  data_bytes = exec.get_data_bytes();
-  let  text_bytes = exec.get_text_bytes();
-
-    if data_bytes.len() > self.info.data_size
-    {
-      panic!();
-    }
-
-
-    if text_bytes.len() > self.info.text_size
-    {
-      panic!();
-    }
-
-
-    for i in 0..data_bytes.len()
-    {
-      self.put_byte_unchecked(self.info.data_start+i,data_bytes[i]);
-    }
-
-
-    for i in 0..text_bytes.len()
-    {
-      self.put_byte_unchecked(self.info.text_start+i,text_bytes[i]);
-    }
-
-
-  self.pc = exec.get_entry_point();
-  self.fp = self.info.stack_start;
-  self.sp = self.info.stack_start;
-  self.cp = self.info.callstack_start;
+  self.pc = exec.find_entry_point(entry_fn_name).unwrap();
+  self.fp = exec.get_stack_start();
+  self.sp = exec.get_stack_start();
+  self.cp = exec.get_callstack_start();
   self.status = 0;
   self.call_depth = 0;
 }
@@ -450,7 +251,7 @@ get_next_byte(&mut self)-> u8
 {
   let  pc = self.get_pc();
 
-  *unsafe{self.memory.get_unchecked(pc)}
+  unsafe{*self.memory_ptr.add(pc)}
 }
 
 
@@ -775,17 +576,17 @@ step(&mut self)
 
       let  mut arg_addr = self.fp;
 
-      print!("called with args(");
+//      print!("called with args(");
 
         while arg_addr < self.sp
         {
-          print!("{},",self.get_u64(arg_addr));
+//          print!("{},",self.get_u64(arg_addr));
 
           arg_addr += WORD_SIZE;
         }
 
 
-      print!(")\n");
+//      print!(")\n");
 
       self.call_depth += 1;
     }
@@ -831,7 +632,32 @@ step(&mut self)
 pub fn
 run(&mut self)
 {
-    if self.info.frequency == 0
+    if self.frequency == 0
+    {
+      println!("machine is set zero frequency");
+
+      return;
+    }
+
+
+  self.unhalt();
+
+    for _ in 0..self.frequency
+    {
+      self.step();
+
+        if self.is_halted()
+        {
+          return;
+        }
+    }
+}
+
+
+pub fn
+keep_run(&mut self)
+{
+    if self.frequency == 0
     {
       println!("machine is set zero frequency");
 
@@ -848,7 +674,7 @@ run(&mut self)
     {
       let  now = Instant::now();
 
-        for _ in 0..self.info.frequency
+        for _ in 0..self.frequency
         {
           self.step();
 
@@ -869,22 +695,6 @@ run(&mut self)
 pub fn
 print(&self)
 {
-    for sym in &self.mini_symbols
-    {
-      let  off = sym.get_offset();
-
-      print!("{}({})",sym.get_name(),off);
-
-        if sym.is_text()
-        {
-          println!("");
-        }
-
-      else
-        {
-          println!(": {}",self.get_u64(off));
-        }
-    }
 }
 
 

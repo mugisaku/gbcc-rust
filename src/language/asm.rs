@@ -668,14 +668,6 @@ push_unary(&mut self, op: &str)
 
       self.push_opcode(Opcode::Not);
     }
-  (s) if s == "&"=>
-    {
-      todo!();
-    }
-  (s) if s == "*"=>
-    {
-todo!();
-    }
   _=>{panic!();}
     }
 }

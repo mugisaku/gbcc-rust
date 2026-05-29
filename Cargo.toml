@@ -1,8 +1,19 @@
 [package]
-name = "gbcc"
+name = "gamebaby"
 version = "0.1.0"
 edition = "2021"
+description = ""
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "gbcc"
+path = "src/main.rs"
+
+
+[lib]
+name = "gblib"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
 
 [dependencies]
+wasm-bindgen = "0.2"

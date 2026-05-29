@@ -258,13 +258,10 @@ read_call_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
           cur.advance(2);
         }
-
-
-      return Expr::CallOp(o,args);
     }
 
 
-  panic!();
+  Expr::CallOp(o,args)
 }
 
 
