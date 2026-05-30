@@ -40,7 +40,6 @@ get_word(off: usize)-> u64
 const VIDEO_START: usize = 0;
 const  WIDTH: usize = 400;
 const HEIGHT: usize = 200;
-const VIDEO_BUFFER_SIZE: usize = (WIDTH*HEIGHT);
 
 const INPUT_UP:    u8 = 0b00001;
 const INPUT_LEFT:  u8 = 0b00010;
@@ -61,13 +60,15 @@ pub fn  get_height()-> u32{HEIGHT as u32}
 
 #[wasm_bindgen]
 pub fn
-get_pixel(x: u32, y: u32)-> u8
+get_pixel(x: u32, y: u32)-> u32
 {
   let  base = get_word(8) as usize;
 
-  let  i = (base+(WIDTH*(y as usize))+(x as usize));
+  let  i = (base+(3*WIDTH*(y as usize))+(3*x as usize));
 
-  get_byte(i)
+   ((get_byte(i+0) as u32)<<24)
+  |((get_byte(i+1) as u32)<<16)
+  |((get_byte(i+2) as u32)<< 8)
 }
 
 
@@ -158,7 +159,6 @@ setup(s: &str)-> bool
             {
               let  exec = symtbl.generate_exec();
 
-/*
               MEM = exec.generate_memory();
 
               MACHINE.connect_memory(MEM.as_mut_ptr(),MEM.len());
@@ -166,7 +166,6 @@ setup(s: &str)-> bool
               MACHINE.reset(128,&exec,"main");
 
               return true;
-*/
             }
         }
     }

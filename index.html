@@ -1,12 +1,23 @@
 <!doctype html>
-<html lang="en-US">
+<html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <title>hello-wasm example</title>
+    <title>hello-wasm gamebaby example</title>
   </head>
   <body>
+自作のプログラミング言語とコンパイラーと仮想機械を使って、
+ゲーム機のようなものを再現しています。
+runを押せば、ソースコードをコンパイルして実行します。
+サンプルでは、インプットレジスタの値を見て、押された方向キーによって、
+ビデオレジスタの値を書き換え、画面をスクロールしています。
+JavaScript部分は、キー入力状態を仮想機械が使う疑似メモリー空間の
+インプットレジスタに相当するアドレスに書き込むことと、
+一定時間毎に仮想機械を動作させた後、ビデオレジスタに相当するアドレスから値を読み出し、
+その値が指す、疑似メモリー空間の位置から、出力画面分のバイト列を
+画像として出力しているだけです。
+  <hr>
   <canvas id="display"></canvas>
-  <textarea id="text" cols="30" rows="20">
+  <textarea id="text" cols="32" rows="16">
 const INPUT_REG = 0;
 const VIDEO_REG = 8;
 
@@ -34,10 +45,10 @@ main()
 {
     loop
     {
-        if INPUT_REG.byte&   UP_KEY{VIDEO_REG.word -= VIDEO_W;}
+        if INPUT_REG.byte&   UP_KEY{VIDEO_REG.word -= 3*VIDEO_W;}
         if INPUT_REG.byte& LEFT_KEY{VIDEO_REG.word -= 1;}
         if INPUT_REG.byte&RIGHT_KEY{VIDEO_REG.word += 1;}
-        if INPUT_REG.byte& DOWN_KEY{VIDEO_REG.word += VIDEO_W;}
+        if INPUT_REG.byte& DOWN_KEY{VIDEO_REG.word += 3*VIDEO_W;}
 
       halt;
     }
@@ -47,7 +58,7 @@ main()
 }
   </textarea>
   <button id="run_btn">run</button>
-  <button id="audio_btn">audio</button>
+  <!--button id="audio_btn">audio</button-->
     <script>function  check(s){console.log(s);}</script>
     <script type="module">
       import init, {
@@ -138,9 +149,9 @@ main()
 
             const  pix = get_pixel(x,y);
 
-            g_imgdat.data[i+0] = pix;
-            g_imgdat.data[i+1] = pix;
-            g_imgdat.data[i+2] = pix;
+            g_imgdat.data[i+0] = (pix>>24)&0xFF;
+            g_imgdat.data[i+1] = (pix>>16)&0xFF;
+            g_imgdat.data[i+2] = (pix>> 8)&0xFF;
             g_imgdat.data[i+3] = 255;
           }}
 
@@ -178,7 +189,7 @@ main()
         g_text = document.getElementById("text");
 
         document.getElementById("run_btn").addEventListener("click",run);
-        document.getElementById("audio_btn").addEventListener("click",switch_audio);
+//        document.getElementById("audio_btn").addEventListener("click",switch_audio);
 
         document.addEventListener("keydown",function(evt){
             switch(evt.key)
