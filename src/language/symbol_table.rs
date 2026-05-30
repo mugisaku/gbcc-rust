@@ -428,16 +428,12 @@ generate_exec(&mut self)-> Exec
           exec.mini_symbols.push(text_minsym);
 
 
-          let  text = assemble(fd,self);
+          let  mut text = assemble(fd,self);
+println!("{}{{",&sym.name);
+text.print();
+println!("}}");
 
-/*
-          println!("fn {} is assembled",&sym.name);
-
-          text.print();
-
-          println!("");
-*/
-
+          text.finalize();
 
           let  bytes = text.to_bytes();
 
@@ -446,6 +442,8 @@ generate_exec(&mut self)-> Exec
               exec.text_bytes.push(*b);
             }
 
+
+          exec.texts.push((sym.name.clone(),text));
 
           let  pos_bytes = pos.to_ne_bytes();
 
@@ -590,6 +588,8 @@ Exec
 {
   mini_symbols: Vec<MiniSymbol>,
 
+  texts: Vec<(String,AsmText)>,
+
   data_start: usize,
   data_bytes: Vec<u8>,
 
@@ -618,6 +618,7 @@ new()-> Self
 {
   Self{
     mini_symbols: Vec::new(),
+    texts: Vec::new(),
     data_start: 0,
     data_bytes: Vec::new(),
     text_start: 0,
@@ -804,6 +805,20 @@ print_memory(&self, mem: &Vec<u8>)
 
           println!(": {}",unsafe{*i64_ptr});
         }
+    }
+}
+
+
+pub fn
+print_text(&self)
+{
+    for (name,text) in &self.texts
+    {
+      println!("{}\n{{",name);
+
+      text.print();
+
+      println!("}}");
     }
 }
 

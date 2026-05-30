@@ -23,6 +23,8 @@ compile_and_run(s: &str)
         {
           let  exec = symtbl.generate_exec();
 
+          exec.print_text();
+
           let  mut mem = exec.generate_memory();
 
 //          symtbl.print();
@@ -93,51 +95,46 @@ main()
   let  codes =
 r#"
 
+const INPUT_REG = 0;
+const VIDEO_REG = 8;
 
-var
-value = 888;
+const HEAP_START = 1024;
+const HEAP_SIZE  =  200;
 
-var
-value2 = 0;
+const DATA_START      = (HEAP_START+HEAP_SIZE);
+const TEXT_START      = (HEAP_START+HEAP_SIZE)+(1024*1);
+const STACK_START     = (HEAP_START+HEAP_SIZE)+(1024*2);
+const CALLSTACK_START = (HEAP_START+HEAP_SIZE)+(1024*3);
 
-var
-xorshift_state = 12345678;
-
-
-const DATA_START = 0;
-const TEXT_START = 1024*1;
-const HEAP_START = 0;
-const HEAP_SIZE  = 0;
-const STACK_START = 1024*2;
-const STACK_SIZE  = 1024;
-const CALLSTACK_START = 1024*3;
+const     STACK_SIZE  = 1024;
 const CALLSTACK_SIZE  = 1024;
 
+const VIDEO_W = 400;
 
-fn
-rand()
-{
-  xorshift_state ^= xorshift_state<<7;
-  xorshift_state ^= xorshift_state>>9;
-
-  return xorshift_state;
-}
-
-
-fn
-add(a,b)
-{
-  return a+b;
-}
+const    UP_KEY = 0b0001;
+const  LEFT_KEY = 0b0010;
+const RIGHT_KEY = 0b0100;
+const  DOWN_KEY = 0b1000;
 
 
 fn
 main()
 {
-  (value2.ptr+1).byte = 0xFF;
+    loop
+    {
+        if INPUT_REG.byte&   UP_KEY{VIDEO_REG.word -= VIDEO_W;}
+        if INPUT_REG.byte& LEFT_KEY{VIDEO_REG.word -= 1;}
+        if INPUT_REG.byte&RIGHT_KEY{VIDEO_REG.word += 1;}
+        if INPUT_REG.byte& DOWN_KEY{VIDEO_REG.word += VIDEO_W;}
 
-  return 0;
+      halt;
+    }
+
+
+  return;
 }
+
+
 "#;
 
 

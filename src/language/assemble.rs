@@ -77,8 +77,8 @@ BrLabelHolder
 pub fn
 new(id: usize)-> Self
 {
-  let   base = format!("L{}_",id);
-  let  label = format!("L{}_1",&base);
+  let   base = format!("L{}",id);
+  let  label = format!("{}_1",&base);
 
   Self{base, number: 1, label}
 }
@@ -103,7 +103,7 @@ increment(&mut self)
 {
   self.number += 1;
 
-  self.label = format!("{}{}",&self.base,self.number);
+  self.label = format!("{}_{}",&self.base,self.number);
 }
 
 
@@ -146,8 +146,6 @@ process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Optio
 {
   let  mut blh = lid.make_br_label_holder();
 
-//  blh.increment();
-
   let  end_label = blh.make_end_label();
 
     for (cond,blk) in ifstmt.get_cond_block_list()
@@ -168,10 +166,10 @@ process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Optio
     }
 
 
+  output.push_label(blh.get_label());
+
     if let Some(blk) = ifstmt.get_else_block_opt()
     {
-      output.push_label(blh.get_label());
-
       process_block(blk,tbl,lid,clh_opt,scp,output);
     }
 
@@ -422,8 +420,6 @@ assemble(decl: &FnDecl, tbl: &SymbolTable)-> AsmText
   process_block(decl.get_block(),tbl,&mut lid,None,&scp,&mut text);
 
   text.set_xs(scp.get_offset_max());
-
-  text.finalize();
 
   text
 }

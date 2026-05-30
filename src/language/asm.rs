@@ -915,7 +915,7 @@ get_label_index(&self, s: &str)-> usize
     }
 
 
-  panic!();
+  panic!("{} not found",s);
 }
 
 

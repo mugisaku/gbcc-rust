@@ -6,6 +6,47 @@
   </head>
   <body>
   <canvas id="display"></canvas>
+  <textarea id="text" cols="30" rows="20">
+const INPUT_REG = 0;
+const VIDEO_REG = 8;
+
+const HEAP_START = 1024;
+const HEAP_SIZE  =  200;
+
+const DATA_START      = (HEAP_START+HEAP_SIZE);
+const TEXT_START      = (HEAP_START+HEAP_SIZE)+(1024*1);
+const STACK_START     = (HEAP_START+HEAP_SIZE)+(1024*2);
+const CALLSTACK_START = (HEAP_START+HEAP_SIZE)+(1024*3);
+
+const     STACK_SIZE  = 1024;
+const CALLSTACK_SIZE  = 1024;
+
+const VIDEO_W = 400;
+
+const    UP_KEY = 0b0001;
+const  LEFT_KEY = 0b0010;
+const RIGHT_KEY = 0b0100;
+const  DOWN_KEY = 0b1000;
+
+
+fn
+main()
+{
+    loop
+    {
+        if INPUT_REG.byte&   UP_KEY{VIDEO_REG.word -= VIDEO_W;}
+        if INPUT_REG.byte& LEFT_KEY{VIDEO_REG.word -= 1;}
+        if INPUT_REG.byte&RIGHT_KEY{VIDEO_REG.word += 1;}
+        if INPUT_REG.byte& DOWN_KEY{VIDEO_REG.word += VIDEO_W;}
+
+      halt;
+    }
+
+
+  return;
+}
+  </textarea>
+  <button id="run_btn">run</button>
   <button id="audio_btn">audio</button>
     <script>function  check(s){console.log(s);}</script>
     <script type="module">
@@ -26,7 +67,11 @@
         set_input_enter,
         unset_input_enter,
         process,
-        start } from "./pkg/gblib.js";
+        setup } from "./pkg/gblib.js";
+
+      let  g_text;
+
+      let  g_ready;
 
       let  g_cv;
       let  g_cvctx;
@@ -79,6 +124,12 @@
       function
       refresh()
       {
+          if(!g_ready)
+          {
+            return;
+          }
+
+
         process();
 
           for(let  y = 0|0;  y < g_imgdat.height;  ++y){
@@ -100,9 +151,18 @@
       }
 
 
-      init().then(() => {
-        start();
+      function
+      run()
+      {
+        g_ready = setup(g_text.value);
 
+          if(!g_ready)
+          {
+            console.log("oh no");
+          }
+      }
+
+      init().then(() => {
         g_cv = document.getElementById("display");
 
         g_cv.width  = get_width();
@@ -115,6 +175,9 @@
         g_cvctx.fillStyle = "black";
         g_cvctx.fillRect(0,0,g_cv.width,g_cv.height);
 
+        g_text = document.getElementById("text");
+
+        document.getElementById("run_btn").addEventListener("click",run);
         document.getElementById("audio_btn").addEventListener("click",switch_audio);
 
         document.addEventListener("keydown",function(evt){

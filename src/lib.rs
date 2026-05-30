@@ -9,6 +9,8 @@ mod debug;
 
 use wasm_bindgen::prelude::*;
 use crate::language::machine::*;
+use crate::language::decl::*;
+use crate::language::symbol_table::*;
 
 
 #[wasm_bindgen]
@@ -20,16 +22,31 @@ pub fn  check(s: &str);
 static mut MEM: Vec<u8> = Vec::new();
 static mut MACHINE: Machine = Machine::new();
 
+fn
+get_byte(off: usize)-> u8
+{unsafe{*MEM.get_unchecked(off%MEM.len())}}
+
+fn
+put_byte(off: usize, v: u8)
+{unsafe{*MEM.get_unchecked_mut(off%MEM.len()) = v;}}
+
+fn
+get_word(off: usize)-> u64
+{unsafe{*(MEM.as_ptr().add(off) as *const u64)}}
+
+
+
+
 const VIDEO_START: usize = 0;
 const  WIDTH: usize = 400;
 const HEIGHT: usize = 200;
 const VIDEO_BUFFER_SIZE: usize = (WIDTH*HEIGHT);
 
-const INPUT_UP:    u8 = 0b000001;
-const INPUT_LEFT:  u8 = 0b000010;
-const INPUT_RIGHT: u8 = 0b000100;
-const INPUT_DOWN:  u8 = 0b001000;
-const INPUT_ENTER: u8 = 0b010000;
+const INPUT_UP:    u8 = 0b00001;
+const INPUT_LEFT:  u8 = 0b00010;
+const INPUT_RIGHT: u8 = 0b00100;
+const INPUT_DOWN:  u8 = 0b01000;
+const INPUT_ENTER: u8 = 0b10000;
 
 
 static mut R: u64 = 12345678;
@@ -42,26 +59,15 @@ pub fn  get_width()->  u32{WIDTH as u32}
 pub fn  get_height()-> u32{HEIGHT as u32}
 
 
-fn
-get_rand()-> u64
-{
-  unsafe
-  {
-    R ^= R<<9;
-    R ^= R>>7;
-
-    R
-  }
-}
-
-
 #[wasm_bindgen]
 pub fn
 get_pixel(x: u32, y: u32)-> u8
 {
-  let  i = ((WIDTH*(y as usize))+(x as usize));
+  let  base = get_word(8) as usize;
 
-  unsafe{*MEM.get_unchecked(i)}
+  let  i = (base+(WIDTH*(y as usize))+(x as usize));
+
+  get_byte(i)
 }
 
 
@@ -69,10 +75,7 @@ get_pixel(x: u32, y: u32)-> u8
 pub fn
 get_audio_freq()-> f64
 {
-  if (get_rand()&1) == 0
-  {
-    440.0
-  }else{880.0}
+  440.0
 }
 
 
@@ -80,126 +83,96 @@ get_audio_freq()-> f64
 pub fn
 get_audio_volume()-> f64
 {
-  if (get_rand()&1) == 0
-  {
-    0.05
-  }else{0.1}
+  0.05
 }
 
-
-static mut INPUT: u8 = 0;
 
 #[wasm_bindgen]
 pub fn
 set_input_up()
-{unsafe{INPUT |= INPUT_UP;}}
+{put_byte(0,get_byte(0)|INPUT_UP);}
 
 #[wasm_bindgen]
 pub fn
 unset_input_up()
-{unsafe{INPUT &= !INPUT_UP;}}
+{put_byte(0,get_byte(0)& !INPUT_UP);}
 
 #[wasm_bindgen]
 pub fn
 set_input_left()
-{unsafe{INPUT |= INPUT_LEFT;}}
+{put_byte(0,get_byte(0)|INPUT_LEFT);}
 
 #[wasm_bindgen]
 pub fn
 unset_input_left()
-{unsafe{INPUT &= !INPUT_LEFT;}}
+{put_byte(0,get_byte(0)& !INPUT_LEFT);}
 
 #[wasm_bindgen]
 pub fn
 set_input_right()
-{unsafe{INPUT |= INPUT_RIGHT;}}
+{put_byte(0,get_byte(0)|INPUT_RIGHT);}
 
 #[wasm_bindgen]
 pub fn
 unset_input_right()
-{unsafe{INPUT &= !INPUT_RIGHT;}}
+{put_byte(0,get_byte(0)& !INPUT_RIGHT);}
 
 #[wasm_bindgen]
 pub fn
 set_input_down()
-{unsafe{INPUT |= INPUT_DOWN;}}
+{put_byte(0,get_byte(0)|INPUT_DOWN);}
 
 #[wasm_bindgen]
 pub fn
 unset_input_down()
-{unsafe{INPUT &= !INPUT_DOWN;}}
+{put_byte(0,get_byte(0)& !INPUT_DOWN);}
 
 #[wasm_bindgen]
 pub fn
 set_input_enter()
-{unsafe{INPUT |= INPUT_ENTER;}}
+{put_byte(0,get_byte(0)|INPUT_ENTER);}
 
 #[wasm_bindgen]
 pub fn
 unset_input_enter()
-{unsafe{INPUT &= !INPUT_ENTER;}}
+{put_byte(0,get_byte(0)& !INPUT_ENTER);}
 
-
-static mut X_POS: usize = 0;
-static mut Y_POS: usize = 0;
 
 #[wasm_bindgen]
 pub fn
 process()
 {
-  unsafe
-  {
-      if ((INPUT&INPUT_UP)    != 0) && (Y_POS != 0)        {Y_POS -= 1;}
-      if ((INPUT&INPUT_LEFT)  != 0) && (X_POS != 0)        {X_POS -= 1;}
-      if ((INPUT&INPUT_RIGHT) != 0) && (X_POS < (WIDTH -1)){X_POS += 1;}
-      if ((INPUT&INPUT_DOWN)  != 0) && (Y_POS < (HEIGHT-1)){Y_POS += 1;}
-
-
-    *MEM.get_unchecked_mut((WIDTH*Y_POS)+X_POS) = 255;
-  }
+  unsafe{MACHINE.run();}
 }
-
-
-const src: &'static str =
-r#"
-const DATA_START = 800*400;
-const TEXT_START = 800*400+(1024*1);
-const HEAP_START = 0;
-const HEAP_SIZE  = 800*400;
-const STACK_START = 800*400+(1024*2);
-const STACK_SIZE  = 800*400+(1024);
-const CALLSTACK_START = 800*400+(1024*3);
-const CALLSTACK_SIZE  = 800*400+(1024);
-"#;
-
 
 
 #[wasm_bindgen]
 pub fn
-setup(s: &str)
+setup(s: &str)-> bool
 {
-/*
-    if let Ok(root) = decl::Decl::read_as_root(s)
+    unsafe
     {
-        if let Ok(mut symtbl) = SymbolTable::build(root)
+        if let Ok(root) = Decl::read_as_root(s)
         {
-          let  exec = symtbl.generate_exec(&mi);
+            if let Ok(mut symtbl) = SymbolTable::build(root)
+            {
+              let  exec = symtbl.generate_exec();
 
-          symtbl.print();
+/*
+              MEM = exec.generate_memory();
 
-          println!("");
+              MACHINE.connect_memory(MEM.as_mut_ptr(),MEM.len());
 
-          let  mut m = Machine::new(&mi);
+              MACHINE.reset(128,&exec,"main");
 
-          m.reset(&exec);
-        }
-
-      else
-        {
-          println!("build is failed");
+              return true;
+*/
+            }
         }
     }
-*/
+
+
+  false
 }
 
 
