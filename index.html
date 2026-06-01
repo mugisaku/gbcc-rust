@@ -13,13 +13,14 @@ runを押せば、ソースコードをコンパイルして実行します。
 JavaScript部分は、キー入力状態を仮想機械が使う疑似メモリー空間の
 インプットレジスタに相当するアドレスに書き込むことと、
 一定時間毎に仮想機械を動作させた後、ビデオレジスタに相当するアドレスから値を読み出し、
-その値が指す、疑似メモリー空間の位置から、出力画面分のバイト列を
-画像として出力しているだけです。
+その値が指す疑似メモリー空間のバイト列を画像として表示しているだけです。
   <hr>
+  <button id="run_btn">run</button><p>
+  <!--button id="audio_btn">audio</button--><p>
   <canvas id="display"></canvas>
-  <textarea id="text" cols="32" rows="16">
-const INPUT_REG = 0;
-const VIDEO_REG = 8;
+  <textarea id="text" cols="30" rows="12">
+io INPUT at 0;
+io VIDEO at 8;
 
 const HEAP_START = 1024;
 const HEAP_SIZE  =  200;
@@ -45,10 +46,10 @@ main()
 {
     loop
     {
-        if INPUT_REG.byte&   UP_KEY{VIDEO_REG.word -= 3*VIDEO_W;}
-        if INPUT_REG.byte& LEFT_KEY{VIDEO_REG.word -= 1;}
-        if INPUT_REG.byte&RIGHT_KEY{VIDEO_REG.word += 1;}
-        if INPUT_REG.byte& DOWN_KEY{VIDEO_REG.word += 3*VIDEO_W;}
+        if INPUT.ptr.byte&   UP_KEY{VIDEO -= 3*VIDEO_W;}
+        if INPUT.ptr.byte& LEFT_KEY{VIDEO -= 3;}
+        if INPUT.ptr.byte&RIGHT_KEY{VIDEO += 3;}
+        if INPUT.ptr.byte& DOWN_KEY{VIDEO += 3*VIDEO_W;}
 
       halt;
     }
@@ -57,8 +58,8 @@ main()
   return;
 }
   </textarea>
-  <button id="run_btn">run</button>
-  <!--button id="audio_btn">audio</button-->
+  <textarea id="asm_text" cols="16" rows="12">
+  </textarea>
     <script>function  check(s){console.log(s);}</script>
     <script type="module">
       import init, {
@@ -81,6 +82,7 @@ main()
         setup } from "./pkg/gblib.js";
 
       let  g_text;
+      let  g_asmtext;
 
       let  g_ready;
 
@@ -167,9 +169,9 @@ main()
       {
         g_ready = setup(g_text.value);
 
-          if(!g_ready)
+          if(g_ready)
           {
-            console.log("oh no");
+            g_asmtext.value = g_ready;
           }
       }
 
@@ -187,6 +189,7 @@ main()
         g_cvctx.fillRect(0,0,g_cv.width,g_cv.height);
 
         g_text = document.getElementById("text");
+        g_asmtext = document.getElementById("asm_text");
 
         document.getElementById("run_btn").addEventListener("click",run);
 //        document.getElementById("audio_btn").addEventListener("click",switch_audio);

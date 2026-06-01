@@ -466,27 +466,38 @@ write_to(&self, buf: &mut Vec<u8>)
 
 
 pub fn
-print(&self)
+print_to(&self, buf: &mut String)
 {
     match self
     {
-  Self::Label(s)=>{print!("[{}]",s);}
+  Self::Label(s)=>{buf.push_str(&format!("[{}]",s));}
 
-  Self::Opcode(op)=>{op.print();}
+  Self::Opcode(op)=>{buf.push_str(op.to_str());}
 
-  Self::Push8(i) =>{print!("push8 {}",*i);}
-  Self::Push16(i)=>{print!("push16 {}",*i);}
-  Self::Push32(i)=>{print!("push32 {}",*i);}
-  Self::Push64(i)=>{print!("push64 {}",*i);}
+  Self::Push8(i) =>{buf.push_str(&format!("push8 {}",*i));}
+  Self::Push16(i)=>{buf.push_str(&format!("push16 {}",*i));}
+  Self::Push32(i)=>{buf.push_str(&format!("push32 {}",*i));}
+  Self::Push64(i)=>{buf.push_str(&format!("push64 {}",*i));}
 
-  Self::Xs8(u) =>{print!("xs8 {}",*u);}
-  Self::Xs16(u)=>{print!("xs16 {}",*u);}
-  Self::Xs32(u)=>{print!("xs32 {}",*u);}
+  Self::Xs8(u) =>{buf.push_str(&format!("xs8 {}",*u));}
+  Self::Xs16(u)=>{buf.push_str(&format!("xs16 {}",*u));}
+  Self::Xs32(u)=>{buf.push_str(&format!("xs32 {}",*u));}
 
-  Self::Jmp(i,dst)=>{print!("jmp {}({})",&dst.label,*i);}
-  Self::Brz(i,dst)=>{print!("brz {}({})",&dst.label,*i);}
-  Self::Brnz(i,dst)=>{print!("brnz {}({})",&dst.label,*i);}
+  Self::Jmp(i,dst)=>{buf.push_str(&format!("jmp {}({})",&dst.label,*i));}
+  Self::Brz(i,dst)=>{buf.push_str(&format!("brz {}({})",&dst.label,*i));}
+  Self::Brnz(i,dst)=>{buf.push_str(&format!("brnz {}({})",&dst.label,*i));}
     }
+}
+
+
+pub fn
+print(&self)
+{
+  let  mut buf = String::new();
+
+  self.print_to(&mut buf);
+
+  print!("{}",&buf);
 }
 
 
@@ -1057,7 +1068,7 @@ finalize(&mut self)
 
 
 pub fn
-print(&self)
+print_to(&self, buf: &mut String)
 {
   let  mut n = 0usize;
 
@@ -1065,19 +1076,34 @@ print(&self)
     {
         if let AsmLine::Label(s) = ln
         {
-          print!("[{}]",s);
+          buf.push('[');
+          buf.push_str(s);
+          buf.push(']');
         }
 
       else
         {
-          print!("  {:05} ",li.offset);
+          let  s = format!("  {:05} ",li.offset);
 
-          ln.print();
+          buf.push_str(&s);
+
+          ln.print_to(buf);
         }
 
 
-      println!("");
+      buf.push('\n');
     }
+}
+
+
+pub fn
+print(&self)
+{
+  let  mut buf = String::new();
+
+  self.print_to(&mut buf);
+
+  print!("{}",&buf);
 }
 
 

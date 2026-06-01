@@ -167,6 +167,14 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
 
           EvalResult::Value(txt)
         }
+      SymbolKind::Io=>
+        {
+          let  mut txt = AsmEvalText::new();
+
+          txt.push_global_var(sym.get_offset());
+
+          EvalResult::Value(txt)
+        }
       SymbolKind::Fn(_)=>
         {
           let  mut txt = AsmEvalText::new();

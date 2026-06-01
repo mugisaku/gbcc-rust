@@ -99,10 +99,12 @@ fn: 'fn -> .Identifier & parameter_list & block;
 
 initialize: "=" & expression;
 
+io   :   'io    -> .Identifier & 'at & expression;
 var  :   'var   -> .Identifier & initialize;
 const:   'const -> .Identifier & initialize;
 
 declaration: fn
+           | io
            | var
            | const
            | ";";

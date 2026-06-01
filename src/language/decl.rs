@@ -60,6 +60,7 @@ DeclKind
 
    Const(Expr),
      Var(Expr),
+      Io(Expr),
 
   Fn(FnDecl),
 
@@ -92,6 +93,14 @@ print(&self, name: &str)
       print!(" = ");
 
       e.print();
+    }
+  DeclKind::Io(addr)=>
+    {
+      print!("io {}",name);
+
+      print!(" at ");
+
+      addr.print();
     }
   DeclKind::Fn(f)=>
     {
@@ -161,6 +170,7 @@ collect(&self, buf: &mut Vec<Collectible>)
   DeclKind::Undef=>{}
   DeclKind::Const(e)=>{e.collect(buf);}
   DeclKind::Var(e)  =>{e.collect(buf);}
+  DeclKind::Io(e)   =>{e.collect(buf);}
   DeclKind::Fn(fd)=>{/*fd.get_block().collect(buf);*/}
   _=>{panic!();}
     }
@@ -320,6 +330,29 @@ read_object_decl(start_nd: &Node)-> (String,Expr)
 
 
 pub fn
+read_io_decl(start_nd: &Node)-> (String,Expr)
+{
+  let  mut cur = start_nd.cursor();
+
+  cur.advance(1);
+
+    if let Some(id_s) = cur.get_identifier()
+    {
+      let  name = id_s.clone();
+
+      cur.advance(2);
+
+      let  expr = read_expr(cur.select_node("expression").unwrap());
+
+      return (name,expr);
+    }
+
+
+  panic!();
+}
+
+
+pub fn
 read_fn_decl(start_nd: &Node)-> (String,FnDecl)
 {
   let  mut cur = start_nd.cursor();
@@ -370,6 +403,14 @@ read_decl(start_nd: &Node)-> Decl
           let  (name,f) = read_fn_decl(nd);
 
           return Decl{name, kind: DeclKind::Fn(f)};
+        }
+
+      else
+        if name == "io"
+        {
+          let  (name,expr) = read_io_decl(nd);
+
+          return Decl{name, kind: DeclKind::Io(expr)};
         }
 
       else

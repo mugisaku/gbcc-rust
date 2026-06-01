@@ -48,9 +48,6 @@ const INPUT_DOWN:  u8 = 0b01000;
 const INPUT_ENTER: u8 = 0b10000;
 
 
-static mut R: u64 = 12345678;
-
-
 #[wasm_bindgen]
 pub fn  get_width()->  u32{WIDTH as u32}
 
@@ -143,13 +140,17 @@ unset_input_enter()
 pub fn
 process()
 {
+  let  b = get_byte(0);
+
+  check(&format!("{}",b));
+
   unsafe{MACHINE.run();}
 }
 
 
 #[wasm_bindgen]
 pub fn
-setup(s: &str)-> bool
+setup(s: &str)-> Option<String>
 {
     unsafe
     {
@@ -165,13 +166,18 @@ setup(s: &str)-> bool
 
               MACHINE.reset(128,&exec,"main");
 
-              return true;
+
+              let  mut buf = String::new();
+
+              exec.print_text_to(&mut buf);
+
+              return Some(buf);
             }
         }
     }
 
 
-  false
+  None
 }
 
 

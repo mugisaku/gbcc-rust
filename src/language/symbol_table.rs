@@ -22,6 +22,8 @@ SymbolKind
       Const(i64),
   GlobalVar(i64),
 
+  Io,
+
   Fn(FnDecl),
 
 }
@@ -95,6 +97,18 @@ build(src: Source, symtbl: &SymbolTable)-> Self
         deps_child_list,
       }
     }
+  DeclKind::Io(e)=>
+    {
+      let  res = evaluate_const(&e,symtbl,None);
+
+      Self{
+        name,
+        kind: SymbolKind::Io,
+        offset: res.unwrap() as usize,
+        deps_parent_list,
+        deps_child_list,
+      }
+    }
   DeclKind::Fn(fd)=>
     {
       Self{
@@ -145,6 +159,7 @@ print(&self)
     {
   SymbolKind::Const(_)    =>{print!("const");}
   SymbolKind::GlobalVar(_)=>{print!("(g)var");}
+  SymbolKind::Io          =>{print!("io");}
   SymbolKind::Fn(_)       =>{print!("fn");}
     }
 
@@ -155,6 +170,7 @@ print(&self)
     {
   SymbolKind::Const(res)    =>{print!("{}",res);}
   SymbolKind::GlobalVar(res)=>{print!("{}",res);}
+  SymbolKind::Io            =>{print!("at");}
   SymbolKind::Fn(_,)=>{}
     }
 
@@ -330,46 +346,27 @@ build(decls: Vec<Decl>)-> Result<Self,()>
 
 
 fn
-generate_data(&mut self, start: usize)-> Vec<u8>
+generate_data_bytes(&mut self, start: usize)-> Vec<u8>
 {
   let  mut bytes = Vec::<u8>::new();
   let  mut pos = start;
 
     for sym in &mut self.symbols
     {
-      sym.offset = get_word_aligned(pos)            ;
-                                    pos += WORD_SIZE;
-    }
-
-
-  bytes.resize(pos-start,0);
-
-    for sym in &self.symbols
-    {
         match &sym.kind
         {
-      SymbolKind::Const(res)=>
+      SymbolKind::GlobalVar(_)
+     |SymbolKind::Fn(_)=>
         {
-          let  res_bytes = res.to_ne_bytes();
-
-            for i in 0..res_bytes.len()
-            {
-              bytes[(sym.offset-start)+i] = res_bytes[i];
-            }
-        }
-      SymbolKind::GlobalVar(res)=>
-        {
-          let  res_bytes = res.to_ne_bytes();
-
-            for i in 0..res_bytes.len()
-            {
-              bytes[(sym.offset-start)+i] = res_bytes[i];
-            }
+          sym.offset = get_word_aligned(pos)            ;
+                                        pos += WORD_SIZE;
         }
       _=>{}
         }
     }
 
+
+  bytes.resize(pos-start,0);
 
   bytes
 }
@@ -411,7 +408,7 @@ generate_exec(&mut self)-> Exec
   exec.stack_start     = get_word_aligned(exec.stack_start);
   exec.callstack_start = get_word_aligned(exec.callstack_start);
 
-  exec.data_bytes = self.generate_data(exec.data_start);
+  exec.data_bytes = self.generate_data_bytes(exec.data_start);
 
   let  mut pos = exec.text_start;
 
@@ -421,8 +418,8 @@ generate_exec(&mut self)-> Exec
         {
       SymbolKind::Fn(fd)=>
         {
-          let   ptr_minsym = MiniSymbol{offset: sym.offset, name: sym.name.clone(), is_text: false};
-          let  text_minsym = MiniSymbol{offset:        pos, name: sym.name.clone(), is_text:  true};
+          let   ptr_minsym = MiniSymbol{offset: sym.offset, name: sym.name.clone(), kind: MiniSymbolKind::Data};
+          let  text_minsym = MiniSymbol{offset:        pos, name: sym.name.clone(), kind: MiniSymbolKind::Text};
 
           exec.mini_symbols.push( ptr_minsym);
           exec.mini_symbols.push(text_minsym);
@@ -455,9 +452,21 @@ println!("}}");
 
           pos += bytes.len();
         }
-      SymbolKind::GlobalVar(_)=>
+      SymbolKind::GlobalVar(res)=>
         {
-          exec.mini_symbols.push(MiniSymbol{offset: sym.offset, name: sym.name.clone(), is_text: false});
+          let  res_bytes = res.to_ne_bytes();
+
+            for i in 0..res_bytes.len()
+            {
+              exec.data_bytes[(sym.offset-exec.data_start)+i] = res_bytes[i];
+            }
+
+
+          exec.mini_symbols.push(MiniSymbol{offset: sym.offset, name: sym.name.clone(), kind: MiniSymbolKind::Data});
+        }
+      SymbolKind::Io=>
+        {
+          exec.mini_symbols.push(MiniSymbol{offset: sym.offset, name: sym.name.clone(), kind: MiniSymbolKind::Io});
         }
       _=>{}
         }
@@ -557,13 +566,22 @@ print(&self)
 
 
 #[derive(Clone)]
+pub enum
+MiniSymbolKind
+{
+  Data, Text, Io,
+
+}
+
+
+#[derive(Clone)]
 pub struct
 MiniSymbol
 {
   offset: usize,
     name: String,
 
-  is_text: bool,
+  kind: MiniSymbolKind,
 
 }
 
@@ -575,7 +593,7 @@ MiniSymbol
 
 pub fn  get_offset(&self)-> usize{self.offset}
 pub fn  get_name(&self)-> &String{&self.name}
-pub fn  is_text(&self)-> bool{self.is_text}
+pub fn  get_kind(&self)-> &MiniSymbolKind{&self.kind}
 
 
 }
@@ -774,9 +792,12 @@ find_entry_point(&self, name: &str)-> Option<usize>
 {
     for sym in &self.mini_symbols
     {
-        if sym.is_text && (&sym.name == name)
+        if let MiniSymbolKind::Text = &sym.kind
         {
-          return Some(sym.offset);
+            if &sym.name == name
+            {
+              return Some(sym.offset);
+            }
         }
     }
 
@@ -794,17 +815,33 @@ print_memory(&self, mem: &Vec<u8>)
 
       print!("{}({})",sym.get_name(),off);
 
-        if sym.is_text()
+        match &sym.kind
         {
-          println!("");
-        }
-
-      else
+      MiniSymbolKind::Data
+     |MiniSymbolKind::Io=>
         {
           let  i64_ptr = unsafe{mem.as_ptr().add(off)} as *const i64;
 
           println!(": {}",unsafe{*i64_ptr});
         }
+      _=>{println!("");}
+        }
+    }
+}
+
+
+pub fn
+print_text_to(&self, buf: &mut String)
+{
+    for (name,text) in &self.texts
+    {
+      buf.push_str(name);
+
+      buf.push_str("{\n");
+
+      text.print_to(buf);
+
+      buf.push_str("}\n");
     }
 }
 

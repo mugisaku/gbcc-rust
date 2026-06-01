@@ -39,7 +39,7 @@ compile_and_run(s: &str)
 
           println!("machine runs");
 
-          m.run();
+          m.keep_run();
 
           println!("machine is finished");
 
@@ -95,8 +95,8 @@ main()
   let  codes =
 r#"
 
-const INPUT_REG = 0;
-const VIDEO_REG = 8;
+io INPUT at 0;
+io VIDEO at 8;
 
 const HEAP_START = 1024;
 const HEAP_SIZE  =  200;
@@ -122,10 +122,10 @@ main()
 {
     loop
     {
-        if INPUT_REG.byte&   UP_KEY{VIDEO_REG.word -= VIDEO_W;}
-        if INPUT_REG.byte& LEFT_KEY{VIDEO_REG.word -= 1;}
-        if INPUT_REG.byte&RIGHT_KEY{VIDEO_REG.word += 1;}
-        if INPUT_REG.byte& DOWN_KEY{VIDEO_REG.word += VIDEO_W;}
+        if INPUT.byte&   UP_KEY{VIDEO.word -= VIDEO_W;}
+        if INPUT.byte& LEFT_KEY{VIDEO.word -= 1;}
+        if INPUT.byte&RIGHT_KEY{VIDEO.word += 1;}
+        if INPUT.byte& DOWN_KEY{VIDEO.word += VIDEO_W;}
 
       halt;
     }
