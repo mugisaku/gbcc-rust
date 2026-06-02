@@ -171,7 +171,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_global_var(sym.get_offset());
+          txt.push_io(sym.get_offset());
 
           EvalResult::Value(txt)
         }

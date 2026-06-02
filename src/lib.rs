@@ -34,10 +34,13 @@ fn
 get_word(off: usize)-> u64
 {unsafe{*(MEM.as_ptr().add(off) as *const u64)}}
 
+fn
+put_word(off: usize, v: u64)
+{unsafe{*(MEM.as_mut_ptr().add(off) as *mut u64) = v;}}
 
 
 
-const VIDEO_START: usize = 0;
+
 const  WIDTH: usize = 400;
 const HEIGHT: usize = 200;
 
@@ -71,17 +74,37 @@ get_pixel(x: u32, y: u32)-> u32
 
 #[wasm_bindgen]
 pub fn
-get_audio_freq()-> f64
+add_time(v: u32)
 {
-  440.0
+  let  now = get_word(16);
+
+//check(&format!("time: {}",now));
+
+  put_word(16,now+(v as u64));
 }
 
 
 #[wasm_bindgen]
 pub fn
-get_audio_volume()-> f64
+get_audio_freq()-> i32
 {
-  0.05
+  get_word(24) as i64 as i32
+}
+
+
+#[wasm_bindgen]
+pub fn
+get_audio_vol()-> u32
+{
+  get_word(32) as u32
+}
+
+
+#[wasm_bindgen]
+pub fn
+get_report()-> i32
+{
+  get_word(40) as i64 as i32
 }
 
 
@@ -140,10 +163,6 @@ unset_input_enter()
 pub fn
 process()
 {
-  let  b = get_byte(0);
-
-  check(&format!("{}",b));
-
   unsafe{MACHINE.run();}
 }
 

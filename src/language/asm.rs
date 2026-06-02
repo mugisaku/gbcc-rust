@@ -611,6 +611,15 @@ push_global_var(&mut self, off: usize)
 
 
 pub fn
+push_io(&mut self, off: usize)
+{
+  self.push_i64(off as i64);
+
+  self.is_deref = true;
+}
+
+
+pub fn
 push_fn(&mut self, off: usize)
 {
   self.push_i64(off as i64);
@@ -858,7 +867,7 @@ push_brnz(&mut self, s: &str)
 
 
 pub fn
-push_assign(&mut self, mut l: AsmEvalText, r: AsmEvalText, op: &str)
+push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
 {
     if !l.is_deref
     {
@@ -868,6 +877,12 @@ push_assign(&mut self, mut l: AsmEvalText, r: AsmEvalText, op: &str)
 
     if op == "="
     {
+        if r.is_deref()
+        {
+          r.push_load();
+        }
+
+
       l.push_text(r);
     }
 

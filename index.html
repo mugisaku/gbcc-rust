@@ -21,6 +21,10 @@ JavaScript部分は、キー入力状態を仮想機械が使う疑似メモリ�
   <textarea id="text" cols="30" rows="12">
 io INPUT at 0;
 io VIDEO at 8;
+io time  at 16;
+io audio_freq  at 24;
+io audio_vol   at 32;
+io report      at 40;
 
 const HEAP_START = 1024;
 const HEAP_SIZE  =  200;
@@ -44,12 +48,19 @@ const  DOWN_KEY = 0b1000;
 fn
 main()
 {
+  report = time;
+
+  audio_vol = 127;
+
     loop
     {
-        if INPUT.ptr.byte&   UP_KEY{VIDEO -= 3*VIDEO_W;}
-        if INPUT.ptr.byte& LEFT_KEY{VIDEO -= 3;}
-        if INPUT.ptr.byte&RIGHT_KEY{VIDEO += 3;}
-        if INPUT.ptr.byte& DOWN_KEY{VIDEO += 3*VIDEO_W;}
+        if time-report >= 1000
+        {
+          report = time;
+
+          audio_freq += 1;
+        }
+      
 
       halt;
     }
@@ -67,7 +78,7 @@ main()
         get_height,
         get_pixel,
         get_audio_freq,
-        get_audio_volume,
+        get_audio_vol,
         set_input_up,
         unset_input_up,
         set_input_left,
@@ -78,6 +89,8 @@ main()
         unset_input_down,
         set_input_enter,
         unset_input_enter,
+        add_time,
+        get_report,
         process,
         setup } from "./pkg/gblib.js";
 
@@ -93,19 +106,22 @@ main()
       let  g_actx;
       let  g_osc;
       let  g_gain;
+      const  g_millisec = 1000/20;
 
       function
       update_audio()
       {
           if(g_actx)
           {
-            g_osc.frequency.value = get_audio_freq();
-            g_gain.gain.value     = get_audio_volume();
+            const  max_vol = 0.2;
+
+            g_osc.frequency.value = 440.0*Math.pow(2,get_audio_freq()/12);
+            g_gain.gain.value     = max_vol/256*Math.min(256,get_audio_vol());
           }
       }
 
       function
-      switch_audio()
+      start_audio()
       {
           if(!g_actx)
           {
@@ -114,22 +130,11 @@ main()
             g_osc = new OscillatorNode(g_actx,{type: "sine", frequency: 440});
 
             g_gain = g_actx.createGain();
-            g_gain.gain.value = 0.05;
+            g_gain.gain.value = 0.0;
 
             g_osc.connect(g_gain).connect(g_actx.destination);
 
             g_osc.start();
-          }
-
-        else
-          if(g_actx.state === "running")
-          {
-            g_actx.suspend();
-          }
-
-        else
-          {
-            g_actx.resume();
           }
       }
 
@@ -142,6 +147,8 @@ main()
             return;
           }
 
+console.log(get_report());
+        add_time(g_millisec);
 
         process();
 
@@ -172,6 +179,8 @@ main()
           if(g_ready)
           {
             g_asmtext.value = g_ready;
+
+            start_audio();
           }
       }
 
@@ -192,7 +201,6 @@ main()
         g_asmtext = document.getElementById("asm_text");
 
         document.getElementById("run_btn").addEventListener("click",run);
-//        document.getElementById("audio_btn").addEventListener("click",switch_audio);
 
         document.addEventListener("keydown",function(evt){
             switch(evt.key)
@@ -217,7 +225,7 @@ main()
         });
 
 
-        setInterval(refresh,1000/20);
+        setInterval(refresh,g_millisec);
       });
     </script>
   </body>
