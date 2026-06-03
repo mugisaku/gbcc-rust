@@ -20,7 +20,8 @@ pub fn  check(s: &str);
 
 
 static mut MEM: Vec<u8> = Vec::new();
-static mut MACHINE: Machine = Machine::new();
+static mut A_MACHINE: Machine = Machine::new();
+static mut B_MACHINE: Machine = Machine::new();
 
 fn
 get_byte(off: usize)-> u8
@@ -163,7 +164,10 @@ unset_input_enter()
 pub fn
 process()
 {
-  unsafe{MACHINE.run();}
+  unsafe{
+    A_MACHINE.run();
+    B_MACHINE.run();
+  }
 }
 
 
@@ -181,9 +185,11 @@ setup(s: &str)-> Option<String>
 
               MEM = exec.generate_memory();
 
-              MACHINE.connect_memory(MEM.as_mut_ptr(),MEM.len());
+              A_MACHINE.connect_memory(MEM.as_mut_ptr(),MEM.len());
+              B_MACHINE.connect_memory(MEM.as_mut_ptr(),MEM.len());
 
-              MACHINE.reset(128,&exec,"main");
+              A_MACHINE.reset(0,128,&exec,"a_main",0);
+              B_MACHINE.reset(1,128,&exec,"b_main",256);
 
 
               let  mut buf = String::new();

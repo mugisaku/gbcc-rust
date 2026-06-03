@@ -14,6 +14,8 @@ Machine
   memory_ptr: *mut u8,
   memory_size: usize,
 
+  id: usize,
+
   frequency: usize,
 
   pc: usize,
@@ -25,7 +27,7 @@ Machine
 
   call_depth: usize,
 
-  time_counter: usize,
+  verbose: bool,
 
 }
 
@@ -42,6 +44,8 @@ new()-> Self
     memory_ptr: std::ptr::null_mut(),
     memory_size: 0,
 
+    id: 0,
+
     frequency: 0,
 
     pc: 0,
@@ -53,8 +57,16 @@ new()-> Self
 
     call_depth: 0,
 
-    time_counter: 0
+    verbose: false,
+
   }
+}
+
+
+pub fn
+set_verbose(&mut self)
+{
+  self.verbose = true;
 }
 
 
@@ -95,14 +107,15 @@ connect_memory(&mut self, ptr: *mut u8, sz: usize)
 
 
 pub fn
-reset(&mut self, freq: usize, exec: &Exec, entry_fn_name: &str)
+reset(&mut self, id: usize, freq: usize, exec: &Exec, entry_fn_name: &str, offset: usize)
 {
   self.frequency = freq;
 
+  self.id = id;
   self.pc = exec.find_entry_point(entry_fn_name).unwrap();
-  self.fp = exec.get_stack_start();
-  self.sp = exec.get_stack_start();
-  self.cp = exec.get_callstack_start();
+  self.fp = exec.get_stack_start()+offset;
+  self.sp = exec.get_stack_start()+offset;
+  self.cp = exec.get_callstack_start()+offset;
   self.status = 0;
   self.call_depth = 0;
 }
@@ -348,7 +361,11 @@ branch_if_non_zero(&mut self, offset: isize)
 pub fn
 step(&mut self)
 {
-//  println!("PC: {}, FP: {}, SP: {}, CP: {}",self.pc,self.fp,self.sp,self.cp);
+    if self.verbose
+    {
+      println!("PC: {}, FP: {}, SP: {}, CP: {}",self.pc,self.fp,self.sp,self.cp);
+    }
+
 
   let  b = self.get_next_byte();
 
@@ -358,6 +375,10 @@ step(&mut self)
     {
   (op) if op == Opcode::Nop as u8=>{}
 
+  (op) if op == Opcode::Pushid as u8=>
+    {
+      self.push(self.id as u64);
+    }
   (op) if op == Opcode::Pushpc as u8=>
     {
       self.push(self.pc as u64);

@@ -94,9 +94,15 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Sc
 
     for a in args
     {
-      let  a_res = evaluate(a,tbl,scp_opt);
+      let  mut a_txt = evaluate(a,tbl,scp_opt).to_text();
 
-      buf.push(a_res.to_text());
+        if a_txt.is_deref()
+        {
+          a_txt.push_load();
+        }
+
+
+      buf.push(a_txt);
     }
 
 

@@ -9,6 +9,7 @@ Opcode
 {
   Nop,
 
+  Pushid,
   Pushpc,
   Pushfp,
   Pushsp,
@@ -69,6 +70,7 @@ to_str(&self)-> &'static str
     {
   Self::Nop=>{"nop"}
 
+  Self::Pushid=>{"pushid"}
   Self::Pushpc=>{"pushpc"}
   Self::Pushfp=>{"pushfp"}
   Self::Pushsp=>{"pushsp"}
@@ -161,6 +163,7 @@ from(b: u8)-> Self
     match b
     {
   (op) if op == Self::Nop as u8=>{Self::Nop}
+  (op) if op == Self::Pushid as u8=>{Self::Pushid}
   (op) if op == Self::Pushpc as u8=>{Self::Pushpc}
   (op) if op == Self::Pushfp as u8=>{Self::Pushfp}
   (op) if op == Self::Pushsp as u8=>{Self::Pushsp}
@@ -919,6 +922,17 @@ to_bytes(&self)-> Vec<u8>
     for (ln,_) in &self.lines
     {
       ln.write_to(&mut bytes);
+    }
+
+
+    if let Some(last) = bytes.last()
+    {
+      const  ret: u8 = (Opcode::Ret as u8);
+
+        if *last != ret
+        {
+          bytes.push(ret);
+        }
     }
 
 

@@ -35,11 +35,19 @@ compile_and_run(s: &str)
 
           m.connect_memory(mem.as_mut_ptr(),mem.len());
 
-          m.reset(1024,&exec,"main");
+          m.reset(0,256,&exec,"main",0);
+
+m.set_verbose();
 
           println!("machine runs");
 
-          m.keep_run();
+            loop{
+m.run();
+
+//let  n = unsafe{*(mem.as_ptr().add(16) as *const u64)};
+
+//println!("n = {}",n);
+}
 
           println!("machine is finished");
 
@@ -97,6 +105,7 @@ r#"
 
 io INPUT at 0;
 io VIDEO at 8;
+io report at 16;
 
 const HEAP_START = 1024;
 const HEAP_SIZE  =  200;
@@ -118,14 +127,22 @@ const  DOWN_KEY = 0b1000;
 
 
 fn
+inc(x)
+{
+  return x+1;
+}
+
+
+fn
 main()
 {
+  var  n = 0;
+
     loop
     {
-        if INPUT.byte&   UP_KEY{VIDEO.word -= VIDEO_W;}
-        if INPUT.byte& LEFT_KEY{VIDEO.word -= 1;}
-        if INPUT.byte&RIGHT_KEY{VIDEO.word += 1;}
-        if INPUT.byte& DOWN_KEY{VIDEO.word += VIDEO_W;}
+      n = inc(n);
+
+      report = n;
 
       halt;
     }

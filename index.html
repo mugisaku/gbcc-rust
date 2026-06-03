@@ -5,18 +5,12 @@
     <title>hello-wasm gamebaby example</title>
   </head>
   <body>
-自作のプログラミング言語とコンパイラーと仮想機械を使って、
-ゲーム機のようなものを再現しています。
-runを押せば、ソースコードをコンパイルして実行します。
-サンプルでは、インプットレジスタの値を見て、押された方向キーによって、
-ビデオレジスタの値を書き換え、画面をスクロールしています。
-JavaScript部分は、キー入力状態を仮想機械が使う疑似メモリー空間の
-インプットレジスタに相当するアドレスに書き込むことと、
-一定時間毎に仮想機械を動作させた後、ビデオレジスタに相当するアドレスから値を読み出し、
-その値が指す疑似メモリー空間のバイト列を画像として表示しているだけです。
+自作のプログラミング言語とコンパイラーと仮想機械を使って、<br>
+ゲーム機のようなものを再現しています。<br>
+ソースコードは<a href="https://github.com/mugisaku/gbcc-rust">https://github.com/mugisaku/gbcc-rust</a>
   <hr>
-  <button id="run_btn">run</button><p>
-  <!--button id="audio_btn">audio</button--><p>
+  <button id="run_btn">run</button>
+  <button id="audio_btn">audio on/off</button><p>
   <canvas id="display"></canvas>
   <textarea id="text" cols="30" rows="12">
 io INPUT at 0;
@@ -29,13 +23,15 @@ io report      at 40;
 const HEAP_START = 1024;
 const HEAP_SIZE  =  200;
 
-const DATA_START      = (HEAP_START+HEAP_SIZE);
-const TEXT_START      = (HEAP_START+HEAP_SIZE)+(1024*1);
-const STACK_START     = (HEAP_START+HEAP_SIZE)+(1024*2);
-const CALLSTACK_START = (HEAP_START+HEAP_SIZE)+(1024*3);
+const COMMON_SIZE = 1024*4;
 
-const     STACK_SIZE  = 1024;
-const CALLSTACK_SIZE  = 1024;
+const DATA_START      = (HEAP_START+HEAP_SIZE);
+const TEXT_START      = (HEAP_START+HEAP_SIZE)+(COMMON_SIZE*1);
+const STACK_START     = (HEAP_START+HEAP_SIZE)+(COMMON_SIZE*2);
+const CALLSTACK_START = (HEAP_START+HEAP_SIZE)+(COMMON_SIZE*3);
+
+const     STACK_SIZE  = COMMON_SIZE;
+const CALLSTACK_SIZE  = COMMON_SIZE;
 
 const VIDEO_W = 400;
 
@@ -46,19 +42,53 @@ const  DOWN_KEY = 0b1000;
 
 
 fn
-main()
+sleep(tm)
 {
-  report = time;
-
-  audio_vol = 127;
+  var  base = time;
 
     loop
     {
-        if time-report >= 1000
+        if (time-base) >= tm
         {
-          report = time;
+          break;
+        }
 
-          audio_freq += 1;
+
+      halt;
+    }
+}
+
+
+fn
+b_main()
+{
+    loop
+    {
+      audio_freq = 24;
+
+      sleep(200);
+
+      audio_freq = 26;
+
+      sleep(200);
+    }
+}
+
+
+fn
+a_main()
+{
+  var  prev = time;
+
+  audio_vol = 32;
+
+    loop
+    {
+        if time-prev >= 1000
+        {
+          prev = time;
+
+//          audio_freq += 1;
         }
       
 
@@ -90,7 +120,7 @@ main()
         set_input_enter,
         unset_input_enter,
         add_time,
-        get_report,
+//        get_report,
         process,
         setup } from "./pkg/gblib.js";
 
@@ -113,10 +143,28 @@ main()
       {
           if(g_actx)
           {
-            const  max_vol = 0.2;
+            const   max_vol = 0.1;
+            const    freq_n = Math.min(12*6,get_audio_freq());
 
-            g_osc.frequency.value = 440.0*Math.pow(2,get_audio_freq()/12);
+            g_osc.frequency.value = (440.0/4)*Math.pow(2,freq_n/12);
             g_gain.gain.value     = max_vol/256*Math.min(256,get_audio_vol());
+          }
+      }
+
+      function
+      switch_audio()
+      {
+          if(g_actx)
+          {
+              if(g_actx.state === "running")
+              {
+                g_actx.suspend();
+              }
+
+            else
+              {
+                g_actx.resume();
+              }
           }
       }
 
@@ -147,7 +195,7 @@ main()
             return;
           }
 
-console.log(get_report());
+//console.log(get_report());
         add_time(g_millisec);
 
         process();
@@ -201,6 +249,7 @@ console.log(get_report());
         g_asmtext = document.getElementById("asm_text");
 
         document.getElementById("run_btn").addEventListener("click",run);
+        document.getElementById("audio_btn").addEventListener("click",switch_audio);
 
         document.addEventListener("keydown",function(evt){
             switch(evt.key)
