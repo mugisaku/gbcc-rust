@@ -194,7 +194,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
     }
 
 
-  EvalResult::Err
+  panic!("evaluate_identifier error: {} not found",s);
 }
 
 

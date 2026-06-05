@@ -99,23 +99,23 @@ put_byte_unchecked(&self, offset: usize, byte: u8)
 
 
 pub fn
-connect_memory(&mut self, ptr: *mut u8, sz: usize)
+reset(&mut self, id: usize, freq: usize, exec: &mut Exec, entry_fn_name: &str, offset: usize)
 {
-  self.memory_ptr = ptr;
-  self.memory_size = sz;
-}
+  let  mem = exec.get_memory_mut();
 
+  self.memory_ptr  = mem.as_mut_ptr();
+  self.memory_size = mem.len();
 
-pub fn
-reset(&mut self, id: usize, freq: usize, exec: &Exec, entry_fn_name: &str, offset: usize)
-{
   self.frequency = freq;
+
+  let      stack_start = exec.find_const("STACK_START").unwrap() as usize;
+  let  callstack_start = exec.find_const("CALLSTACK_START").unwrap() as usize;
 
   self.id = id;
   self.pc = exec.find_entry_point(entry_fn_name).unwrap();
-  self.fp = exec.get_stack_start()+offset;
-  self.sp = exec.get_stack_start()+offset;
-  self.cp = exec.get_callstack_start()+offset;
+  self.fp = stack_start+offset;
+  self.sp = stack_start+offset;
+  self.cp = callstack_start+offset;
   self.status = 0;
   self.call_depth = 0;
 }

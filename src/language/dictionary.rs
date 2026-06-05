@@ -60,6 +60,7 @@ assign: expression & assign_operator & expression;
 
 
 statement: ";"
+  | halt
   | break
   | continue
   | if
@@ -72,10 +73,10 @@ statement: ";"
   | print
   | assign
   | expression
-  | 'halt
   ;
 
 
+halt    : 'halt;
 break   : 'break;
 continue: 'continue;
 return  : 'return -> [expression];
@@ -99,7 +100,7 @@ fn: 'fn -> .Identifier & parameter_list & block;
 
 initialize: "=" & expression;
 
-io   :   'io    -> .Identifier & 'at & expression;
+io   :   'io    -> .Identifier;
 var  :   'var   -> .Identifier & initialize;
 const:   'const -> .Identifier & initialize;
 

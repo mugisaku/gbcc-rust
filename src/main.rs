@@ -21,37 +21,26 @@ compile_and_run(s: &str)
     {
         if let Ok(mut symtbl) = SymbolTable::build(root)
         {
-          let  exec = symtbl.generate_exec();
+          let  mut exec = symtbl.generate_exec(1024*1024*8);
 
           exec.print_text();
-
-          let  mut mem = exec.generate_memory();
-
 //          symtbl.print();
 
           println!("");
 
           let  mut m = Machine::new();
 
-          m.connect_memory(mem.as_mut_ptr(),mem.len());
-
-          m.reset(0,256,&exec,"main",0);
+          m.reset(0,256,&mut exec,"main",0);
 
 m.set_verbose();
 
           println!("machine runs");
 
-            loop{
-m.run();
-
-//let  n = unsafe{*(mem.as_ptr().add(16) as *const u64)};
-
-//println!("n = {}",n);
-}
+          m.keep_run();
 
           println!("machine is finished");
 
-          exec.print_memory(&mem);
+          exec.print_memory();
         }
 
       else
@@ -103,52 +92,15 @@ main()
   let  codes =
 r#"
 
-io INPUT at 0;
-io VIDEO at 8;
-io report at 16;
+io report;
 
-const HEAP_START = 1024;
-const HEAP_SIZE  =  200;
-
-const DATA_START      = (HEAP_START+HEAP_SIZE);
-const TEXT_START      = (HEAP_START+HEAP_SIZE)+(1024*1);
-const STACK_START     = (HEAP_START+HEAP_SIZE)+(1024*2);
-const CALLSTACK_START = (HEAP_START+HEAP_SIZE)+(1024*3);
-
-const     STACK_SIZE  = 1024;
-const CALLSTACK_SIZE  = 1024;
-
-const VIDEO_W = 400;
-
-const    UP_KEY = 0b0001;
-const  LEFT_KEY = 0b0010;
-const RIGHT_KEY = 0b0100;
-const  DOWN_KEY = 0b1000;
-
-
-fn
-inc(x)
-{
-  return x+1;
-}
+var  test = 0;
 
 
 fn
 main()
 {
-  var  n = 0;
-
-    loop
-    {
-      n = inc(n);
-
-      report = n;
-
-      halt;
-    }
-
-
-  return;
+  test = 123;
 }
 
 

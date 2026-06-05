@@ -13,12 +13,21 @@
   <button id="audio_btn">audio on/off</button><p>
   <canvas id="display"></canvas>
   <textarea id="text" cols="30" rows="12">
-io INPUT at 0;
-io VIDEO at 8;
+io input at 0;
+io video at 8;
 io time  at 16;
-io audio_freq  at 24;
-io audio_vol   at 32;
-io report      at 40;
+
+io sin_freq  at 24;
+io sin_vol   at 32;
+io squ_freq  at 40;
+io squ_vol   at 48;
+io saw_freq  at 56;
+io saw_vol   at 64;
+io tri_freq  at 72;
+io tri_vol   at 80;
+io noi_vol   at 88;
+
+io report at 256;
 
 const HEAP_START = 1024;
 const HEAP_SIZE  =  200;
@@ -34,6 +43,7 @@ const     STACK_SIZE  = COMMON_SIZE;
 const CALLSTACK_SIZE  = COMMON_SIZE;
 
 const VIDEO_W = 400;
+const VIDEO_H = 200;
 
 const    UP_KEY = 0b0001;
 const  LEFT_KEY = 0b0010;
@@ -78,25 +88,16 @@ b_main()
 fn
 a_main()
 {
-  var  prev = time;
-
-  audio_vol = 32;
-
     loop
     {
-        if time-prev >= 1000
-        {
-          prev = time;
+      audio_freq = 24;
 
-//          audio_freq += 1;
-        }
-      
+      sleep(200);
 
-      halt;
+      audio_freq = 26;
+
+      sleep(200);
     }
-
-
-  return;
 }
   </textarea>
   <textarea id="asm_text" cols="16" rows="12">
@@ -104,23 +105,12 @@ a_main()
     <script>function  check(s){console.log(s);}</script>
     <script type="module">
       import init, {
-        get_width,
-        get_height,
-        get_pixel,
-        get_audio_freq,
-        get_audio_vol,
-        set_input_up,
-        unset_input_up,
-        set_input_left,
-        unset_input_left,
-        set_input_right,
-        unset_input_right,
-        set_input_down,
-        unset_input_down,
-        set_input_enter,
-        unset_input_enter,
-        add_time,
-//        get_report,
+        get_byte,
+        put_byte,
+        get_word,
+        put_word,
+        get_io,
+        get_const,
         process,
         setup } from "./pkg/gblib.js";
 
@@ -134,20 +124,67 @@ a_main()
       let  g_imgdat;
 
       let  g_actx;
-      let  g_osc;
-      let  g_gain;
+      let  g_sin_osc;
+      let  g_squ_osc;
+      let  g_saw_osc;
+      let  g_tri_osc;
+      let  g_noi;
+      let  g_noi_buf;
+      let  g_noi_buf_size;
+      let  g_sin_gain;
+      let  g_squ_gain;
+      let  g_saw_gain;
+      let  g_tri_gain;
+      let  g_noi_gain;
+
+      let  g_key_state = 0;
+
+      const  g_volume_max = 0.1;
+
       const  g_millisec = 1000/20;
+
+      let  input_addr;
+      let  video_addr;
+      let   time_addr;
+
+      let  sin_freq_addr;
+      let  sin_vol_addr ;
+      let  squ_freq_addr;
+      let  squ_vol_addr ;
+      let  saw_freq_addr;
+      let  saw_vol_addr ;
+      let  tri_freq_addr;
+      let  tri_vol_addr ;
+
+      let  report_addr;
+
+      function
+      get_freq(addr)
+      {
+        return (440.0/4)*Math.pow(2,Math.min(12*6,get_word(addr))/12)
+      }
+
+      function
+      get_vol(addr)
+      {
+        return g_volume_max/256*Math.min(256,get_word(addr));
+      }
 
       function
       update_audio()
       {
           if(g_actx)
           {
-            const   max_vol = 0.1;
-            const    freq_n = Math.min(12*6,get_audio_freq());
+            g_sin_osc.frequency.value = get_freq(g_sin_freq_addr);
+            g_squ_osc.frequency.value = get_freq(g_squ_freq_addr);
+            g_saw_osc.frequency.value = get_freq(g_saw_freq_addr);
+            g_tri_osc.frequency.value = get_freq(g_tri_freq_addr);
 
-            g_osc.frequency.value = (440.0/4)*Math.pow(2,freq_n/12);
-            g_gain.gain.value     = max_vol/256*Math.min(256,get_audio_vol());
+            g_sin_gain.gain.value = get_vol(g_sin_vol_addr);
+            g_squ_gain.gain.value = get_vol(g_squ_vol_addr);
+            g_saw_gain.gain.value = get_vol(g_saw_vol_addr);
+            g_tri_gain.gain.value = get_vol(g_tri_vol_addr);
+            g_noi_gain.gain.value = get_vol(g_noi_vol_addr);
           }
       }
 
@@ -169,20 +206,53 @@ a_main()
       }
 
       function
+      fill_noise()
+      {
+        const  data = g_noi_buf.getChannelData(0);
+
+          for(let  i = 0;  i < g_noi_buf_size;  ++i)
+          {
+            data[i] = Math.random()*2-1;
+          }
+      }
+
+      function
       start_audio()
       {
           if(!g_actx)
           {
             g_actx = new AudioContext();
 
-            g_osc = new OscillatorNode(g_actx,{type: "sine", frequency: 440});
+            g_noi_buf_size = g_actx.sampleRate*1024;
 
-            g_gain = g_actx.createGain();
-            g_gain.gain.value = 0.0;
+            g_sin_osc = new OscillatorNode(g_actx,{type:     "sine", frequency: 440});
+            g_squ_osc = new OscillatorNode(g_actx,{type:   "square", frequency: 440});
+            g_saw_osc = new OscillatorNode(g_actx,{type: "sawtooth", frequency: 440});
+            g_tri_osc = new OscillatorNode(g_actx,{type: "triangle", frequency: 440});
 
-            g_osc.connect(g_gain).connect(g_actx.destination);
+            g_noi_buf = new AudioBuffer({length: g_noi_buf_size, sampleRate: g_actx.sampleRate});
 
-            g_osc.start();
+            fill_noise();
+
+            g_noi = new AudioBufferSourceNode(g_actx,{buffer: g_noi_buf});
+
+            g_sin_gain = g_actx.createGain();
+            g_squ_gain = g_actx.createGain();
+            g_saw_gain = g_actx.createGain();
+            g_tri_gain = g_actx.createGain();
+            g_noi_gain = g_actx.createGain();
+
+            g_sin_osc.connect(g_sin_gain).connect(g_actx.destination);
+            g_squ_osc.connect(g_squ_gain).connect(g_actx.destination);
+            g_saw_osc.connect(g_saw_gain).connect(g_actx.destination);
+            g_tri_osc.connect(g_tri_gain).connect(g_actx.destination);
+            g_noi.connect(g_noi_gain).connect(g_actx.destination);
+
+            g_sin_osc.start();
+            g_squ_osc.start();
+            g_saw_osc.start();
+            g_tri_osc.start();
+            g_noi.start();
           }
       }
 
@@ -196,21 +266,17 @@ a_main()
           }
 
 //console.log(get_report());
-        add_time(g_millisec);
+        put_byte(g_input_addr,g_key_state);
+        put_word(g_time_addr,g_millisec);
 
         process();
 
-          for(let  y = 0|0;  y < g_imgdat.height;  ++y){
-          for(let  x = 0|0;  x < g_imgdat.width;   ++x){
-            let  i = ((4*g_imgdat.width)*y)+(4*x);
+        const  base = get_word(g_video_addr);
 
-            const  pix = get_pixel(x,y);
-
-            g_imgdat.data[i+0] = (pix>>24)&0xFF;
-            g_imgdat.data[i+1] = (pix>>16)&0xFF;
-            g_imgdat.data[i+2] = (pix>> 8)&0xFF;
-            g_imgdat.data[i+3] = 255;
-          }}
+          for(let  i = 0|0;  i < (4*g_imgdat.width*g_imgdat.height);  ++i)
+          {
+            g_imgdat.data[i] = get_byte(base+i);
+          }
 
 
         g_cvctx.putImageData(g_imgdat,0,0);
@@ -228,6 +294,29 @@ a_main()
           {
             g_asmtext.value = g_ready;
 
+            g_input_addr = get_io("input");
+            g_video_addr = get_io("video");
+            g_time_addr  = get_io("time");
+            g_sin_freq_addr = get_io("sin_freq");
+            g_sin_vol_addr  = get_io("sin_vol");
+            g_squ_freq_addr = get_io("squ_freq");
+            g_squ_vol_addr  = get_io("squ_vol");
+            g_saw_freq_addr = get_io("saw_freq");
+            g_saw_vol_addr  = get_io("saw_vol");
+            g_tri_freq_addr = get_io("tri_freq");
+            g_tri_vol_addr  = get_io("tri_vol");
+            g_noi_vol_addr  = get_io("noi_vol");
+            g_report_addr   = get_io("report");
+
+            g_up_key    = get_const("UP_KEY");
+            g_left_key  = get_const("LEFT_KEY");
+            g_right_key = get_const("RIGHT_KEY");
+            g_down_key  = get_const("DOWN_KEY");
+
+            g_cv.width  = get_const("VIDEO_W");
+            g_cv.height = get_const("VIDEO_H");
+            g_imgdat = g_cvctx.createImageData(g_cv.width,g_cv.height);
+
             start_audio();
           }
       }
@@ -235,15 +324,7 @@ a_main()
       init().then(() => {
         g_cv = document.getElementById("display");
 
-        g_cv.width  = get_width();
-        g_cv.height = get_height();
-
         g_cvctx = g_cv.getContext("2d");
-
-        g_imgdat = g_cvctx.createImageData(g_cv.width,g_cv.height);
-
-        g_cvctx.fillStyle = "black";
-        g_cvctx.fillRect(0,0,g_cv.width,g_cv.height);
 
         g_text = document.getElementById("text");
         g_asmtext = document.getElementById("asm_text");
@@ -254,22 +335,22 @@ a_main()
         document.addEventListener("keydown",function(evt){
             switch(evt.key)
             {
-          case    "ArrowUp":    set_input_up();break;
-          case  "ArrowLeft":  set_input_left();break;
-          case "ArrowRight": set_input_right();break;
-          case  "ArrowDown":  set_input_down();break;
-          case      "Enter": set_input_enter();break;
+          case    "ArrowUp": g_key_state |=    g_up_key;break;
+          case  "ArrowLeft": g_key_state |=  g_left_key;break;
+          case "ArrowRight": g_key_state |= g_right_key;break;
+          case  "ArrowDown": g_key_state |=  g_down_key;break;
+//          case      "Enter": set_input_enter();break;
             }
         });
 
         document.addEventListener("keyup",function(evt){
             switch(evt.key)
             {
-          case    "ArrowUp":    unset_input_up();break;
-          case  "ArrowLeft":  unset_input_left();break;
-          case "ArrowRight": unset_input_right();break;
-          case  "ArrowDown":  unset_input_down();break;
-          case      "Enter": unset_input_enter();break;
+          case    "ArrowUp": g_key_state &=    ~g_up_key;break;
+          case  "ArrowLeft": g_key_state &=  ~g_left_key;break;
+          case "ArrowRight": g_key_state &= ~g_right_key;break;
+          case  "ArrowDown": g_key_state &=  ~g_down_key;break;
+//          case      "Enter": unset_input_enter();break;
             }
         });
 

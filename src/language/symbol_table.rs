@@ -97,14 +97,12 @@ build(src: Source, symtbl: &SymbolTable)-> Self
         deps_child_list,
       }
     }
-  DeclKind::Io(e)=>
+  DeclKind::Io=>
     {
-      let  res = evaluate_const(&e,symtbl,None);
-
       Self{
         name,
         kind: SymbolKind::Io,
-        offset: res.unwrap() as usize,
+        offset: 0,
         deps_parent_list,
         deps_child_list,
       }
@@ -346,9 +344,31 @@ build(decls: Vec<Decl>)-> Result<Self,()>
 
 
 fn
-generate_data_bytes(&mut self, start: usize)-> Vec<u8>
+process_io_offset(&mut self, start: usize)-> usize
 {
-  let  mut bytes = Vec::<u8>::new();
+  let  mut pos = start;
+
+    for sym in &mut self.symbols
+    {
+        match &sym.kind
+        {
+      SymbolKind::Io=>
+        {
+          sym.offset = get_word_aligned(pos)            ;
+                                        pos += WORD_SIZE;
+        }
+      _=>{}
+        }
+    }
+
+
+  get_word_aligned(pos)
+}
+
+
+fn
+process_data_offset(&mut self, start: usize)-> usize
+{
   let  mut pos = start;
 
     for sym in &mut self.symbols
@@ -366,9 +386,7 @@ generate_data_bytes(&mut self, start: usize)-> Vec<u8>
     }
 
 
-  bytes.resize(pos-start,0);
-
-  bytes
+  get_word_aligned(pos)
 }
 
 
@@ -388,29 +406,54 @@ find_text_offset(ls: &Vec<(String,Vec<u8>,usize)>, name: &str)-> usize
 }
 
 
+fn
+get_const_or(&mut self, s: &str, def: usize)-> usize
+{
+    if let Some(v) = self.find_const(s)
+    {
+      v as usize
+    }
+
+  else
+    {
+      self.add_const(s,def as i64);
+
+      def
+    }
+}
+
+
 pub fn
-generate_exec(&mut self)-> Exec
+generate_exec(&mut self, memsz: usize)-> Exec
 {
   let  mut exec = Exec::new();
 
-  exec.data_start      = self.find_const("DATA_START").unwrap() as usize;
-  exec.text_start      = self.find_const("TEXT_START").unwrap() as usize;
-  exec.heap_start      = self.find_const("HEAP_START").unwrap() as usize;
-  exec.heap_size       = self.find_const("HEAP_SIZE").unwrap() as usize;
-  exec.stack_start     = self.find_const("STACK_START").unwrap() as usize;
-  exec.stack_size      = self.find_const("STACK_SIZE").unwrap() as usize;
-  exec.callstack_start = self.find_const("CALLSTACK_START").unwrap() as usize;
-  exec.callstack_size  = self.find_const("CALLSTACK_SIZE").unwrap() as usize;
+  exec.memory.resize(memsz,0);
 
-  exec.data_start      = get_word_aligned(exec.data_start);
-  exec.text_start      = get_word_aligned(exec.text_start);
-  exec.heap_start      = get_word_aligned(exec.heap_start);
-  exec.stack_start     = get_word_aligned(exec.stack_start);
-  exec.callstack_start = get_word_aligned(exec.callstack_start);
+  let  stack_start = self.process_io_offset(256);
 
-  exec.data_bytes = self.generate_data_bytes(exec.data_start);
+  self.add_const("STACK_START",stack_start as i64);
 
-  let  mut pos = exec.text_start;
+  let  stack_size = self.get_const_or("STACK_SIZE",1024*1024);
+
+  let  callstack_start = get_word_aligned(stack_start+stack_size);
+
+  self.add_const("CALLSTACK_START",callstack_start as i64);
+
+  let  callstack_size = self.get_const_or("CALLSTACK_SIZE",1024*1024);
+
+  let  heap_start = get_word_aligned(callstack_start+callstack_size);
+
+  self.add_const("HEAP_START",heap_start as i64);
+
+  let  heap_size = self.get_const_or("HEAP_SIZE",1024*1024*4);
+
+  let  data_start = get_word_aligned(heap_start+heap_size);
+
+
+  let  text_start = self.process_data_offset(data_start);
+
+  let  mut pos = text_start;
 
     for sym in &self.symbols
     {
@@ -426,17 +469,14 @@ generate_exec(&mut self)-> Exec
 
 
           let  mut text = assemble(fd,self);
-println!("{}{{",&sym.name);
-text.print();
-println!("}}");
 
           text.finalize();
 
           let  bytes = text.to_bytes();
 
-            for b in &bytes
+            for i in 0..bytes.len()
             {
-              exec.text_bytes.push(*b);
+              exec.memory[pos+i] = bytes[i];
             }
 
 
@@ -446,11 +486,15 @@ println!("}}");
 
             for i in 0..pos_bytes.len()
             {
-              exec.data_bytes[(sym.offset-exec.data_start)+i] = pos_bytes[i];
+              exec.memory[sym.offset+i] = pos_bytes[i];
             }
 
 
           pos += bytes.len();
+        }
+      SymbolKind::Const(v)=>
+        {
+          exec.mini_symbols.push(MiniSymbol{offset: 0, name: sym.name.clone(), kind: MiniSymbolKind::Const(*v)});
         }
       SymbolKind::GlobalVar(res)=>
         {
@@ -458,7 +502,7 @@ println!("}}");
 
             for i in 0..res_bytes.len()
             {
-              exec.data_bytes[(sym.offset-exec.data_start)+i] = res_bytes[i];
+              exec.memory[sym.offset+i] = res_bytes[i];
             }
 
 
@@ -474,24 +518,6 @@ println!("}}");
 
 
   exec
-}
-
-
-
-
-pub fn
-find_symbol_index(&self, name: &str)-> Option<usize>
-{
-    for i in 0..self.symbols.len()
-    {
-        if &self.symbols[i].name == name
-        {
-          return Some(i);
-        }
-    }
-
-
-  None
 }
 
 
@@ -544,6 +570,22 @@ find_const(&self, name: &str)-> Option<i64>
 
 
 pub fn
+add_const(&mut self, name: &str, v: i64)
+{
+  let  sym = Symbol{
+    name: name.to_string(),
+    kind: SymbolKind::Const(v),
+    offset: 0,
+    deps_parent_list: Vec::new(),
+    deps_child_list: Vec::new(),
+  };
+
+
+  self.symbols.push(sym);
+}
+
+
+pub fn
 print(&self)
 {
   println!("}}\nglobal symbols{{");
@@ -569,7 +611,7 @@ print(&self)
 pub enum
 MiniSymbolKind
 {
-  Data, Text, Io,
+  Data, Text, Const(i64), Io,
 
 }
 
@@ -608,20 +650,7 @@ Exec
 
   texts: Vec<(String,AsmText)>,
 
-  data_start: usize,
-  data_bytes: Vec<u8>,
-
-  text_start: usize,
-  text_bytes: Vec<u8>,
-
-  heap_start: usize,
-  heap_size: usize,
-
-  stack_start: usize,
-  stack_size: usize,
-
-  callstack_start: usize,
-  callstack_size: usize,
+  memory: Vec<u8>,
 
 }
 
@@ -637,16 +666,7 @@ new()-> Self
   Self{
     mini_symbols: Vec::new(),
     texts: Vec::new(),
-    data_start: 0,
-    data_bytes: Vec::new(),
-    text_start: 0,
-    text_bytes: Vec::new(),
-    heap_start: 0,
-    heap_size: 0,
-    stack_start: 0,
-    stack_size: 0,
-    callstack_start: 0,
-    callstack_size: 0,
+    memory: Vec::new(),
   }
 }
 
@@ -659,131 +679,54 @@ get_mini_symbols(&self)-> &Vec<MiniSymbol>
 
 
 pub fn
-get_data_start(&self)-> usize
+get_memory(&self)-> &Vec<u8>
 {
-  self.data_start
+  &self.memory
 }
 
 
 pub fn
-get_data_bytes(&self)-> &Vec<u8>
+get_memory_mut(&mut self)-> &mut Vec<u8>
 {
-  &self.data_bytes
+  &mut self.memory
 }
 
 
 pub fn
-get_text_start(&self)-> usize
+find_const(&self, name: &str)-> Option<i64>
 {
-  self.text_start
-}
-
-
-pub fn
-get_text_bytes(&self)-> &Vec<u8>
-{
-  &self.text_bytes
-}
-
-
-pub fn
-get_heap_start(&self)-> usize
-{
-  self.heap_start
-}
-
-
-pub fn
-get_heap_size(&self)-> usize
-{
-  self.heap_size
-}
-
-
-pub fn
-get_stack_start(&self)-> usize
-{
-  self.stack_start
-}
-
-
-pub fn
-get_stack_size(&self)-> usize
-{
-  self.stack_size
-}
-
-
-pub fn
-get_callstack_start(&self)-> usize
-{
-  self.callstack_start
-}
-
-
-pub fn
-get_callstack_size(&self)-> usize
-{
-  self.callstack_size
-}
-
-
-pub fn
-get_memory_size(&self)-> usize
-{
-  let  mut sz = 0usize;
-
-  sz = std::cmp::max(sz,self.data_start+self.data_bytes.len());
-  sz = std::cmp::max(sz,self.text_start+self.text_bytes.len());
-  sz = std::cmp::max(sz,self.heap_start+self.heap_size);
-  sz = std::cmp::max(sz,self.stack_start+self.stack_size);
-  sz = std::cmp::max(sz,self.callstack_start+self.callstack_size);
-
-  sz
-}
-
-
-pub fn
-generate_memory(&self)-> Vec<u8>
-{
-  let  mut mem = Vec::<u8>::new();
-
-  let  memsz = self.get_memory_size();
-
-    if self.data_start+self.data_bytes.len() >= memsz
+    for sym in &self.mini_symbols
     {
-      panic!();
-    }
-
-
-    if self.text_start+self.text_bytes.len() >= memsz
-    {
-      panic!();
-    }
-
-
-  mem.resize(memsz,0);
-
-    unsafe
-    {
-        for i in 0..self.data_bytes.len()
+        if let MiniSymbolKind::Const(v) = &sym.kind
         {
-          let  v = *self.data_bytes.get_unchecked(i);
-
-          *mem.get_unchecked_mut(self.data_start+i) = v;
-        }
-
-
-        for i in 0..self.text_bytes.len()
-        {
-          let  v = *self.text_bytes.get_unchecked(i);
-
-          *mem.get_unchecked_mut(self.text_start+i) = v;
+            if &sym.name == name
+            {
+              return Some(*v);
+            }
         }
     }
 
 
-  mem
+  None
+}
+
+
+pub fn
+find_io(&self, name: &str)-> Option<usize>
+{
+    for sym in &self.mini_symbols
+    {
+        if let MiniSymbolKind::Io = &sym.kind
+        {
+            if &sym.name == name
+            {
+              return Some(sym.offset);
+            }
+        }
+    }
+
+
+  None
 }
 
 
@@ -807,23 +750,26 @@ find_entry_point(&self, name: &str)-> Option<usize>
 
 
 pub fn
-print_memory(&self, mem: &Vec<u8>)
+print_memory(&self)
 {
     for sym in &self.mini_symbols
     {
       let  off = sym.get_offset();
 
-      print!("{}({})",sym.get_name(),off);
+      print!("{}",sym.get_name());
 
         match &sym.kind
         {
       MiniSymbolKind::Data
      |MiniSymbolKind::Io=>
         {
-          let  i64_ptr = unsafe{mem.as_ptr().add(off)} as *const i64;
+          print!("(addr: {})",off);
+
+          let  i64_ptr = unsafe{self.memory.as_ptr().add(off)} as *const i64;
 
           println!(": {}",unsafe{*i64_ptr});
         }
+      MiniSymbolKind::Const(v)=>{println!(": {}",v);}
       _=>{println!("");}
         }
     }

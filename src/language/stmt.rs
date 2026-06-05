@@ -682,18 +682,6 @@ read_stmt(start_nd: &Node)-> Stmt
     }
 
   else
-    if let Some(s) = cur.get_keyword()
-    {
-        if s == "halt"
-        {
-          return Stmt::Halt;
-        }
-
-      else
-        {panic!();}
-    }
-
-  else
     if let Some(d) = cur.get_node()
     {
       let  d_name = d.get_name();
@@ -737,6 +725,12 @@ read_stmt(start_nd: &Node)-> Stmt
         if d_name == "continue"
         {
           return Stmt::Continue;
+        }
+
+      else
+        if d_name == "halt"
+        {
+          return Stmt::Halt;
         }
 
       else
