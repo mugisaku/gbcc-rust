@@ -420,6 +420,7 @@ assemble(decl: &FnDecl, tbl: &SymbolTable)-> AsmText
   process_block(decl.get_block(),tbl,&mut lid,None,&scp,&mut text);
 
   text.set_xs(scp.get_offset_max());
+  text.terminate();
 
   text
 }

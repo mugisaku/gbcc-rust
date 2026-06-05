@@ -13,34 +13,21 @@
   <button id="audio_btn">audio on/off</button><p>
   <canvas id="display"></canvas>
   <textarea id="text" cols="30" rows="12">
-io input at 0;
-io video at 8;
-io time  at 16;
+io input;
+io video;
+io time;
 
-io sin_freq  at 24;
-io sin_vol   at 32;
-io squ_freq  at 40;
-io squ_vol   at 48;
-io saw_freq  at 56;
-io saw_vol   at 64;
-io tri_freq  at 72;
-io tri_vol   at 80;
-io noi_vol   at 88;
+io sin_freq;
+io sin_vol ;
+io squ_freq;
+io squ_vol ;
+io saw_freq;
+io saw_vol ;
+io tri_freq;
+io tri_vol ;
+io noi_vol ;
 
-io report at 256;
-
-const HEAP_START = 1024;
-const HEAP_SIZE  =  200;
-
-const COMMON_SIZE = 1024*4;
-
-const DATA_START      = (HEAP_START+HEAP_SIZE);
-const TEXT_START      = (HEAP_START+HEAP_SIZE)+(COMMON_SIZE*1);
-const STACK_START     = (HEAP_START+HEAP_SIZE)+(COMMON_SIZE*2);
-const CALLSTACK_START = (HEAP_START+HEAP_SIZE)+(COMMON_SIZE*3);
-
-const     STACK_SIZE  = COMMON_SIZE;
-const CALLSTACK_SIZE  = COMMON_SIZE;
+io report;
 
 const VIDEO_W = 400;
 const VIDEO_H = 200;
@@ -72,13 +59,15 @@ sleep(tm)
 fn
 b_main()
 {
+  squ_vol = 32;
+
     loop
     {
-      audio_freq = 24;
+      squ_freq = 24;
 
       sleep(200);
 
-      audio_freq = 26;
+      squ_freq = 26;
 
       sleep(200);
     }
@@ -88,13 +77,15 @@ b_main()
 fn
 a_main()
 {
+  sin_vol = 32;
+
     loop
     {
-      audio_freq = 24;
+      sin_freq = 24;
 
       sleep(200);
 
-      audio_freq = 26;
+      sin_freq = 26;
 
       sleep(200);
     }
@@ -138,30 +129,37 @@ a_main()
       let  g_noi_gain;
 
       let  g_key_state = 0;
+      let  g_up_key;
+      let  g_left_key;
+      let  g_right_key;
+      let  g_down_key;
 
       const  g_volume_max = 0.1;
 
       const  g_millisec = 1000/20;
 
-      let  input_addr;
-      let  video_addr;
-      let   time_addr;
+      let  g_input_addr;
+      let  g_video_addr;
+      let   g_time_addr;
 
-      let  sin_freq_addr;
-      let  sin_vol_addr ;
-      let  squ_freq_addr;
-      let  squ_vol_addr ;
-      let  saw_freq_addr;
-      let  saw_vol_addr ;
-      let  tri_freq_addr;
-      let  tri_vol_addr ;
+      let  g_sin_freq_addr;
+      let  g_sin_vol_addr ;
+      let  g_squ_freq_addr;
+      let  g_squ_vol_addr ;
+      let  g_saw_freq_addr;
+      let  g_saw_vol_addr ;
+      let  g_tri_freq_addr;
+      let  g_tri_vol_addr ;
+      let  g_noi_vol_addr ;
 
-      let  report_addr;
+      let  g_report_addr;
 
       function
       get_freq(addr)
       {
-        return (440.0/4)*Math.pow(2,Math.min(12*6,get_word(addr))/12)
+        const  n = Math.min(12*6,get_word(addr));
+
+        return (440.0/4)*Math.pow(2,n/12)
       }
 
       function
@@ -242,6 +240,12 @@ a_main()
             g_tri_gain = g_actx.createGain();
             g_noi_gain = g_actx.createGain();
 
+            g_sin_gain.gain.value = 0;
+            g_squ_gain.gain.value = 0;
+            g_saw_gain.gain.value = 0;
+            g_tri_gain.gain.value = 0;
+            g_noi_gain.gain.value = 0;
+
             g_sin_osc.connect(g_sin_gain).connect(g_actx.destination);
             g_squ_osc.connect(g_squ_gain).connect(g_actx.destination);
             g_saw_osc.connect(g_saw_gain).connect(g_actx.destination);
@@ -265,7 +269,7 @@ a_main()
             return;
           }
 
-//console.log(get_report());
+//console.log(get_word(g_report_addr));
         put_byte(g_input_addr,g_key_state);
         put_word(g_time_addr,g_millisec);
 
@@ -288,7 +292,7 @@ a_main()
       function
       run()
       {
-        g_ready = setup(g_text.value);
+        g_ready = setup(g_text.value,1024*1024*8,1024);
 
           if(g_ready)
           {

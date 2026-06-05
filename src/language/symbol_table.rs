@@ -434,13 +434,13 @@ generate_exec(&mut self, memsz: usize)-> Exec
 
   self.add_const("STACK_START",stack_start as i64);
 
-  let  stack_size = self.get_const_or("STACK_SIZE",1024*1024);
+  let  stack_size = self.get_const_or("STACK_SIZE",1024*32);
 
   let  callstack_start = get_word_aligned(stack_start+stack_size);
 
   self.add_const("CALLSTACK_START",callstack_start as i64);
 
-  let  callstack_size = self.get_const_or("CALLSTACK_SIZE",1024*1024);
+  let  callstack_size = self.get_const_or("CALLSTACK_SIZE",1024*32);
 
   let  heap_start = get_word_aligned(callstack_start+callstack_size);
 

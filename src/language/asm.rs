@@ -803,6 +803,25 @@ set_xs(&mut self, sz: usize)
 
 
 pub fn
+terminate(&mut self)
+{
+    if let Some((ln,_)) = self.lines.last()
+    {
+        if let AsmLine::Opcode(op) = ln
+        {
+            if (op.clone() as u8) == (Opcode::Ret as u8)
+            {
+              return;
+            }
+        }
+    }
+
+
+  self.push_opcode(Opcode::Ret);
+}
+
+
+pub fn
 push_label(&mut self, s: &str)
 {
   let  li = LineInfo::default();
@@ -922,17 +941,6 @@ to_bytes(&self)-> Vec<u8>
     for (ln,_) in &self.lines
     {
       ln.write_to(&mut bytes);
-    }
-
-
-    if let Some(last) = bytes.last()
-    {
-      const  ret: u8 = (Opcode::Ret as u8);
-
-        if *last != ret
-        {
-          bytes.push(ret);
-        }
     }
 
 

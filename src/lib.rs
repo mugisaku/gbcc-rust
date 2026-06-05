@@ -87,7 +87,7 @@ process()
 
 #[wasm_bindgen]
 pub fn
-setup(s: &str, memsz: u32)-> Option<String>
+setup(s: &str, memsz: u32, freq: u32)-> Option<String>
 {
     unsafe
     {
@@ -97,8 +97,8 @@ setup(s: &str, memsz: u32)-> Option<String>
             {
               EXEC = symtbl.generate_exec(memsz as usize);
 
-              A_MACHINE.reset(0,128,&mut EXEC,"a_main",0);
-              B_MACHINE.reset(1,128,&mut EXEC,"b_main",256);
+              A_MACHINE.reset(0,freq as usize,&mut EXEC,"a_main",0);
+              B_MACHINE.reset(1,freq as usize,&mut EXEC,"b_main",1024);
 
 
               let  mut buf = String::new();
