@@ -119,10 +119,14 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
 
   let  mut txt = res.to_text();
 
-       if s ==   "ptr"{txt.unset_deref();}
-  else if s == "deref"{txt.set_deref();}
-  else if s ==  "word"{txt.set_deref();}
-  else if s ==  "byte"{txt.set_byte();}
+       if s ==   "ptr"{txt.push_to_ptr();}
+  else if s ==   "i8"{txt.change_kind(AsmEvalKind::DerefI8 );}
+  else if s ==  "i16"{txt.change_kind(AsmEvalKind::DerefI16);}
+  else if s ==  "i32"{txt.change_kind(AsmEvalKind::DerefI32);}
+  else if s ==  "i64"{txt.change_kind(AsmEvalKind::DerefI64);}
+  else if s ==   "u8"{txt.change_kind(AsmEvalKind::DerefU8 );}
+  else if s ==  "u16"{txt.change_kind(AsmEvalKind::DerefU16);}
+  else if s ==  "u32"{txt.change_kind(AsmEvalKind::DerefU32);}
   else{panic!();}
 
 

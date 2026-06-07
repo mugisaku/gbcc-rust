@@ -64,6 +64,13 @@ new()-> Self
 
 
 pub fn
+get_pc(&self)-> usize
+{
+  self.pc
+}
+
+
+pub fn
 set_verbose(&mut self)
 {
   self.verbose = true;
@@ -229,7 +236,7 @@ set_pc(&mut self, pc: usize)
 
 
 pub fn
-get_pc(&mut self)-> usize
+pop_pc(&mut self)-> usize
 {
   let  old_pc = self.pc     ;
                 self.pc += 1;
@@ -262,7 +269,7 @@ is_halted(&self)-> bool
 pub fn
 get_next_byte(&mut self)-> u8
 {
-  let  pc = self.get_pc();
+  let  pc = self.pop_pc();
 
   unsafe{*self.memory_ptr.add(pc)}
 }
@@ -519,6 +526,27 @@ step(&mut self)
     {
       let  addr = self.pop() as usize;
       let     v = self.get_u64(addr);
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Ld_u8 as u8=>
+    {
+      let  addr = self.pop() as usize;
+      let     v = self.get_u8(addr) as u64;
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Ld_u16 as u8=>
+    {
+      let  addr = self.pop() as usize;
+      let     v = self.get_u16(addr) as u64;
+
+      self.push(v);
+    }
+  (op) if op == Opcode::Ld_u32 as u8=>
+    {
+      let  addr = self.pop() as usize;
+      let     v = self.get_u32(addr) as u64;
 
       self.push(v);
     }

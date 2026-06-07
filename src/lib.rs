@@ -76,6 +76,16 @@ get_const(s: &str)-> u32
 
 #[wasm_bindgen]
 pub fn
+get_info()-> u32
+{
+  unsafe{
+    B_MACHINE.get_pc() as u32
+  }
+}
+
+
+#[wasm_bindgen]
+pub fn
 process()
 {
   unsafe{
@@ -99,7 +109,6 @@ setup(s: &str, memsz: u32, freq: u32)-> Option<String>
 
               A_MACHINE.reset(0,freq as usize,&mut EXEC,"a_main",0);
               B_MACHINE.reset(1,freq as usize,&mut EXEC,"b_main",1024);
-
 
               let  mut buf = String::new();
 

@@ -3,6 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <title>hello-wasm gamebaby example</title>
+    <style>
+    .root{
+      display: flex;
+      flex-direction: row;
+    }
+    .output_root{
+      display: flex;
+      flex-direction: column;
+    }
+    </style>
   </head>
   <body>
 自作のプログラミング言語とコンパイラーと仮想機械を使って、<br>
@@ -11,8 +21,16 @@
   <hr>
   <button id="run_btn">run</button>
   <button id="audio_btn">audio on/off</button><p>
-  <canvas id="display"></canvas>
-  <textarea id="text" cols="30" rows="12">
+  <span class="root">
+    <span class="output_root">
+      <canvas id="display" width="400" height="200">
+      </canvas>
+      <span id="info">
+      --
+      </span>
+    </span>
+  <span>
+    <textarea id="text" cols="30" rows="12">
 io input;
 io video;
 io time;
@@ -67,7 +85,7 @@ b_main()
 
       sleep(200);
 
-      squ_freq = 26;
+      squ_freq = 20;
 
       sleep(200);
     }
@@ -83,16 +101,18 @@ a_main()
     {
       sin_freq = 24;
 
-      sleep(200);
+      sleep(400);
 
-      sin_freq = 26;
+      sin_freq = 20;
 
-      sleep(200);
+      sleep(100);
     }
 }
-  </textarea>
-  <textarea id="asm_text" cols="16" rows="12">
-  </textarea>
+    </textarea>
+    <textarea id="asm_text" cols="16" rows="12">
+    </textarea>
+  </span>
+
     <script>function  check(s){console.log(s);}</script>
     <script type="module">
       import init, {
@@ -102,11 +122,13 @@ a_main()
         put_word,
         get_io,
         get_const,
+        get_info,
         process,
         setup } from "./pkg/gblib.js";
 
       let  g_text;
       let  g_asmtext;
+      let  g_info;
 
       let  g_ready;
 
@@ -234,6 +256,8 @@ a_main()
 
             g_noi = new AudioBufferSourceNode(g_actx,{buffer: g_noi_buf});
 
+            g_noi.loop = true;
+
             g_sin_gain = g_actx.createGain();
             g_squ_gain = g_actx.createGain();
             g_saw_gain = g_actx.createGain();
@@ -269,23 +293,32 @@ a_main()
             return;
           }
 
-//console.log(get_word(g_report_addr));
+
         put_byte(g_input_addr,g_key_state);
-        put_word(g_time_addr,g_millisec);
+
+        const  new_time = get_word(g_time_addr)+g_millisec;
+
+        put_word(g_time_addr,new_time);
 
         process();
 
         const  base = get_word(g_video_addr);
 
-          for(let  i = 0|0;  i < (4*g_imgdat.width*g_imgdat.height);  ++i)
+          for(let  i = 0|0;  i < (g_imgdat.width*g_imgdat.height);  ++i)
           {
-            g_imgdat.data[i] = get_byte(base+i);
+            const  rgba_i = 4*i;
+
+            g_imgdat.data[rgba_i  ] = get_byte(base+rgba_i  );
+            g_imgdat.data[rgba_i+1] = get_byte(base+rgba_i+1);
+            g_imgdat.data[rgba_i+2] = get_byte(base+rgba_i+2);
           }
 
 
         g_cvctx.putImageData(g_imgdat,0,0);
 
         update_audio();
+
+        g_info.innerText = "REPORT: "+get_word(g_report_addr);
       }
 
 
@@ -319,7 +352,14 @@ a_main()
 
             g_cv.width  = get_const("VIDEO_W");
             g_cv.height = get_const("VIDEO_H");
+
             g_imgdat = g_cvctx.createImageData(g_cv.width,g_cv.height);
+
+              for(let  i = 0|0;  i < (g_imgdat.width*g_imgdat.height);  ++i)
+              {
+                g_imgdat.data[(4*i)+3] = 255;
+              }
+
 
             start_audio();
           }
@@ -330,6 +370,11 @@ a_main()
 
         g_cvctx = g_cv.getContext("2d");
 
+        g_cvctx.fillStyle = "rgb(0,0,0)";
+
+        g_cvctx.fillRect(0,0,g_cv.width,g_cv.height);
+
+        g_info = document.getElementById("info");
         g_text = document.getElementById("text");
         g_asmtext = document.getElementById("asm_text");
 

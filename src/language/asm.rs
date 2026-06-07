@@ -39,6 +39,7 @@ Opcode
   Dup,
 
   Ld_i8, Ld_i16, Ld_i32, Ld_i64, 
+  Ld_u8, Ld_u16, Ld_u32, 
   St_i8, St_i16, St_i32, St_i64,
 
   Neg, Not,
@@ -103,6 +104,9 @@ to_str(&self)-> &'static str
   Self::Ld_i16=>{"ld_i16"}
   Self::Ld_i32=>{"ld_i32"}
   Self::Ld_i64=>{"ld_i64"}
+  Self::Ld_u8=>{"ld_u8"}
+  Self::Ld_u16=>{"ld_u16"}
+  Self::Ld_u32=>{"ld_u32"}
   Self::St_i8=>{"st_i8"}
   Self::St_i16=>{"st_i16"}
   Self::St_i32=>{"st_i32"}
@@ -189,6 +193,9 @@ from(b: u8)-> Self
   (op) if op == Self::Ld_i16 as u8=>{Self::Ld_i16}
   (op) if op == Self::Ld_i32 as u8=>{Self::Ld_i32}
   (op) if op == Self::Ld_i64 as u8=>{Self::Ld_i64}
+  (op) if op == Self::Ld_u8 as u8=>{Self::Ld_u8}
+  (op) if op == Self::Ld_u16 as u8=>{Self::Ld_u16}
+  (op) if op == Self::Ld_u32 as u8=>{Self::Ld_u32}
   (op) if op == Self::St_i8 as u8=>{Self::St_i8}
   (op) if op == Self::St_i16 as u8=>{Self::St_i16}
   (op) if op == Self::St_i32 as u8=>{Self::St_i32}
@@ -510,13 +517,30 @@ print(&self)
 
 
 #[derive(Clone)]
+pub enum
+AsmEvalKind
+{
+  Void,
+  Value,
+
+  DerefI8,
+  DerefI16,
+  DerefI32,
+  DerefI64,
+  DerefU8,
+  DerefU16,
+  DerefU32,
+
+}
+
+
+#[derive(Clone)]
 pub struct
 AsmEvalText
 {
   lines: Vec<AsmLine>,
 
-  is_deref: bool,
-  is_byte: bool,
+  kind: AsmEvalKind,
 
 }
 
@@ -529,49 +553,54 @@ AsmEvalText
 pub fn
 new()-> Self
 {
-  Self{lines: Vec::new(), is_deref: false, is_byte: false}
+  Self{lines: Vec::new(), kind: AsmEvalKind::Void}
 }
 
 
 pub fn
 is_deref(&self)-> bool
 {
-  self.is_deref
-}
-
-
-pub fn
-is_byte(&self)-> bool
-{
-  self.is_byte
-}
-
-
-pub fn
-set_deref(&mut self)
-{
-    if self.is_deref
+    match &self.kind
     {
-      self.push_load();
+  AsmEvalKind::DerefI8
+ |AsmEvalKind::DerefI16
+ |AsmEvalKind::DerefI32
+ |AsmEvalKind::DerefI64
+ |AsmEvalKind::DerefU8
+ |AsmEvalKind::DerefU16
+ |AsmEvalKind::DerefU32=>{true}
+  _=>{false}
+    }
+}
+
+
+pub fn
+get_kind(&self)-> &AsmEvalKind
+{
+  &self.kind
+}
+
+
+pub fn
+change_kind(&mut self, k: AsmEvalKind)
+{
+  self.push_load();
+
+  self.kind = k;
+}
+
+
+pub fn
+push_to_ptr(&mut self)
+{
+    match &self.kind
+    {
+  AsmEvalKind::Void=>{panic!();}
+  _=>{}
     }
 
 
-  self.is_deref = true;
-}
-
-
-pub fn
-unset_deref(&mut self)
-{
-  self.is_deref = false;
-}
-
-
-pub fn
-set_byte(&mut self)
-{
-  self.is_deref = true;
-  self.is_byte  = true;
+  self.kind = AsmEvalKind::Value;
 }
 
 
@@ -583,17 +612,11 @@ push_opcode(&mut self, opcode: Opcode)
 
 
 pub fn
-push_2opcodes(&mut self, a: Opcode, b: Opcode)
-{
-  self.push_opcode(a);
-  self.push_opcode(b);
-}
-
-
-pub fn
 push_bool(&mut self, b: bool)
 {
   self.lines.push(AsmLine::Push8(if b{1} else{0}));
+
+  self.kind = AsmEvalKind::Value;
 }
 
 
@@ -601,6 +624,8 @@ pub fn
 push_i64(&mut self, i: i64)
 {
   self.lines.push(AsmLine::make_push(i));
+
+  self.kind = AsmEvalKind::Value;
 }
 
 
@@ -609,7 +634,7 @@ push_global_var(&mut self, off: usize)
 {
   self.push_i64(off as i64);
 
-  self.is_deref = true;
+  self.kind = AsmEvalKind::DerefI64;
 }
 
 
@@ -618,7 +643,7 @@ push_io(&mut self, off: usize)
 {
   self.push_i64(off as i64);
 
-  self.is_deref = true;
+  self.kind = AsmEvalKind::DerefI64;
 }
 
 
@@ -628,7 +653,7 @@ push_fn(&mut self, off: usize)
   self.push_i64(off as i64);
   self.push_opcode(Opcode::Ld_i64);
 
-  self.is_deref = true;
+  self.kind = AsmEvalKind::Value;
 }
 
 
@@ -639,13 +664,14 @@ push_local_var(&mut self, off: usize)
   self.push_i64(off as i64);
   self.push_opcode(Opcode::Add);
 
-  self.is_deref = true;
+  self.kind = AsmEvalKind::DerefI64;
 }
 
 
 pub fn
 push_call(&mut self, args: Vec<Self>)
 {
+  self.push_load();
   self.push_opcode(Opcode::Prcal);
 
     for a in args
@@ -656,29 +682,28 @@ push_call(&mut self, args: Vec<Self>)
 
   self.push_opcode(Opcode::Cal);
 
-  self.is_deref = false;
+  self.kind = AsmEvalKind::Value;
 }
 
 
 pub fn
 push_load(&mut self)
 {
-    if !self.is_deref
+    match &self.kind
     {
-      panic!();
+  AsmEvalKind::Void    =>{panic!();}
+  AsmEvalKind::Value   =>{}
+  AsmEvalKind::DerefI8 =>{self.push_opcode(Opcode::Ld_i8 );}
+  AsmEvalKind::DerefI16=>{self.push_opcode(Opcode::Ld_i16);}
+  AsmEvalKind::DerefI32=>{self.push_opcode(Opcode::Ld_i32);}
+  AsmEvalKind::DerefI64=>{self.push_opcode(Opcode::Ld_i64);}
+  AsmEvalKind::DerefU8 =>{self.push_opcode(Opcode::Ld_u8 );}
+  AsmEvalKind::DerefU16=>{self.push_opcode(Opcode::Ld_u16);}
+  AsmEvalKind::DerefU32=>{self.push_opcode(Opcode::Ld_u32);}
     }
 
 
-  self.push_opcode(if self.is_byte{Opcode::Ld_i8} else{Opcode::Ld_i64});
-
-  self.is_deref = false;
-}
-
-
-pub fn
-push_store(&mut self)
-{
-  self.push_opcode(if self.is_byte{Opcode::St_i8} else{Opcode::St_i64});
+  self.kind = AsmEvalKind::Value;
 }
 
 
@@ -689,21 +714,13 @@ push_unary(&mut self, op: &str)
     {
   (s) if s == "-"=>
     {
-        if self.is_deref
-        {
-          self.push_load();
-        }
-
+      self.push_load();
 
       self.push_opcode(Opcode::Neg);
     }
   (s) if s == "!"=>
     {
-        if self.is_deref
-        {
-          self.push_load();
-        }
-
+      self.push_load();
 
       self.push_opcode(Opcode::Not);
     }
@@ -715,17 +732,8 @@ push_unary(&mut self, op: &str)
 pub fn
 push_binary(&mut self, mut other: Self, op_s: &str)
 {
-    if self.is_deref
-    {
-      self.push_load();
-    }
-
-
-    if other.is_deref
-    {
-      other.push_load();
-    }
-
+   self.push_load();
+  other.push_load();
 
   self.lines.extend(other.lines);
 
@@ -891,19 +899,9 @@ push_brnz(&mut self, s: &str)
 pub fn
 push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
 {
-    if !l.is_deref
-    {
-      panic!();
-    }
-
-
     if op == "="
     {
-        if r.is_deref()
-        {
-          r.push_load();
-        }
-
+      r.push_load();
 
       l.push_text(r);
     }
@@ -927,9 +925,22 @@ push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
     }
 
 
-  l.push_store();
+  let  op = match &l.kind
+    {
+  AsmEvalKind::DerefI8 =>{Opcode::St_i8 }
+  AsmEvalKind::DerefI16=>{Opcode::St_i16}
+  AsmEvalKind::DerefI32=>{Opcode::St_i32}
+  AsmEvalKind::DerefI64=>{Opcode::St_i64}
+  AsmEvalKind::DerefU8 =>{Opcode::St_i8 }
+  AsmEvalKind::DerefU16=>{Opcode::St_i16}
+  AsmEvalKind::DerefU32=>{Opcode::St_i32}
+  _=>{panic!();}
+    };
+
 
   self.push_eval_text(l);
+
+  self.push_opcode(op);
 }
 
 
