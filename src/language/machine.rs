@@ -400,19 +400,19 @@ step(&mut self)
     }
   (op) if op == Opcode::Push8 as u8=>
     {
-      let  v = self.get_imm_i8() as i64 as u64;
+      let  v = self.get_imm_i8() as u64;
 
       self.push(v);
     }
   (op) if op == Opcode::Push16 as u8=>
     {
-      let  v = self.get_imm_i16() as i64 as u64;
+      let  v = self.get_imm_i16() as u64;
 
       self.push(v);
     }
   (op) if op == Opcode::Push32 as u8=>
     {
-      let  v = self.get_imm_i32() as i64 as u64;
+      let  v = self.get_imm_i32() as u64;
 
       self.push(v);
     }
@@ -552,21 +552,21 @@ step(&mut self)
     }
   (op) if op == Opcode::St_i8 as u8=>
     {
-      let     v = self.pop() as i8 as u8;
+      let     v = self.pop() as u8;
       let  addr = self.pop() as usize;
 
       self.put_u8(addr,v);
     }
   (op) if op == Opcode::St_i16 as u8=>
     {
-      let     v = self.pop() as i16 as u16;
+      let     v = self.pop() as u16;
       let  addr = self.pop() as usize;
 
       self.put_u16(addr,v);
     }
   (op) if op == Opcode::St_i32 as u8=>
     {
-      let     v = self.pop() as i32 as u32;
+      let     v = self.pop() as u32;
       let  addr = self.pop() as usize;
 
       self.put_u32(addr,v);

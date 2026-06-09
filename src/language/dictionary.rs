@@ -98,16 +98,27 @@ parameter_list: "(" & [{.Identifier & [","]}] & ")";
 
 fn: 'fn -> .Identifier & parameter_list & block;
 
+expression_list: "{" & [{expression & [","]}] & "}";
+
 initialize: "=" & expression;
 
-io   :   'io    -> .Identifier;
-var  :   'var   -> .Identifier & initialize;
-const:   'const -> .Identifier & initialize;
+str: 'str
+  -> .Identifier
+  & ('i8 | 'i16 | 'i32 | 'i64 | 'u8 | 'u16 | 'u32)
+  & "=" & (.String | expression_list);
+
+
+field: 'field -> .Identifier & expression;
+io   : 'io    -> .Identifier;
+var  : 'var   -> .Identifier & initialize;
+const: 'const -> .Identifier & initialize;
 
 declaration: fn
            | io
            | var
            | const
+           | str
+           | field
            | ";";
 
 

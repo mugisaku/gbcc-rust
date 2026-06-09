@@ -96,6 +96,10 @@ io report;
 
 var  test = 0;
 
+str  test_s u8 = "mumumu";
+str  test_a u16 = {0,0,0,0,};
+field  test_f 1024;
+
 
 fn
 main()

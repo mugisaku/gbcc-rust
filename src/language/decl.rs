@@ -54,6 +54,15 @@ print(&self)
 
 
 pub enum
+StrInitKind
+{
+  String(String),
+  ExprList(Vec<Expr>),
+
+}
+
+
+pub enum
 DeclKind
 {
   Undef,
@@ -61,6 +70,9 @@ DeclKind
    Const(Expr),
      Var(Expr),
       Io,
+
+  Str(String,StrInitKind),
+  Field(Expr),
 
   Fn(FnDecl),
 
@@ -78,6 +90,36 @@ print(&self, name: &str)
     match self
     {
   DeclKind::Undef=>{print!("undef {}",name);}
+  DeclKind::Str(dk,ik)=>
+    {
+      print!("str {} {}",name,dk);
+
+      print!(" = ");
+
+        match ik
+        {
+      StrInitKind::String(s)=>{print!("{}",s);}
+      StrInitKind::ExprList(ls)=>
+        {
+          print!("{{");
+
+            for e in ls
+            {
+              e.print();
+              print!(", ");
+            }
+
+
+          print!("}}");
+        }
+        }
+    }
+  DeclKind::Field(e)=>
+    {
+      print!("field {} ",name);
+
+      e.print();
+    }
   DeclKind::Const(e)=>
     {
       print!("const {}",name);
@@ -167,6 +209,15 @@ collect(&self, buf: &mut Vec<Collectible>)
   DeclKind::Const(e)=>{e.collect(buf);}
   DeclKind::Var(e)  =>{e.collect(buf);}
   DeclKind::Io      =>{}
+  DeclKind::Str(dk,sik)=>
+    {
+        match sik
+        {
+      StrInitKind::String(_)=>{}
+      StrInitKind::ExprList(ls)=>{for e in ls{e.collect(buf);}}
+        }
+    }
+  DeclKind::Field(e)=>{e.collect(buf);}
   DeclKind::Fn(fd)=>{/*fd.get_block().collect(buf);*/}
   _=>{panic!();}
     }
@@ -326,6 +377,68 @@ read_object_decl(start_nd: &Node)-> (String,Expr)
 
 
 pub fn
+read_str_decl(start_nd: &Node)-> (String,String,StrInitKind)
+{
+  let  mut cur = start_nd.cursor();
+
+  cur.advance(1);
+
+    if let Some(id_s) = cur.get_identifier()
+    {
+      let  name = id_s.clone();
+
+      cur.advance(1);
+
+      let  dk = cur.get_keyword().unwrap().clone();
+
+      cur.advance(2);
+
+        if let Some(es_dir) = cur.select_node("expression_list")
+        {
+          let  es = read_expr_list(es_dir);
+
+          return (name,dk,StrInitKind::ExprList(es));
+        }
+
+      else
+        if let Some(s) = cur.get_string()
+        {
+          return (name,dk,StrInitKind::String(s.clone()));
+        }
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+read_field_decl(start_nd: &Node)-> (String,Expr)
+{
+  let  mut cur = start_nd.cursor();
+
+  cur.advance(1);
+
+    if let Some(id_s) = cur.get_identifier()
+    {
+      let  name = id_s.clone();
+
+      cur.advance(1);
+
+        if let Some(e_dir) = cur.select_node("expression")
+        {
+          let  e = read_expr(e_dir);
+
+          return (name,e);
+        }
+    }
+
+
+  panic!();
+}
+
+
+pub fn
 read_io_decl(start_nd: &Node)-> String
 {
   let  mut cur = start_nd.cursor();
@@ -399,6 +512,22 @@ read_decl(start_nd: &Node)-> Decl
           let  (name,f) = read_fn_decl(nd);
 
           return Decl{name, kind: DeclKind::Fn(f)};
+        }
+
+      else
+        if name == "str"
+        {
+          let  (name,dk,sik) = read_str_decl(nd);
+
+          return Decl{name, kind: DeclKind::Str(dk,sik)};
+        }
+
+      else
+        if name == "field"
+        {
+          let  (name,e) = read_field_decl(nd);
+
+          return Decl{name, kind: DeclKind::Field(e)};
         }
 
       else

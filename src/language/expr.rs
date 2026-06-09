@@ -194,6 +194,34 @@ read_expr(start_nd: &Node)-> Expr
 
 
 pub fn
+read_expr_list(start_nd: &Node)-> Vec<Expr>
+{
+  let  mut cur = start_nd.cursor();
+
+  let  mut es = Vec::<Expr>::new();
+
+  cur.advance(1);
+
+    if let Some(first_e_nd) = cur.select_node("expression")
+    {
+      es.push(read_expr(first_e_nd));
+
+      cur.advance(2);
+
+        while let Some(e_nd) = cur.select_node("expression")
+        {
+          es.push(read_expr(e_nd));
+
+          cur.advance(2);
+        }
+    }
+
+
+  es
+}
+
+
+pub fn
 read_unary_operator(start_nd: &Node)-> String
 {
   let  mut cur = start_nd.cursor();

@@ -26,30 +26,22 @@ static mut B_MACHINE: Machine = Machine::new();
 #[wasm_bindgen]
 pub fn
 get_byte(off: usize)-> u8
-{unsafe{*EXEC.get_memory().get_unchecked(off%EXEC.get_memory().len())}}
+{unsafe{EXEC.get_u8(off)}}
 
 #[wasm_bindgen]
 pub fn
 put_byte(off: usize, v: u8)
-{
-    unsafe
-    {
-      let  len = EXEC.get_memory().len();
-
-      *EXEC.get_memory_mut().get_unchecked_mut(off%len) = v;
-    }
-}
-
+{unsafe{EXEC.put_u8(off,v);}}
 
 #[wasm_bindgen]
 pub fn
 get_word(off: usize)-> u32
-{unsafe{*(EXEC.get_memory().as_ptr().add(off) as *const u32)}}
+{unsafe{EXEC.get_u32(off)}}
 
 #[wasm_bindgen]
 pub fn
 put_word(off: usize, v: u32)
-{unsafe{*(EXEC.get_memory_mut().as_mut_ptr().add(off) as *mut u32) = v;}}
+{unsafe{EXEC.put_u32(off,v);}}
 
 
 

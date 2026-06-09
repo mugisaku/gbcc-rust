@@ -24,6 +24,9 @@ SymbolKind
 
   Io,
 
+  Str(String,Vec<u8>),
+  Field(usize),
+
   Fn(FnDecl),
 
 }
@@ -60,6 +63,95 @@ Symbol
 impl
 Symbol
 {
+
+
+fn
+make_str_bytes(dk: &str, ik: &StrInitKind, symtbl: &SymbolTable)-> Vec<u8>
+{
+    if (dk == "i8") || (dk == "u8")
+    {
+        if let StrInitKind::String(s) = ik
+        {
+          return s.as_bytes().to_vec();
+        }
+    }
+
+
+  let  mut   tmp = Vec::<i64>::new();
+  let  mut bytes = Vec::<u8>::new();
+
+    match ik
+    {
+  StrInitKind::String(s)=>
+    {
+        for c in s.chars()
+        {
+          tmp.push(c as i64);
+        }
+    }
+  StrInitKind::ExprList(ls)=>
+    {
+        for e in ls
+        {
+          tmp.push(evaluate_const(e,symtbl,None).unwrap());
+        }
+    }
+    }
+
+
+    if (dk == "i8") || (dk == "u8")
+    {
+        for i in tmp
+        {
+          bytes.push(i as u8);
+        }
+    }
+
+  else
+    if (dk == "i16") || (dk == "u16")
+    {
+        for i in tmp
+        {
+          let  tmp_bytes = (i as i16).to_ne_bytes();
+
+            for b in tmp_bytes
+            {
+              bytes.push(b);
+            }
+        }
+    }
+
+  else
+    if (dk == "i32") || (dk == "u32")
+    {
+        for i in tmp
+        {
+          let  tmp_bytes = (i as i32).to_ne_bytes();
+
+            for b in tmp_bytes
+            {
+              bytes.push(b);
+            }
+        }
+    }
+
+  else
+    if dk == "i64"
+    {
+        for i in tmp
+        {
+          let  tmp_bytes = i.to_ne_bytes();
+
+            for b in tmp_bytes
+            {
+              bytes.push(b);
+            }
+        }
+    }
+
+
+  bytes
+}
 
 
 pub fn
@@ -102,6 +194,30 @@ build(src: Source, symtbl: &SymbolTable)-> Self
       Self{
         name,
         kind: SymbolKind::Io,
+        offset: 0,
+        deps_parent_list,
+        deps_child_list,
+      }
+    }
+  DeclKind::Str(dk,sik)=>
+    {
+      let  bytes = Self::make_str_bytes(&dk,&sik,symtbl);
+
+      Self{
+        name,
+        kind: SymbolKind::Str(dk,bytes),
+        offset: 0,
+        deps_parent_list,
+        deps_child_list,
+      }
+    }
+  DeclKind::Field(e)=>
+    {
+      let  res = evaluate_const(&e,symtbl,None);
+
+      Self{
+        name,
+        kind: SymbolKind::Field(res.unwrap() as usize),
         offset: 0,
         deps_parent_list,
         deps_child_list,
@@ -158,6 +274,8 @@ print(&self)
   SymbolKind::Const(_)    =>{print!("const");}
   SymbolKind::GlobalVar(_)=>{print!("(g)var");}
   SymbolKind::Io          =>{print!("io");}
+  SymbolKind::Str(_,_)    =>{print!("str");}
+  SymbolKind::Field(_)    =>{print!("field");}
   SymbolKind::Fn(_)       =>{print!("fn");}
     }
 
@@ -168,7 +286,9 @@ print(&self)
     {
   SymbolKind::Const(res)    =>{print!("{}",res);}
   SymbolKind::GlobalVar(res)=>{print!("{}",res);}
-  SymbolKind::Io            =>{print!("at");}
+  SymbolKind::Io            =>{}
+  SymbolKind::Str(ty,data)  =>{print!("{} {{..{}}}",ty,data.len());}
+  SymbolKind::Field(sz)     =>{print!("{}",sz);}
   SymbolKind::Fn(_,)=>{}
     }
 
@@ -390,6 +510,52 @@ process_data_offset(&mut self, start: usize)-> usize
 }
 
 
+fn
+process_str_offset(&mut self, start: usize)-> usize
+{
+  let  mut pos = start;
+
+    for sym in &mut self.symbols
+    {
+        match &sym.kind
+        {
+      SymbolKind::Str(_,bytes)=>
+        {
+          sym.offset = get_word_aligned(pos)              ;
+                                        pos += bytes.len();
+        }
+      _=>{}
+        }
+    }
+
+
+  get_word_aligned(pos)
+}
+
+
+fn
+process_field_offset(&mut self, start: usize)-> usize
+{
+  let  mut pos = start;
+
+    for sym in &mut self.symbols
+    {
+        match &sym.kind
+        {
+      SymbolKind::Field(sz)=>
+        {
+          sym.offset = get_word_aligned(pos)     ;
+                                        pos += sz;
+        }
+      _=>{}
+        }
+    }
+
+
+  get_word_aligned(pos)
+}
+
+
 pub fn
 find_text_offset(ls: &Vec<(String,Vec<u8>,usize)>, name: &str)-> usize
 {
@@ -430,7 +596,10 @@ generate_exec(&mut self, memsz: usize)-> Exec
 
   exec.memory.resize(memsz,0);
 
-  let  stack_start = self.process_io_offset(256);
+  let   data_start = self.process_io_offset(256);
+  let    str_start = self.process_data_offset(data_start);
+  let  field_start = self.process_str_offset(str_start);
+  let  stack_start = self.process_field_offset(field_start);
 
   self.add_const("STACK_START",stack_start as i64);
 
@@ -442,16 +611,8 @@ generate_exec(&mut self, memsz: usize)-> Exec
 
   let  callstack_size = self.get_const_or("CALLSTACK_SIZE",1024*32);
 
-  let  heap_start = get_word_aligned(callstack_start+callstack_size);
+  let  text_start = get_word_aligned(callstack_start+callstack_size);
 
-  self.add_const("HEAP_START",heap_start as i64);
-
-  let  heap_size = self.get_const_or("HEAP_SIZE",1024*1024*4);
-
-  let  data_start = get_word_aligned(heap_start+heap_size);
-
-
-  let  text_start = self.process_data_offset(data_start);
 
   let  mut pos = text_start;
 
@@ -511,6 +672,26 @@ generate_exec(&mut self, memsz: usize)-> Exec
       SymbolKind::Io=>
         {
           exec.mini_symbols.push(MiniSymbol{offset: sym.offset, name: sym.name.clone(), kind: MiniSymbolKind::Io});
+        }
+      SymbolKind::Str(ty,bytes)=>
+        {
+            for i in 0..bytes.len()
+            {
+              exec.memory[sym.offset+i] = bytes[i];
+            }
+
+
+          let  n = bytes.len()/if (ty ==  "i8") || (ty ==  "u8"){1}
+                          else if (ty == "i16") || (ty == "u16"){2}
+                          else if (ty == "i32") || (ty == "u32"){4}
+                          else if (ty == "i64")                 {8}
+                          else{panic!();};
+
+          exec.mini_symbols.push(MiniSymbol{offset: sym.offset, name: sym.name.clone(), kind: MiniSymbolKind::Str(ty.clone(),n)});
+        }
+      SymbolKind::Field(sz)=>
+        {
+          exec.mini_symbols.push(MiniSymbol{offset: sym.offset, name: sym.name.clone(), kind: MiniSymbolKind::Field(*sz)});
         }
       _=>{}
         }
@@ -611,7 +792,7 @@ print(&self)
 pub enum
 MiniSymbolKind
 {
-  Data, Text, Const(i64), Io,
+  Data, Text, Const(i64), Str(String,usize), Field(usize), Io,
 
 }
 
@@ -689,6 +870,81 @@ pub fn
 get_memory_mut(&mut self)-> &mut Vec<u8>
 {
   &mut self.memory
+}
+
+
+
+fn
+get_ptr(&self, off: usize)-> *const u8
+{
+  let  len = self.memory.len();
+
+  unsafe{self.memory.as_ptr().add(off%len)}
+}
+
+
+fn
+get_mut_ptr(&mut self, off: usize)-> *mut u8
+{
+  let  len = self.memory.len();
+
+  unsafe{self.memory.as_mut_ptr().add(off%len)}
+}
+
+
+pub fn
+get_u8(&self, off: usize)-> u8
+{
+  unsafe{*self.get_ptr(off)}
+}
+
+
+pub fn
+put_u8(&mut self, off: usize, v: u8)
+{
+  unsafe{*self.get_mut_ptr(off) = v;}
+}
+
+
+pub fn
+get_u16(&self, off: usize)-> u16
+{
+  unsafe{*(self.get_ptr(off) as *const u16)}
+}
+
+
+pub fn
+put_u16(&mut self, off: usize, v: u16)
+{
+  unsafe{*(self.get_mut_ptr(off) as *mut u16) = v;}
+}
+
+
+pub fn
+get_u32(&self, off: usize)-> u32
+{
+  unsafe{*(self.get_ptr(off) as *const u32)}
+}
+
+
+pub fn
+put_u32(&mut self, off: usize, v: u32)
+{
+  unsafe{*(self.get_mut_ptr(off) as *mut u32) = v;}
+}
+
+
+pub fn
+get_u64(&self, off: usize)-> u64
+{
+  unsafe{*(self.get_ptr(off) as *const u64)}
+}
+
+
+pub fn
+put_u64(&mut self, off: usize, v: u64)
+{
+  unsafe{*(self.get_mut_ptr(off) as *mut u64) = v;}
 }
 
 
@@ -770,6 +1026,27 @@ print_memory(&self)
           println!(": {}",unsafe{*i64_ptr});
         }
       MiniSymbolKind::Const(v)=>{println!(": {}",v);}
+      MiniSymbolKind::Str(ty,n)=>
+        {
+          let  base = sym.offset;
+
+          print!(" {} = {{",ty);
+
+               if ty ==  "i8"{for i in 0..*n{print!("{},",self.get_u8( base+i    )       );}}
+          else if ty ==  "u8"{for i in 0..*n{print!("0x{:X},",self.get_u8( base+i    ) as  i8);}}
+          else if ty == "i16"{for i in 0..*n{print!("{},",self.get_u16(base+(2*i))       );}}
+          else if ty == "u16"{for i in 0..*n{print!("0x{:X},",self.get_u16(base+(2*i)) as i16);}}
+          else if ty == "i32"{for i in 0..*n{print!("{},",self.get_u32(base+(4*i))       );}}
+          else if ty == "u32"{for i in 0..*n{print!("0x{:X},",self.get_u32(base+(4*i)) as i32);}}
+          else if ty == "i64"{for i in 0..*n{print!("{},",self.get_u64(base+(8*i)) as i64);}}
+          else{panic!("{}",ty);}
+
+          println!("}}");
+        }
+      MiniSymbolKind::Field(sz)=>
+        {
+          println!(" {}: {{...}}",*sz);
+        }
       _=>{println!("");}
         }
     }
