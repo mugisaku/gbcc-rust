@@ -92,19 +92,172 @@ main()
   let  codes =
 r#"
 
+io input;
+io video;
+io time;
+
+io sin_freq;
+io sin_vol ;
+io squ_freq;
+io squ_vol ;
+io saw_freq;
+io saw_vol ;
+io tri_freq;
+io tri_vol ;
+io noi_vol ;
+
 io report;
 
-var  test = 0;
+str font u8 = {
+0b00000000,
+0b00011100,
+0b00100010,
+0b01000101,
+0b01001001,
+0b01010001,
+0b00100010,
+0b00011100,
 
-str  test_s u8 = "mumumu";
-str  test_a u16 = {0,0,0,0,};
-field  test_f 1024;
+0b00000000,
+0b00001100,
+0b00111100,
+0b00001100,
+0b00001100,
+0b00001100,
+0b00001100,
+0b00011110,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b00000011,
+0b00000011,
+0b00001100,
+0b00110000,
+0b01111111,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b00000011,
+0b00001100,
+0b00000011,
+0b01100011,
+0b00011100,
+
+0b00000000,
+0b00000110,
+0b00001110,
+0b00010110,
+0b00100110,
+0b01111111,
+0b00000110,
+0b00000110,
+
+0b00000000,
+0b01111111,
+0b01100000,
+0b01111100,
+0b01100011,
+0b00000011,
+0b01100011,
+0b00011100,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b01100000,
+0b01111110,
+0b01100011,
+0b01100011,
+0b00011100,
+
+0b00000000,
+0b01111111,
+0b00000011,
+0b00000011,
+0b00000110,
+0b00011000,
+0b00110000,
+0b01100000,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b01100011,
+0b00011100,
+0b01100011,
+0b01100011,
+0b00011100,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b01100011,
+0b00011111,
+0b00000011,
+0b01100011,
+0b00011100,
+
+};
+
+field video_field 4*VIDEO_W*VIDEO_H;
+
+const VIDEO_W = 400;
+const VIDEO_H = 200;
+
+const    UP_KEY = 0b0001;
+const  LEFT_KEY = 0b0010;
+const RIGHT_KEY = 0b0100;
+const  DOWN_KEY = 0b1000;
+
+
+fn
+sleep(tm)
+{
+  var  base = time;
+
+    loop
+    {
+        if (time-base) >= tm
+        {
+          break;
+        }
+
+
+      halt;
+    }
+}
+
+
+fn
+fill(x,y,w,h,pixel)
+{
+  var  base_ptr = video.ptr+(4*VIDEO_W*y)+(4*x);
+
+    for y_off in h
+    {
+      var  ptr = base_ptr             ;
+                 base_ptr += 4*VIDEO_W;
+
+        for x_off in w
+        {
+          ptr.u32 = pixel;
+
+          ptr += 4;
+        }
+    }
+}
 
 
 fn
 main()
 {
-  test = 123;
+  video = video_field.ptr;
+
+  fill(0,0,VIDEO_W,VIDEO_H,0xFF00FF);
+
+  halt;
 }
 
 

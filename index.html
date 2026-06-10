@@ -47,11 +47,100 @@ io noi_vol ;
 
 io report;
 
-str test_s = "mumumu";
+str font u8 = {
+0b00000000,
+0b00011100,
+0b00100010,
+0b01000101,
+0b01001001,
+0b01010001,
+0b00100010,
+0b00011100,
 
-str test_u16 = {0,0,0,0};
+0b00000000,
+0b00001100,
+0b00111100,
+0b00001100,
+0b00001100,
+0b00001100,
+0b00001100,
+0b00011110,
 
-field test_field 256;
+0b00000000,
+0b00011100,
+0b01100011,
+0b00000011,
+0b00000011,
+0b00001100,
+0b00110000,
+0b01111111,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b00000011,
+0b00001100,
+0b00000011,
+0b01100011,
+0b00011100,
+
+0b00000000,
+0b00000110,
+0b00001110,
+0b00010110,
+0b00100110,
+0b01111111,
+0b00000110,
+0b00000110,
+
+0b00000000,
+0b01111111,
+0b01100000,
+0b01111100,
+0b01100011,
+0b00000011,
+0b01100011,
+0b00011100,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b01100000,
+0b01111110,
+0b01100011,
+0b01100011,
+0b00011100,
+
+0b00000000,
+0b01111111,
+0b00000011,
+0b00000011,
+0b00000110,
+0b00011000,
+0b00110000,
+0b01100000,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b01100011,
+0b00011100,
+0b01100011,
+0b01100011,
+0b00011100,
+
+0b00000000,
+0b00011100,
+0b01100011,
+0b01100011,
+0b00011111,
+0b00000011,
+0b01100011,
+0b00011100,
+
+};
+
+field video_field 4*VIDEO_W*VIDEO_H;
 
 const VIDEO_W = 400;
 const VIDEO_H = 200;
@@ -81,38 +170,33 @@ sleep(tm)
 
 
 fn
-b_main()
+fill(x,y,w,h,pixel)
 {
-  squ_vol = 32;
+  var  base_ptr = video.ptr+(4*VIDEO_W*y)+(4*x);
 
-    loop
+    for y_off in h
     {
-      squ_freq = 24;
+      var  ptr = base_ptr             ;
+                 base_ptr += 4*VIDEO_W;
 
-      sleep(200);
+        for x_off in w
+        {
+          ptr.u32 = pixel;
 
-      squ_freq = 20;
-
-      sleep(200);
+          ptr += 4;
+        }
     }
 }
 
 
 fn
-a_main()
+main()
 {
-  sin_vol = 32;
+  video = video_field.ptr;
 
-    loop
-    {
-      sin_freq = 24;
+  fill(0,0,VIDEO_W,VIDEO_H,(0xFF<<24)|(0x00<<16)|(0x00<<8));
 
-      sleep(400);
-
-      sin_freq = 20;
-
-      sleep(100);
-    }
+  halt;
 }
     </textarea>
     <textarea id="asm_text" cols="16" rows="12">
@@ -229,6 +313,11 @@ a_main()
                 g_actx.resume();
               }
           }
+
+        else
+          {
+            start_audio();
+          }
       }
 
       function
@@ -314,9 +403,11 @@ a_main()
           {
             const  rgba_i = 4*i;
 
-            g_imgdat.data[rgba_i  ] = get_byte(base+rgba_i  );
-            g_imgdat.data[rgba_i+1] = get_byte(base+rgba_i+1);
-            g_imgdat.data[rgba_i+2] = get_byte(base+rgba_i+2);
+            const  pixel = get_word(base+i);
+
+            g_imgdat.data[rgba_i  ] = (pixel>>24)&0xFF;
+            g_imgdat.data[rgba_i+1] = (pixel>>16)&0xFF;
+            g_imgdat.data[rgba_i+2] = (pixel>> 8)&0xFF;
           }
 
 
@@ -365,9 +456,6 @@ a_main()
               {
                 g_imgdat.data[(4*i)+3] = 255;
               }
-
-
-            start_audio();
           }
       }
 

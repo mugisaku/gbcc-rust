@@ -119,15 +119,15 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
 
   let  mut txt = res.to_text();
 
-       if s ==   "ptr"{txt.push_to_ptr();}
-  else if s ==   "i8"{txt.change_kind(AsmEvalKind::DerefI8 );}
-  else if s ==  "i16"{txt.change_kind(AsmEvalKind::DerefI16);}
-  else if s ==  "i32"{txt.change_kind(AsmEvalKind::DerefI32);}
-  else if s ==  "i64"{txt.change_kind(AsmEvalKind::DerefI64);}
-  else if s ==   "u8"{txt.change_kind(AsmEvalKind::DerefU8 );}
-  else if s ==  "u16"{txt.change_kind(AsmEvalKind::DerefU16);}
-  else if s ==  "u32"{txt.change_kind(AsmEvalKind::DerefU32);}
-  else{panic!();}
+       if s == "ptr"{txt.push_to_ptr();}
+  else if s ==  "i8"{txt.change_kind(AsmEvalKind::DerefI8 );}
+  else if s == "i16"{txt.change_kind(AsmEvalKind::DerefI16);}
+  else if s == "i32"{txt.change_kind(AsmEvalKind::DerefI32);}
+  else if s == "i64"{txt.change_kind(AsmEvalKind::DerefI64);}
+  else if s ==  "u8"{txt.change_kind(AsmEvalKind::DerefU8 );}
+  else if s == "u16"{txt.change_kind(AsmEvalKind::DerefU16);}
+  else if s == "u32"{txt.change_kind(AsmEvalKind::DerefU32);}
+  else{panic!("evalute_access error: unknown field {}",s);}
 
 
   EvalResult::Value(txt)
@@ -181,7 +181,23 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_io(sym.get_offset());
+          txt.push_global_var(sym.get_offset());
+
+          EvalResult::Value(txt)
+        }
+      SymbolKind::Str(_,_)=>
+        {
+          let  mut txt = AsmEvalText::new();
+
+          txt.push_i64(sym.get_offset() as i64);
+
+          EvalResult::Value(txt)
+        }
+      SymbolKind::Field(_)=>
+        {
+          let  mut txt = AsmEvalText::new();
+
+          txt.push_i64(sym.get_offset() as i64);
 
           EvalResult::Value(txt)
         }

@@ -639,15 +639,6 @@ push_global_var(&mut self, off: usize)
 
 
 pub fn
-push_io(&mut self, off: usize)
-{
-  self.push_i64(off as i64);
-
-  self.kind = AsmEvalKind::DerefI64;
-}
-
-
-pub fn
 push_fn(&mut self, off: usize)
 {
   self.push_i64(off as i64);
@@ -899,6 +890,8 @@ push_brnz(&mut self, s: &str)
 pub fn
 push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
 {
+  let  k = l.kind.clone();
+
     if op == "="
     {
       r.push_load();
@@ -925,7 +918,7 @@ push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
     }
 
 
-  let  op = match &l.kind
+  let  op = match k
     {
   AsmEvalKind::DerefI8 =>{Opcode::St_i8 }
   AsmEvalKind::DerefI16=>{Opcode::St_i16}
@@ -934,7 +927,17 @@ push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
   AsmEvalKind::DerefU8 =>{Opcode::St_i8 }
   AsmEvalKind::DerefU16=>{Opcode::St_i16}
   AsmEvalKind::DerefU32=>{Opcode::St_i32}
-  _=>{panic!();}
+  _=>
+    {
+        for ln in &l.lines
+        {
+          ln.print();
+          println!("");
+        }
+
+
+      panic!("push_assign error: assign to non deref");
+    }
     };
 
 
