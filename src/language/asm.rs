@@ -48,6 +48,8 @@ Opcode
   Shl, Shr, And, Or, Xor,
   Eq, Neq, Lt, Lteq, Gt, Gteq,
 
+  Lnot, Land, Lor,
+
   Prcal,
     Cal,
 
@@ -126,6 +128,10 @@ to_str(&self)-> &'static str
   Self::And=>{"and"}
   Self::Or =>{"or"}
   Self::Xor=>{"xor"}
+
+  Self::Lnot=>{"lnot"}
+  Self::Land=>{"land"}
+  Self::Lor =>{"lor"}
 
   Self::Eq  =>{"eq"}
   Self::Neq =>{"neq"}
@@ -212,6 +218,9 @@ from(b: u8)-> Self
   (op) if op == Self::And as u8=>{Self::And}
   (op) if op == Self::Or  as u8=>{Self::Or}
   (op) if op == Self::Xor as u8=>{Self::Xor}
+  (op) if op == Self::Lnot as u8=>{Self::Lnot}
+  (op) if op == Self::Land as u8=>{Self::Land}
+  (op) if op == Self::Lor as u8=>{Self::Lor}
   (op) if op == Self::Eq  as u8=>{Self::Eq}
   (op) if op == Self::Neq as u8=>{Self::Neq}
   (op) if op == Self::Lt   as u8=>{Self::Lt}
@@ -701,20 +710,13 @@ push_load(&mut self)
 pub fn
 push_unary(&mut self, op: &str)
 {
+  self.push_load();
+
     match op
     {
-  (s) if s == "-"=>
-    {
-      self.push_load();
-
-      self.push_opcode(Opcode::Neg);
-    }
-  (s) if s == "!"=>
-    {
-      self.push_load();
-
-      self.push_opcode(Opcode::Not);
-    }
+  (s) if s == "-"=>{self.push_opcode(Opcode::Neg);}
+  (s) if s == "^"=>{self.push_opcode(Opcode::Not);}
+  (s) if s == "!"=>{self.push_opcode(Opcode::Lnot);}
   _=>{panic!();}
     }
 }
@@ -740,6 +742,8 @@ push_binary(&mut self, mut other: Self, op_s: &str)
   (s) if s ==  "&"=>{Opcode::And}
   (s) if s ==  "|"=>{Opcode::Or}
   (s) if s ==  "^"=>{Opcode::Xor}
+  (s) if s == "&&"=>{Opcode::Land}
+  (s) if s == "||"=>{Opcode::Lor}
   (s) if s == "=="=>{Opcode::Eq}
   (s) if s == "!="=>{Opcode::Neq}
   (s) if s ==  "<"=>{Opcode::Lt}

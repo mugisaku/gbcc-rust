@@ -50,6 +50,8 @@ evaluate_binary_const(l: i64, r: i64, op: &str)-> Result<i64,()>
   (s) if s == "<="=>{Ok(if l <= r{1} else{0})}
   (s) if s ==  ">"=>{Ok(if l >  r{1} else{0})}
   (s) if s == ">="=>{Ok(if l >= r{1} else{0})}
+  (s) if s == "&&"=>{Ok(if (l != 0) && (r != 0){1} else{0})}
+  (s) if s == "||"=>{Ok(if (l != 0) || (r != 0){1} else{0})}
   _=>{Err(())}
     }
 }

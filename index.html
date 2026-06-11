@@ -194,7 +194,7 @@ draw_rect(x,y,w,h,pixel)
 
 
 fn
-print_number(n,x,y,fore_pixel,back_pixel)
+print_number(n,x,y,pixel)
 {
   var  ptr = font+(8*n);
 
@@ -207,12 +207,7 @@ print_number(n,x,y,fore_pixel,back_pixel)
         {
             if bits&0x80
             {
-              dot(x+x_off,y+y_off,fore_pixel);
-            }
-
-          else
-            {
-              dot(x+x_off,y+y_off,back_pixel);
+              dot(x+x_off,y+y_off,pixel);
             }
 
 
@@ -223,11 +218,11 @@ print_number(n,x,y,fore_pixel,back_pixel)
 
 
 fn
-print_int(i,x,y,fore_pixel,back_pixel)
+print_int(i,x,y,pixel)
 {
     if i == 0
     {
-      print_number(0,x,y,fore_pixel,back_pixel);
+      print_number(0,x,y,pixel);
 
       return;
     }
@@ -235,7 +230,7 @@ print_int(i,x,y,fore_pixel,back_pixel)
 
     while i
     {
-      print_number(i%10,x,y,fore_pixel,back_pixel);
+      print_number(i%10,x,y,pixel);
 
       x -=  8;
       i /= 10;
@@ -268,9 +263,24 @@ main()
 {
   video = video_field;
 
+  var  x = 80;
+  var  y = 80;
+
   loop
   {
-    print_int(time,80,80,0xFFFFFFFF,0);
+    draw_rect(x,y,24,24,0);
+
+         if (input&UP_KEY   )&&(y >=                8){y -= 8;}
+    else if (input&DOWN_KEY )&&((y+24) <= (VIDEO_H-8)){y += 8;}
+         if (input&LEFT_KEY )&&(x >=                8){x -= 8;}
+    else if (input&RIGHT_KEY)&&((x+24) <= (VIDEO_W-8)){x += 8;}
+
+    fill(0,0,8*9,16,0);
+
+    print_int(x,8*8,0,0xFFFFFFFF);
+    print_int(y,8*8,8,0xFFFFFFFF);
+
+    draw_rect(x,y,24,24,0xFFFFFFFF);
 
     halt;
   }

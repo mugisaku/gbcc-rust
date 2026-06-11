@@ -593,6 +593,10 @@ step(&mut self)
   (op) if op == Opcode::Or  as u8=>{let  (l,r) = self.pop2();  self.push(l|r);}
   (op) if op == Opcode::Xor as u8=>{let  (l,r) = self.pop2();  self.push(l^r);}
 
+  (op) if op == Opcode::Lnot as u8=>{let  v = self.pop();  self.push(if v != 0{0} else{1});}
+  (op) if op == Opcode::Land as u8=>{let  (l,r) = self.pop2();  self.push(if (l != 0) && (r != 0){1} else{0});}
+  (op) if op == Opcode::Lor  as u8=>{let  (l,r) = self.pop2();  self.push(if (l != 0) || (r != 0){1} else{0});}
+
   (op) if op == Opcode::Eq  as u8=>{let  (l,r) = self.pop2();  self.push_b(l == r);}
   (op) if op == Opcode::Neq as u8=>{let  (l,r) = self.pop2();  self.push_b(l != r);}
 
