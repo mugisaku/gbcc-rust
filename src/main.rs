@@ -30,14 +30,14 @@ compile_and_run(s: &str)
 
           let  mut m = Machine::new();
 
-          m.reset(0,256,&mut exec,"main",0);
+          m.reset(0,1024*1024*16,&mut exec,"main",0);
 
-m.set_verbose();
+//m.set_verbose();
 
           println!("machine runs");
-
+//loop{
           m.keep_run();
-
+//}
           println!("machine is finished");
 
           exec.print_memory();
@@ -257,7 +257,7 @@ main()
 
   fill(0,0,VIDEO_W,VIDEO_H,0xFF00FF);
 
-  halt;
+  loop{halt;}
 }
 
 

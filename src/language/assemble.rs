@@ -150,11 +150,13 @@ process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Optio
 
     for (cond,blk) in ifstmt.get_cond_block_list()
     {
-      let  txt = evaluate(cond,tbl,Some(scp)).to_text();
+      let  mut txt = evaluate(cond,tbl,Some(scp)).to_text();
 
       output.push_label(blh.get_label());
 
       blh.increment();
+
+      txt.push_load();
 
       output.push_eval_text(txt);
 
@@ -334,7 +336,9 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       output.push_label(&clh.on_continue);
 
 
-      let  txt = evaluate(e,tbl,Some(scp)).to_text();
+      let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
+
+      txt.push_load();
 
       output.push_eval_text(txt);
 
@@ -353,11 +357,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
         {
           let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
 
-            if txt.is_deref()
-            {
-              txt.push_load();
-            }
-
+          txt.push_load();
 
           output.push_eval_text(txt);
         }
@@ -393,11 +393,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     {
       let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
 
-        if txt.is_deref()
-        {
-          txt.push_load();
-        }
-
+      txt.push_load();
 
       txt.push_opcode(Opcode::Pri);
 

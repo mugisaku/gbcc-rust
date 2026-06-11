@@ -48,14 +48,13 @@ io noi_vol ;
 io report;
 
 str font u8 = {
-0b00000000,
-0b00011100,
-0b00100010,
-0b01000101,
-0b01001001,
-0b01010001,
-0b00100010,
-0b00011100,
+0b00111110,
+0b01100011,
+0b01100111,
+0b01101011,
+0b01110011,
+0b01100011,
+0b00111110,
 
 0b00000000,
 0b00001100,
@@ -170,9 +169,84 @@ sleep(tm)
 
 
 fn
+dot(x,y,pixel)
+{
+  (video+(4*VIDEO_W*y)+(4*x)).u32 = pixel;
+}
+
+
+fn
+draw_rect(x,y,w,h,pixel)
+{
+    for off in w
+    {
+      dot(x+off,y    ,pixel);
+      dot(x+off,y+h-1,pixel);
+    }
+
+
+    for off in h
+    {
+      dot(x    ,y+off,pixel);
+      dot(x+w-1,y+off,pixel);
+    }
+}
+
+
+fn
+print_number(n,x,y,fore_pixel,back_pixel)
+{
+  var  ptr = font+(8*n);
+
+    for y_off in 8
+    {
+      var  bits = ptr.u8;
+                  ptr += 1;
+
+        for x_off in 8
+        {
+            if bits&0x80
+            {
+              dot(x+x_off,y+y_off,fore_pixel);
+            }
+
+          else
+            {
+              dot(x+x_off,y+y_off,back_pixel);
+            }
+
+
+          bits <<= 1;
+        }
+    }
+}
+
+
+fn
+print_int(i,x,y,fore_pixel,back_pixel)
+{
+    if i == 0
+    {
+      print_number(0,x,y,fore_pixel,back_pixel);
+
+      return;
+    }
+
+
+    while i
+    {
+      print_number(i%10,x,y,fore_pixel,back_pixel);
+
+      x -=  8;
+      i /= 10;
+    }
+}
+
+
+fn
 fill(x,y,w,h,pixel)
 {
-  var  base_ptr = video.ptr+(4*VIDEO_W*y)+(4*x);
+  var  base_ptr = video+(4*VIDEO_W*y)+(4*x);
 
     for y_off in h
     {
@@ -192,11 +266,17 @@ fill(x,y,w,h,pixel)
 fn
 main()
 {
-  video = video_field.ptr;
+  video = video_field;
 
-  fill(0,0,VIDEO_W,VIDEO_H,(0xFF<<24)|(0x00<<16)|(0x00<<8));
+  loop
+  {
+    print_int(time,80,80,0xFFFFFFFF,0);
 
-  halt;
+    halt;
+  }
+
+
+  loop{halt;}
 }
     </textarea>
     <textarea id="asm_text" cols="16" rows="12">
@@ -403,7 +483,7 @@ main()
           {
             const  rgba_i = 4*i;
 
-            const  pixel = get_word(base+i);
+            const  pixel = get_word(base+rgba_i);
 
             g_imgdat.data[rgba_i  ] = (pixel>>24)&0xFF;
             g_imgdat.data[rgba_i+1] = (pixel>>16)&0xFF;
@@ -422,7 +502,7 @@ main()
       function
       run()
       {
-        g_ready = setup(g_text.value,1024*1024*8,1024);
+        g_ready = setup(g_text.value,1024*1024*8,1024*1024*16);
 
           if(g_ready)
           {
