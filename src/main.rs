@@ -21,7 +21,7 @@ compile_and_run(s: &str)
     {
         if let Ok(mut symtbl) = SymbolTable::build(root)
         {
-          let  mut exec = symtbl.generate_exec(1024*1024*8);
+          let  mut exec = symtbl.generate_exec();
 
           exec.print_text();
 //          symtbl.print();

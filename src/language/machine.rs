@@ -12,7 +12,6 @@ pub struct
 Machine
 {
   memory_ptr: *mut u8,
-  memory_size: usize,
 
   id: usize,
 
@@ -42,7 +41,6 @@ new()-> Self
 {
   Self{
     memory_ptr: std::ptr::null_mut(),
-    memory_size: 0,
 
     id: 0,
 
@@ -78,40 +76,9 @@ set_verbose(&mut self)
 
 
 pub fn
-get_byte(&self, offset: usize)-> u8
-{
-  unsafe{*self.memory_ptr.add(offset%self.memory_size)}
-}
-
-
-pub fn
-get_byte_unchecked(&self, offset: usize)-> u8
-{
-  unsafe{*self.memory_ptr.add(offset)}
-}
-
-
-pub fn
-put_byte(&self, offset: usize, byte: u8)
-{
-  unsafe{*self.memory_ptr.add(offset%self.memory_size) = byte;}
-}
-
-
-pub fn
-put_byte_unchecked(&self, offset: usize, byte: u8)
-{
-  unsafe{*self.memory_ptr.add(offset) = byte;}
-}
-
-
-pub fn
 reset(&mut self, id: usize, freq: usize, exec: &mut Exec, entry_fn_name: &str, offset: usize)
 {
-  let  mem = exec.get_memory_mut();
-
-  self.memory_ptr  = mem.as_mut_ptr();
-  self.memory_size = mem.len();
+  self.memory_ptr = exec.get_memory_mut().as_mut_ptr();
 
   self.frequency = freq;
 
@@ -184,14 +151,14 @@ pop2_f(&mut self)-> (f64,f64)
 pub fn
 get_last(&self)-> u64
 {
-  unsafe{*(self.memory_ptr.add(self.sp-WORD_SIZE) as *const u64)}
+  unsafe{*(self.get_ptr((self.sp-WORD_SIZE)&Exec::MEMORY_MASK8) as *const u64)}
 }
 
 
 pub fn
 ref_last_mut(&mut self)-> &mut u64
 {
-  unsafe{&mut *(self.memory_ptr.add(self.sp-WORD_SIZE) as *mut u64)}
+  unsafe{&mut *(self.get_mut_ptr((self.sp-WORD_SIZE)&Exec::MEMORY_MASK8) as *mut u64)}
 }
 
 
@@ -202,10 +169,10 @@ get_ptr(&self, off: usize)-> *const u8
 }
 
 
-fn  get_u8( &self, off: usize)-> u8 {unsafe{*(self.get_ptr(off)              )}}
-fn  get_u16(&self, off: usize)-> u16{unsafe{*(self.get_ptr(off) as *const u16)}}
-fn  get_u32(&self, off: usize)-> u32{unsafe{*(self.get_ptr(off) as *const u32)}}
-fn  get_u64(&self, off: usize)-> u64{unsafe{*(self.get_ptr(off) as *const u64)}}
+fn  get_u8( &self, off: usize)-> u8 {unsafe{*(self.get_ptr(off&Exec::MEMORY_MASK1)              )}}
+fn  get_u16(&self, off: usize)-> u16{unsafe{*(self.get_ptr(off&Exec::MEMORY_MASK2) as *const u16)}}
+fn  get_u32(&self, off: usize)-> u32{unsafe{*(self.get_ptr(off&Exec::MEMORY_MASK4) as *const u32)}}
+fn  get_u64(&self, off: usize)-> u64{unsafe{*(self.get_ptr(off&Exec::MEMORY_MASK8) as *const u64)}}
 
 
 pub fn
@@ -215,10 +182,10 @@ get_mut_ptr(&mut self, off: usize)-> *mut u8
 }
 
 
-fn  put_u8( &mut self, off: usize, v: u8 ){unsafe{*(self.get_mut_ptr(off)            ) = v};}
-fn  put_u16(&mut self, off: usize, v: u16){unsafe{*(self.get_mut_ptr(off) as *mut u16) = v};}
-fn  put_u32(&mut self, off: usize, v: u32){unsafe{*(self.get_mut_ptr(off) as *mut u32) = v};}
-fn  put_u64(&mut self, off: usize, v: u64){unsafe{*(self.get_mut_ptr(off) as *mut u64) = v};}
+fn  put_u8( &mut self, off: usize, v: u8 ){unsafe{*(self.get_mut_ptr(off&Exec::MEMORY_MASK1)            ) = v};}
+fn  put_u16(&mut self, off: usize, v: u16){unsafe{*(self.get_mut_ptr(off&Exec::MEMORY_MASK2) as *mut u16) = v};}
+fn  put_u32(&mut self, off: usize, v: u32){unsafe{*(self.get_mut_ptr(off&Exec::MEMORY_MASK4) as *mut u32) = v};}
+fn  put_u64(&mut self, off: usize, v: u64){unsafe{*(self.get_mut_ptr(off&Exec::MEMORY_MASK8) as *mut u64) = v};}
 
 
 pub fn
@@ -271,7 +238,7 @@ get_next_byte(&mut self)-> u8
 {
   let  pc = self.pop_pc();
 
-  unsafe{*self.memory_ptr.add(pc)}
+  self.get_u8(pc)
 }
 
 

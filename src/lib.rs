@@ -89,7 +89,7 @@ process()
 
 #[wasm_bindgen]
 pub fn
-setup(s: &str, memsz: u32, freq: u32)-> Option<String>
+setup(s: &str, freq: u32)-> Option<String>
 {
     unsafe
     {
@@ -97,7 +97,7 @@ setup(s: &str, memsz: u32, freq: u32)-> Option<String>
         {
             if let Ok(mut symtbl) = SymbolTable::build(root)
             {
-              EXEC = symtbl.generate_exec(memsz as usize);
+              EXEC = symtbl.generate_exec();
 
               A_MACHINE.reset(0,freq as usize,&mut EXEC,"main",0);
 //              B_MACHINE.reset(1,freq as usize,&mut EXEC,"main",1024);
