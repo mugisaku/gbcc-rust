@@ -91,6 +91,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> Result
 
       Err(())
     }
+  Expr::String(s)=>{Err(())}
   Expr::Int(i)=>{Ok(*i)}
   Expr::CallOp(f,args)=>
     {

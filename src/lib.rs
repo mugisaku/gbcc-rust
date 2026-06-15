@@ -68,16 +68,6 @@ get_const(s: &str)-> u32
 
 #[wasm_bindgen]
 pub fn
-get_info()-> u32
-{
-  unsafe{
-    B_MACHINE.get_pc() as u32
-  }
-}
-
-
-#[wasm_bindgen]
-pub fn
 process()
 {
   unsafe{

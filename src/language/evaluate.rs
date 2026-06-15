@@ -209,7 +209,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
 
           EvalResult::Value(txt)
         }
-      _=>{EvalResult::Err}
+      _=>{panic!("evaluate_identifier error: {} is invalid symbol kind",s);}
         };
     }
 
@@ -307,6 +307,16 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
   Expr::Identifier(s)=>
     {
       evaluate_identifier(s,tbl,scp_opt)
+    }
+  Expr::String(s)=>
+    {
+      let  sym = tbl.find_string_symbol(s).unwrap();
+
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_i64(sym.get_offset() as i64);
+
+      EvalResult::Value(txt)
     }
   Expr::CallOp(f,args)=>
     {

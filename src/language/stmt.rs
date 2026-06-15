@@ -37,7 +37,7 @@ collect(&self, buf: &mut Vec<Collectible>)
 {
     for (e,blk) in &self.cond_block_list
     {
-        e.collect(buf);
+        e.collect_string(buf);
       blk.collect(buf);
     }
 
@@ -140,7 +140,7 @@ pub fn  get_block(&self)-> &Block{&self.block}
 pub fn
 collect(&self, buf: &mut Vec<Collectible>)
 {
-   self.expr.collect(buf);
+   self.expr.collect_string(buf);
   self.block.collect(buf);
 }
 
@@ -301,13 +301,13 @@ collect(&self, buf: &mut Vec<Collectible>)
     {
   Self::Empty=>{}
   Self::Block(blk)=>{blk.collect(buf);}
-  Self::Decl(decl)=>{decl.collect(buf);}
-  Self::Expr(e)=>{e.collect(buf);}
-  Self::If(i)=>{i.collect(buf);;}
+  Self::Decl(decl)=>{decl.collect_string(buf);}
+  Self::Expr(e)=>{e.collect_string(buf);}
+  Self::If(i)=>{i.collect(buf);}
   Self::Loop(blk)=>{blk.collect(buf);}
   Self::While(e,blk)=>
     {
-        e.collect(buf);
+        e.collect_string(buf);
       blk.collect(buf);
     }
   Self::For(f)=>{f.collect(buf);}
@@ -315,15 +315,15 @@ collect(&self, buf: &mut Vec<Collectible>)
     {
         if let Some(e) = e_opt
         {
-          e.collect(buf);
+          e.collect_string(buf);
         }
     }
   Self::Assign(l,r,_)=>
     {
-      l.collect(buf);
-      r.collect(buf);
+      l.collect_string(buf);
+      r.collect_string(buf);
     }
-  Self::Print(e)=>{e.collect(buf);}
+  Self::Print(e)=>{e.collect_string(buf);}
   _=>{}
     }
 }

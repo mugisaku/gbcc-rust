@@ -10,6 +10,7 @@ pub enum
 Collectible
 {
   Identifier(String),
+      String(String),
 
 }
 
@@ -21,6 +22,7 @@ pub enum
 Expr
 {
   Identifier(String),
+      String(String),
 
   Int(i64),
 
@@ -63,6 +65,7 @@ collect(&self, buf: &mut Vec<Collectible>)
     match self
     {
   Self::Identifier(s)=>{buf.push(Collectible::Identifier(s.clone()));}
+  Self::String(s)=>{buf.push(Collectible::String(s.clone()));}
   Self::CallOp(f,args)=>
     {
       f.collect(buf);
@@ -89,12 +92,48 @@ collect(&self, buf: &mut Vec<Collectible>)
 
 
 pub fn
+collect_string(&self, buf: &mut Vec<Collectible>)
+{
+    match self
+    {
+  Self::String(s)=>{buf.push(Collectible::String(s.clone()));}
+  Self::CallOp(f,args)=>
+    {
+      f.collect_string(buf);
+
+        for e in args
+        {
+          e.collect_string(buf);
+        }
+    }
+  Self::AccessOp(ins,_)=>
+    {
+      ins.collect_string(buf);
+    }
+  Self::Expr(e)=>{e.collect_string(buf);}
+  Self::UnaryOp(o,op)=>{o.collect_string(buf);}
+  Self::BinaryOp(l,r,op)=>
+    {
+      l.collect_string(buf);
+      r.collect_string(buf);
+    }
+  _=>{}
+    }
+}
+
+
+pub fn
 print_to(&self, buf: &mut String)
 {
     match self
     {
   Self::Identifier(s)=>{buf.push_str(s);}
-
+  Self::String(s)=>
+    {
+      buf.push('\"');
+      buf.push_str(s);
+      buf.push('\"');
+    }
   Self::Int(i)=>{buf.push_str(&format!("{}",*i));}
   Self::CallOp(f,args)=>
     {
@@ -320,7 +359,9 @@ read_operand_core(start_nd: &Node)-> Expr
         match v
         {
       Value::Identifier(s)=>{return Expr::Identifier(s.clone());}
+      Value::String(s)=>{return Expr::String(s.clone());}
       Value::Uint(u) =>{return Expr::Int(*u as i64);}
+      Value::Char(c) =>{return Expr::Int(*c as i64);}
       Value::Float(_) =>{panic!("do not use floating point number");}
       Value::SemiString(s)=>
           {

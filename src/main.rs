@@ -91,7 +91,6 @@ main()
 {
   let  codes =
 r#"
-
 io input;
 io video;
 io time;
@@ -108,108 +107,19 @@ io noi_vol ;
 
 io report;
 
-str font u8 = {
-0b00000000,
-0b00011100,
-0b00100010,
-0b01000101,
-0b01001001,
-0b01010001,
-0b00100010,
-0b00011100,
-
-0b00000000,
-0b00001100,
-0b00111100,
-0b00001100,
-0b00001100,
-0b00001100,
-0b00001100,
-0b00011110,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b00000011,
-0b00000011,
-0b00001100,
-0b00110000,
-0b01111111,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b00000011,
-0b00001100,
-0b00000011,
-0b01100011,
-0b00011100,
-
-0b00000000,
-0b00000110,
-0b00001110,
-0b00010110,
-0b00100110,
-0b01111111,
-0b00000110,
-0b00000110,
-
-0b00000000,
-0b01111111,
-0b01100000,
-0b01111100,
-0b01100011,
-0b00000011,
-0b01100011,
-0b00011100,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b01100000,
-0b01111110,
-0b01100011,
-0b01100011,
-0b00011100,
-
-0b00000000,
-0b01111111,
-0b00000011,
-0b00000011,
-0b00000110,
-0b00011000,
-0b00110000,
-0b01100000,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b01100011,
-0b00011100,
-0b01100011,
-0b01100011,
-0b00011100,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b01100011,
-0b00011111,
-0b00000011,
-0b01100011,
-0b00011100,
-
-};
-
 field video_field 4*VIDEO_W*VIDEO_H;
 
 const VIDEO_W = 400;
 const VIDEO_H = 200;
 
-const    UP_KEY = 0b0001;
-const  LEFT_KEY = 0b0010;
-const RIGHT_KEY = 0b0100;
-const  DOWN_KEY = 0b1000;
+const    UP_KEY = 0b00000001;
+const  LEFT_KEY = 0b00000010;
+const RIGHT_KEY = 0b00000100;
+const  DOWN_KEY = 0b00001000;
+const     Z_KEY = 0b00010000;
+const     X_KEY = 0b00100000;
+const     C_KEY = 0b01000000;
+const     V_KEY = 0b10000000;
 
 
 fn
@@ -231,9 +141,124 @@ sleep(tm)
 
 
 fn
+dot(x,y,pixel)
+{
+  (video+(4*VIDEO_W*y)+(4*x)).u32 = pixel;
+}
+
+
+fn
+draw_rect(x,y,w,h,pixel)
+{
+    for off in w
+    {
+      dot(x+off,y    ,pixel);
+      dot(x+off,y+h-1,pixel);
+    }
+
+
+    for off in h
+    {
+      dot(x    ,y+off,pixel);
+      dot(x+w-1,y+off,pixel);
+    }
+}
+
+
+fn
+print_int(i,f,x,y,w,pixel)
+{
+    if i == 0
+    {
+      f('0',x,y,pixel);
+
+      return;
+    }
+
+
+    while i
+    {
+      f('0'+(i%10),x,y,pixel);
+
+      x -=  w;
+      i /= 10;
+    }
+}
+
+
+fn
+print8_unicode(u,x,y,pixel)
+{
+  var  ptr = FONT8_START+(8*u);
+
+    for y_off in 8
+    {
+      var  bits = ptr.u8;
+                  ptr += 1;
+
+        for x_off in 8
+        {
+            if bits&0x80
+            {
+              dot(x+x_off,y+y_off,pixel);
+            }
+
+
+          bits <<= 1;
+        }
+    }
+}
+
+
+fn
+print14_unicode(u,x,y,pixel)
+{
+  var  ptr = FONT14_START+(2*14*u);
+
+    for y_off in 14
+    {
+      var  bits = ptr.u16;
+                  ptr += 2;
+
+        for x_off in 14
+        {
+            if bits&0x8000
+            {
+              dot(x+x_off,y+y_off,pixel);
+            }
+
+
+          bits <<= 1;
+        }
+    }
+}
+
+
+fn
+print14_unicode_s(s,x,y,pixel)
+{
+    loop
+    {
+      var  u = s.u16;
+               s += 2;
+
+        if u == 0
+        {
+          break;
+        }
+
+
+      print14_unicode(u,x,y,pixel);
+
+      x += 16;
+    }
+}
+
+
+fn
 fill(x,y,w,h,pixel)
 {
-  var  base_ptr = video.ptr+(4*VIDEO_W*y)+(4*x);
+  var  base_ptr = video+(4*VIDEO_W*y)+(4*x);
 
     for y_off in h
     {
@@ -253,14 +278,31 @@ fill(x,y,w,h,pixel)
 fn
 main()
 {
-  video = video_field.ptr;
+  video = video_field;
 
-  fill(0,0,VIDEO_W,VIDEO_H,0xFF00FF);
+  var  x = 80;
+  var  y = 80;
+
+  loop
+  {
+    fill(0,0,VIDEO_W,VIDEO_H,0);
+
+         if (input&UP_KEY   )&&(y >=                8){y -= 8;}
+    else if (input&DOWN_KEY )&&((y+24) <= (VIDEO_H-8)){y += 8;}
+         if (input&LEFT_KEY )&&(x >=                8){x -= 8;}
+    else if (input&RIGHT_KEY)&&((x+24) <= (VIDEO_W-8)){x += 8;}
+
+    print_int(x,print14_unicode,16*8, 0,16,0xFFFFFFFF);
+    print_int(y,print14_unicode,16*8,16,16,0xFFFFFFFF);
+
+    print14_unicode_s("＜アリだー",x,y,0xFFFFFFFF);
+
+    halt;
+  }
+
 
   loop{halt;}
 }
-
-
 "#;
 
 

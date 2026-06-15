@@ -218,7 +218,31 @@ collect(&self, buf: &mut Vec<Collectible>)
         }
     }
   DeclKind::Field(e)=>{e.collect(buf);}
-  DeclKind::Fn(fd)=>{/*fd.get_block().collect(buf);*/}
+  DeclKind::Fn(fd)=>{fd.get_block().collect(buf);}
+  _=>{panic!();}
+    }
+}
+
+
+pub fn
+collect_string(&self, buf: &mut Vec<Collectible>)
+{
+    match &self.kind
+    {
+  DeclKind::Undef=>{}
+  DeclKind::Const(e)=>{e.collect_string(buf);}
+  DeclKind::Var(e)  =>{e.collect_string(buf);}
+  DeclKind::Io      =>{}
+  DeclKind::Str(dk,sik)=>
+    {
+        match sik
+        {
+      StrInitKind::String(_)=>{}
+      StrInitKind::ExprList(ls)=>{for e in ls{e.collect_string(buf);}}
+        }
+    }
+  DeclKind::Field(e)=>{e.collect_string(buf);}
+  DeclKind::Fn(fd)=>{fd.get_block().collect(buf);}
   _=>{panic!();}
     }
 }

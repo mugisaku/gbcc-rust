@@ -8,7 +8,7 @@ r##"
 #dynamic
 
 
-operand_core: .Identifier | .Number | ("(" & expression & ")");
+operand_core: .Identifier | .Number | .Character | .String | ("(" & expression & ")");
 
 unary_operator: "!" | "-" | "~";
 

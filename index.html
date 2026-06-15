@@ -8,9 +8,21 @@
       display: flex;
       flex-direction: row;
     }
-    .output_root{
+    .console{
       display: flex;
       flex-direction: column;
+    }
+    .input{
+      display: flex;
+      flex-direction: row;
+    }
+    .cursor{
+      display: flex;
+      flex-direction: column;
+    }
+    .left_right{
+      display: flex;
+      flex-direction: row;
     }
     </style>
   </head>
@@ -22,11 +34,25 @@
   <button id="run_btn">run</button>
   <button id="audio_btn">audio on/off</button><p>
   <span class="root">
-    <span class="output_root">
+    <span class="console">
+      <span id="report"></span>
       <canvas id="display" width="400" height="200">
       </canvas>
-      <span id="info">
-      --
+      <span class="input">
+        <span class="cursor">
+          <button id="up">↑</button>
+          <span class="left_right">
+            <button id="left">←</button>
+            <button id="right">→</button>
+          </span>
+          <button id="down">↓</button>
+        </span>
+        <span class="fn">
+          <button id="z">Z</button>
+          <button id="x">X</button>
+          <button id="c">C</button>
+          <button id="v">V</button>
+        </span>
       </span>
     </span>
   <span>
@@ -47,107 +73,19 @@ io noi_vol ;
 
 io report;
 
-str font u8 = {
-0b00111110,
-0b01100011,
-0b01100111,
-0b01101011,
-0b01110011,
-0b01100011,
-0b00111110,
-
-0b00000000,
-0b00001100,
-0b00111100,
-0b00001100,
-0b00001100,
-0b00001100,
-0b00001100,
-0b00011110,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b00000011,
-0b00000011,
-0b00001100,
-0b00110000,
-0b01111111,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b00000011,
-0b00001100,
-0b00000011,
-0b01100011,
-0b00011100,
-
-0b00000000,
-0b00000110,
-0b00001110,
-0b00010110,
-0b00100110,
-0b01111111,
-0b00000110,
-0b00000110,
-
-0b00000000,
-0b01111111,
-0b01100000,
-0b01111100,
-0b01100011,
-0b00000011,
-0b01100011,
-0b00011100,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b01100000,
-0b01111110,
-0b01100011,
-0b01100011,
-0b00011100,
-
-0b00000000,
-0b01111111,
-0b00000011,
-0b00000011,
-0b00000110,
-0b00011000,
-0b00110000,
-0b01100000,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b01100011,
-0b00011100,
-0b01100011,
-0b01100011,
-0b00011100,
-
-0b00000000,
-0b00011100,
-0b01100011,
-0b01100011,
-0b00011111,
-0b00000011,
-0b01100011,
-0b00011100,
-
-};
-
 field video_field 4*VIDEO_W*VIDEO_H;
 
 const VIDEO_W = 400;
 const VIDEO_H = 200;
 
-const    UP_KEY = 0b0001;
-const  LEFT_KEY = 0b0010;
-const RIGHT_KEY = 0b0100;
-const  DOWN_KEY = 0b1000;
+const    UP_KEY = 0b00000001;
+const  LEFT_KEY = 0b00000010;
+const RIGHT_KEY = 0b00000100;
+const  DOWN_KEY = 0b00001000;
+const     Z_KEY = 0b00010000;
+const     X_KEY = 0b00100000;
+const     C_KEY = 0b01000000;
+const     V_KEY = 0b10000000;
 
 
 fn
@@ -194,9 +132,30 @@ draw_rect(x,y,w,h,pixel)
 
 
 fn
-print_number(n,x,y,pixel)
+print_int(i,f,x,y,w,pixel)
 {
-  var  ptr = font+(8*n);
+    if i == 0
+    {
+      f('0',x,y,pixel);
+
+      return;
+    }
+
+
+    while i
+    {
+      f('0'+(i%10),x,y,pixel);
+
+      x -=  w;
+      i /= 10;
+    }
+}
+
+
+fn
+print8_unicode(u,x,y,pixel)
+{
+  var  ptr = FONT8_START+(8*u);
 
     for y_off in 8
     {
@@ -218,22 +177,46 @@ print_number(n,x,y,pixel)
 
 
 fn
-print_int(i,x,y,pixel)
+print14_unicode(u,x,y,pixel)
 {
-    if i == 0
-    {
-      print_number(0,x,y,pixel);
+  var  ptr = FONT14_START+(2*14*u);
 
-      return;
+    for y_off in 14
+    {
+      var  bits = ptr.u16;
+                  ptr += 2;
+
+        for x_off in 14
+        {
+            if bits&0x8000
+            {
+              dot(x+x_off,y+y_off,pixel);
+            }
+
+
+          bits <<= 1;
+        }
     }
+}
 
 
-    while i
+fn
+print14_unicode_s(s,x,y,pixel)
+{
+    loop
     {
-      print_number(i%10,x,y,pixel);
+      var  u = s.u16;
+               s += 2;
 
-      x -=  8;
-      i /= 10;
+        if u == 0
+        {
+          break;
+        }
+
+
+      print14_unicode(u,x,y,pixel);
+
+      x += 16;
     }
 }
 
@@ -268,19 +251,17 @@ main()
 
   loop
   {
-    draw_rect(x,y,24,24,0);
+    fill(0,0,VIDEO_W,VIDEO_H,0);
 
          if (input&UP_KEY   )&&(y >=                8){y -= 8;}
     else if (input&DOWN_KEY )&&((y+24) <= (VIDEO_H-8)){y += 8;}
          if (input&LEFT_KEY )&&(x >=                8){x -= 8;}
     else if (input&RIGHT_KEY)&&((x+24) <= (VIDEO_W-8)){x += 8;}
 
-    fill(0,0,8*9,16,0);
+    print_int(x,print14_unicode,16*8, 0,16,0xFFFFFFFF);
+    print_int(y,print14_unicode,16*8,16,16,0xFFFFFFFF);
 
-    print_int(x,8*8,0,0xFFFFFFFF);
-    print_int(y,8*8,8,0xFFFFFFFF);
-
-    draw_rect(x,y,24,24,0xFFFFFFFF);
+    print14_unicode_s("＜アリだー",x,y,0xFFFFFFFF);
 
     halt;
   }
@@ -302,13 +283,11 @@ main()
         put_word,
         get_io,
         get_const,
-        get_info,
         process,
         setup } from "./pkg/gblib.js";
 
       let  g_text;
       let  g_asmtext;
-      let  g_info;
 
       let  g_ready;
 
@@ -335,6 +314,10 @@ main()
       let  g_left_key;
       let  g_right_key;
       let  g_down_key;
+      let  g_z_key;
+      let  g_x_key;
+      let  g_c_key;
+      let  g_v_key;
 
       const  g_volume_max = 0.1;
 
@@ -355,6 +338,7 @@ main()
       let  g_noi_vol_addr ;
 
       let  g_report_addr;
+      let  g_report;
 
       function
       get_freq(addr)
@@ -505,7 +489,7 @@ main()
 
         update_audio();
 
-        g_info.innerText = "REPORT: "+get_word(g_report_addr);
+        g_report.innerText = "REPORT: "+get_word(g_report_addr);
       }
 
 
@@ -536,6 +520,10 @@ main()
             g_left_key  = get_const("LEFT_KEY");
             g_right_key = get_const("RIGHT_KEY");
             g_down_key  = get_const("DOWN_KEY");
+            g_z_key     = get_const("Z_KEY");
+            g_x_key     = get_const("X_KEY");
+            g_c_key     = get_const("C_KEY");
+            g_v_key     = get_const("V_KEY");
 
             g_cv.width  = get_const("VIDEO_W");
             g_cv.height = get_const("VIDEO_H");
@@ -558,12 +546,29 @@ main()
 
         g_cvctx.fillRect(0,0,g_cv.width,g_cv.height);
 
-        g_info = document.getElementById("info");
+        g_report = document.getElementById("report");
         g_text = document.getElementById("text");
         g_asmtext = document.getElementById("asm_text");
 
         document.getElementById("run_btn").addEventListener("click",run);
         document.getElementById("audio_btn").addEventListener("click",switch_audio);
+
+        document.getElementById("up").addEventListener("mousedown",function(){g_key_state |=  g_up_key;});
+        document.getElementById("up").addEventListener(  "mouseup",function(){g_key_state &= ~g_up_key;});
+        document.getElementById("left").addEventListener("mousedown",function(){g_key_state |=  g_left_key;});
+        document.getElementById("left").addEventListener(  "mouseup",function(){g_key_state &= ~g_left_key;});
+        document.getElementById("right").addEventListener("mousedown",function(){g_key_state |=  g_right_key;});
+        document.getElementById("right").addEventListener(  "mouseup",function(){g_key_state &= ~g_right_key;});
+        document.getElementById("down").addEventListener("mousedown",function(){g_key_state |=  g_down_key;});
+        document.getElementById("down").addEventListener(  "mouseup",function(){g_key_state &= ~g_down_key;});
+        document.getElementById("z").addEventListener("mousedown",function(){g_key_state |=  g_z_key;});
+        document.getElementById("z").addEventListener(  "mouseup",function(){g_key_state &= ~g_z_key;});
+        document.getElementById("x").addEventListener("mousedown",function(){g_key_state |=  g_x_key;});
+        document.getElementById("x").addEventListener(  "mouseup",function(){g_key_state &= ~g_x_key;});
+        document.getElementById("c").addEventListener("mousedown",function(){g_key_state |=  g_c_key;});
+        document.getElementById("c").addEventListener(  "mouseup",function(){g_key_state &= ~g_c_key;});
+        document.getElementById("v").addEventListener("mousedown",function(){g_key_state |=  g_v_key;});
+        document.getElementById("v").addEventListener(  "mouseup",function(){g_key_state &= ~g_v_key;});
 
         document.addEventListener("keydown",function(evt){
             switch(evt.key)
@@ -572,7 +577,10 @@ main()
           case  "ArrowLeft": g_key_state |=  g_left_key;break;
           case "ArrowRight": g_key_state |= g_right_key;break;
           case  "ArrowDown": g_key_state |=  g_down_key;break;
-//          case      "Enter": set_input_enter();break;
+          case  "Z": g_key_state |= g_z_key;break;
+          case  "X": g_key_state |= g_x_key;break;
+          case  "C": g_key_state |= g_c_key;break;
+          case  "V": g_key_state |= g_v_key;break;
             }
         });
 
@@ -583,7 +591,10 @@ main()
           case  "ArrowLeft": g_key_state &=  ~g_left_key;break;
           case "ArrowRight": g_key_state &= ~g_right_key;break;
           case  "ArrowDown": g_key_state &=  ~g_down_key;break;
-//          case      "Enter": unset_input_enter();break;
+          case  "Z": g_key_state &= ~g_z_key;break;
+          case  "X": g_key_state &= ~g_x_key;break;
+          case  "C": g_key_state &= ~g_c_key;break;
+          case  "V": g_key_state &= ~g_v_key;break;
             }
         });
 

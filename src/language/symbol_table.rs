@@ -12,6 +12,8 @@ use super::assemble::assemble;
 use super::evaluate::*;
 use super::evaluate_const::*;
 use super::tplg_sort::*;
+use super::font14::*;
+use super::font8::*;
 
 
 
@@ -151,6 +153,32 @@ make_str_bytes(dk: &str, ik: &StrInitKind, symtbl: &SymbolTable)-> Vec<u8>
 
 
   bytes
+}
+
+
+pub fn
+make_name_for_string(s: &str)-> String
+{
+  format!(".S:{}",s)
+}
+
+
+pub fn
+build_from_string(s: String, symtbl: &SymbolTable)-> Self
+{
+  let  name =Self::make_name_for_string(&s);
+
+  let  ik = StrInitKind::String(s);
+
+  let  bytes = Self::make_str_bytes("u16",&ik,symtbl);
+
+  Self{
+    name,
+    kind: SymbolKind::Str("u16".to_string(),bytes),
+    offset: 0,
+    deps_parent_list: Vec::new(),
+    deps_child_list: Vec::new(),
+  }
 }
 
 
@@ -325,6 +353,8 @@ SymbolTable
 {
   symbols: Vec<Symbol>,
 
+  string_count: usize,
+
 }
 
 
@@ -338,6 +368,7 @@ new()-> Self
 {
   Self{
     symbols: Vec::new(),
+    string_count: 0,
   }
 }
 
@@ -404,7 +435,7 @@ take_source(srcs: &mut Vec<Source>, name: &str)-> Source
 
 
 fn
-generate_symbols(&mut self, mut srcs: Vec<Source>)
+generate_symbols(&mut self, mut srcs: Vec<Source>, mut strs: Vec<String>)
 {
   let  names = Self::make_tplg_sorted_names(&srcs);
 
@@ -413,6 +444,14 @@ generate_symbols(&mut self, mut srcs: Vec<Source>)
       let  src = Self::take_source(&mut srcs,&name);
 
       let  sym = Symbol::build(src,self);
+
+      self.symbols.push(sym);
+    }
+
+
+    for s in strs
+    {
+      let  sym = Symbol::build_from_string(s,self);
 
       self.symbols.push(sym);
     }
@@ -425,6 +464,7 @@ build(decls: Vec<Decl>)-> Result<Self,()>
   let  mut tbl = Self::new();
 
   let  mut srcs = Vec::<Source>::new();
+  let  mut strs = Vec::<String>::new();
 
     for decl in decls
     {
@@ -452,12 +492,16 @@ build(decls: Vec<Decl>)-> Result<Self,()>
 
               srcs[i].deps_parent_list.push(s);
             }
+          Collectible::String(s)=>
+            {
+              strs.push(s);
+            }
             }
         }
     }
 
 
-  tbl.generate_symbols(srcs);
+  tbl.generate_symbols(srcs,strs);
 
   Ok(tbl)
 }
@@ -521,8 +565,8 @@ process_str_offset(&mut self, start: usize)-> usize
         {
       SymbolKind::Str(_,bytes)=>
         {
-          sym.offset = get_word_aligned(pos)              ;
-                                        pos += bytes.len();
+          sym.offset = get_word_aligned(pos)                        ;
+                                        pos += bytes.len()+WORD_SIZE;
         }
       _=>{}
         }
@@ -553,6 +597,84 @@ process_field_offset(&mut self, start: usize)-> usize
 
 
   get_word_aligned(pos)
+}
+
+
+fn
+install_font8(dst: &mut [u8])
+{
+  let  mut  iter = FONT8.iter();
+
+    while let Some(unicode) = iter.next()
+    {
+      let  base = (8*((*unicode) as usize));
+
+        for i in 0..8
+        {
+          let  bits = (*iter.next().unwrap()) as u8;
+
+          dst[base+i] = bits;
+        }
+    }
+}
+
+
+fn
+install_combi8(dst: &mut [u8])
+{
+  let  mut  iter = COMBI8.iter();
+
+    while let Some(unicode) = iter.next()
+    {
+      let  base = (2*((*unicode) as usize));
+
+      let  upper = (*iter.next().unwrap()) as u16;
+      let  lower = (*iter.next().unwrap()) as u16;
+
+      let  u_bytes = upper.to_ne_bytes();
+      let  l_bytes = lower.to_ne_bytes();
+
+      dst[base  ] = u_bytes[0];
+      dst[base+1] = u_bytes[1];
+      dst[base+2] = l_bytes[0];
+      dst[base+3] = l_bytes[1];
+    }
+}
+
+
+fn
+install_font14(dst: &mut [u8])
+{
+  let  mut  iter = FONT14.iter();
+
+
+    while let Some(unicode) = iter.next()
+    {
+      const  FULLWIDTH_FIRST: usize = 0xFF01;
+      const  FULLWIDTH_LAST: usize  = 0xFF5E;
+
+      let  u = *unicode as usize;
+
+      let  base = 2*14*u;
+
+      let  is_fullwidth_ascii = (u >= FULLWIDTH_FIRST) && (u <= FULLWIDTH_LAST);
+
+        for i in 0..14
+        {
+          let  bytes = iter.next().unwrap().to_ne_bytes();
+
+          dst[base+(2*i)  ] = bytes[0];
+          dst[base+(2*i)+1] = bytes[1];
+
+            if is_fullwidth_ascii
+            {
+              let  ascii_base = 2*14*(('!' as usize)+u-FULLWIDTH_FIRST);
+
+              dst[ascii_base+(2*i)  ] = bytes[0];
+              dst[ascii_base+(2*i)+1] = bytes[1];
+            }
+        }
+    }
 }
 
 
@@ -595,22 +717,29 @@ generate_exec(&mut self)-> Exec
 {
   let  mut exec = Exec::new_with_memory();
 
-  let   data_start = self.process_io_offset(256);
-  let    str_start = self.process_data_offset(data_start);
-  let  field_start = self.process_str_offset(str_start);
-  let  stack_start = self.process_field_offset(field_start);
+  let    data_start = self.process_io_offset(256);
+  let     str_start = self.process_data_offset(data_start);
+  let   field_start = self.process_str_offset(str_start);
+  let   font8_start = get_word_aligned(   str_start+(   8*0x10000));
+  let  combi8_start = get_word_aligned( font8_start+(2* 3*0x10000));
+  let  font14_start = get_word_aligned(combi8_start+(2*14*0x10000));
+  let   stack_start = self.process_field_offset(field_start);
 
-  self.add_const("STACK_START",stack_start as i64);
 
   let  stack_size = self.get_const_or("STACK_SIZE",1024*32);
 
   let  callstack_start = get_word_aligned(stack_start+stack_size);
 
-  self.add_const("CALLSTACK_START",callstack_start as i64);
-
   let  callstack_size = self.get_const_or("CALLSTACK_SIZE",1024*32);
 
   let  text_start = get_word_aligned(callstack_start+callstack_size);
+
+
+  self.add_const("FONT8_START",font8_start as i64);
+  self.add_const("COMBI8_START",combi8_start as i64);
+  self.add_const("FONT14_START",font14_start as i64);
+  self.add_const("STACK_START",stack_start as i64);
+  self.add_const("CALLSTACK_START",callstack_start as i64);
 
 
   let  mut pos = text_start;
@@ -697,6 +826,10 @@ generate_exec(&mut self)-> Exec
     }
 
 
+  Self::install_font8(&mut exec.memory[font8_start..]);
+  Self::install_combi8(&mut exec.memory[combi8_start..]);
+  Self::install_font14(&mut exec.memory[font14_start..]);
+
   exec
 }
 
@@ -714,6 +847,15 @@ find_symbol(&self, name: &str)-> Option<&Symbol>
 
 
   None
+}
+
+
+pub fn
+find_string_symbol(&self, s: &str)-> Option<&Symbol>
+{
+  let  name = Symbol::make_name_for_string(s);
+
+  self.find_symbol(&name)
 }
 
 
@@ -1003,6 +1145,25 @@ find_io(&self, name: &str)-> Option<usize>
             if &sym.name == name
             {
               return Some(sym.offset);
+            }
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+find_field(&self, name: &str)-> Option<(usize,usize)>
+{
+    for sym in &self.mini_symbols
+    {
+        if let MiniSymbolKind::Field(sz) = &sym.kind
+        {
+            if &sym.name == name
+            {
+              return Some((sym.offset,*sz));
             }
         }
     }
