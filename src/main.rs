@@ -21,9 +21,14 @@ compile_and_run(s: &str)
     {
         if let Ok(mut symtbl) = SymbolTable::build(root)
         {
+          let  mut tmp = Vec::<u8>::new();
+
+          tmp.resize(4*384*384,0);
+
+          symtbl.add_img("image",384,384,tmp);
+
           let  mut exec = symtbl.generate_exec();
 
-          exec.print_text();
 //          symtbl.print();
 
           println!("");
@@ -41,6 +46,7 @@ compile_and_run(s: &str)
           println!("machine is finished");
 
           exec.print_memory();
+//          exec.print_text();
         }
 
       else
@@ -256,6 +262,34 @@ print14_unicode_s(s,x,y,pixel)
 
 
 fn
+print_character(src_x,src_y,src_w,src_h,dst_x,dst_y)
+{
+//  var  dst_ptr_base = video+(4*VIDEO_W*dst_y)+(4*dst_x);
+
+//  var  src_pitch = (image+4).u32;
+//  var  src_ptr_base = image+8+(4*src_pitch*src_y)+(4*src_x);
+/*
+    for y in src_h
+    {
+      var  dst_ptr = dst_ptr_base;
+                     dst_ptr_base += 4*VIDEO_W;
+
+      var  src_ptr = src_ptr_base;
+                     src_ptr_base += 4*src_pitch;
+
+        for x in src_w
+        {
+          dst_ptr.u32 = src_ptr.u32;
+
+          dst_ptr += 4;
+          src_ptr += 4;
+        }
+    }
+*/
+}
+
+
+fn
 fill(x,y,w,h,pixel)
 {
   var  base_ptr = video+(4*VIDEO_W*y)+(4*x);
@@ -295,7 +329,7 @@ main()
     print_int(x,print14_unicode,16*8, 0,16,0xFFFFFFFF);
     print_int(y,print14_unicode,16*8,16,16,0xFFFFFFFF);
 
-    print14_unicode_s("＜アリだー",x,y,0xFFFFFFFF);
+    print_character(0,0,24,24,x,y);
 
     halt;
   }

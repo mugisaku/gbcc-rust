@@ -341,6 +341,8 @@ step(&mut self)
     }
 
 
+  let  cur_pc = self.pc;
+
   let  b = self.get_next_byte();
 
 //  println!("OP: {}",b);
@@ -644,7 +646,9 @@ step(&mut self)
 
       println!("**PRINT** {}",v);
     }
-  _=>{panic!();}
+  _=>{println!("step error: invalid opcode {} at {}",b,cur_pc);
+//let  t: Opcode = Opcode::try_from(b).unwrap();
+}
     }
 }
 

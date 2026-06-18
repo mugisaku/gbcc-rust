@@ -222,6 +222,33 @@ print14_unicode_s(s,x,y,pixel)
 
 
 fn
+print_character(src_x,src_y,src_w,src_h,dst_x,dst_y)
+{
+  var  dst_ptr_base = video+(4*VIDEO_W*dst_y)+(4*dst_x);
+
+  var  src_pitch = 4*(image+4).u32;
+  var  src_ptr_base = image+8+(src_pitch*src_y)+(4*src_x);
+
+    for y in src_h
+    {
+      var  dst_ptr = dst_ptr_base;
+                     dst_ptr_base += 4*VIDEO_W;
+
+      var  src_ptr = src_ptr_base;
+                     src_ptr_base += src_pitch;
+
+        for x in src_w
+        {
+          dst_ptr.u32 = src_ptr.u32;
+
+          dst_ptr += 4;
+          src_ptr += 4;
+        }
+    }
+}
+
+
+fn
 fill(x,y,w,h,pixel)
 {
   var  base_ptr = video+(4*VIDEO_W*y)+(4*x);
@@ -260,8 +287,8 @@ main()
 
     print_int(x,print14_unicode,16*8, 0,16,0xFFFFFFFF);
     print_int(y,print14_unicode,16*8,16,16,0xFFFFFFFF);
-
-    print14_unicode_s("＜アリだー",x,y,0xFFFFFFFF);
+draw_rect(x,y,24,24,0xFFFFFFFF);
+    print_character(0,0,40,40,x,y);
 
     halt;
   }
@@ -284,6 +311,8 @@ main()
         get_io,
         get_const,
         process,
+        build,
+        add_img,
         setup } from "./pkg/gblib.js";
 
       let  g_text;
@@ -294,6 +323,7 @@ main()
       let  g_cv;
       let  g_cvctx;
       let  g_imgdat;
+      let  g_ex_img;
 
       let  g_actx;
       let  g_sin_osc;
@@ -496,7 +526,22 @@ main()
       function
       run()
       {
-        g_ready = setup(g_text.value,1024*1024*16);
+        const  ex_img_cv = document.createElement("canvas");
+
+        ex_img_cv.width  = g_ex_img.width;
+        ex_img_cv.height = g_ex_img.height;
+
+        const  ctx = ex_img_cv.getContext("2d");
+
+        ctx.drawImage(g_ex_img,0,0);
+
+        const  ex_imgdat = ctx.getImageData(0,0,ex_img_cv.width,ex_img_cv.height);
+
+        build(g_text.value);
+
+        add_img(ex_imgdat.width,ex_imgdat.height,ex_imgdat.data);
+
+        g_ready = setup(1024*1024*32);
 
           if(g_ready)
           {
@@ -545,6 +590,12 @@ main()
         g_cvctx.fillStyle = "rgb(0,0,0)";
 
         g_cvctx.fillRect(0,0,g_cv.width,g_cv.height);
+
+
+        g_ex_img = new Image();
+
+        g_ex_img.src = "chr.png";
+
 
         g_report = document.getElementById("report");
         g_text = document.getElementById("text");

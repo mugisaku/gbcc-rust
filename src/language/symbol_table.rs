@@ -353,8 +353,6 @@ SymbolTable
 {
   symbols: Vec<Symbol>,
 
-  string_count: usize,
-
 }
 
 
@@ -368,7 +366,7 @@ new()-> Self
 {
   Self{
     symbols: Vec::new(),
-    string_count: 0,
+
   }
 }
 
@@ -719,10 +717,10 @@ generate_exec(&mut self)-> Exec
 
   let    data_start = self.process_io_offset(256);
   let     str_start = self.process_data_offset(data_start);
-  let   field_start = self.process_str_offset(str_start);
-  let   font8_start = get_word_aligned(   str_start+(   8*0x10000));
+  let   font8_start = self.process_str_offset(str_start);
   let  combi8_start = get_word_aligned( font8_start+(2* 3*0x10000));
   let  font14_start = get_word_aligned(combi8_start+(2*14*0x10000));
+  let   field_start = get_word_aligned(font14_start+(   8*0x10000));
   let   stack_start = self.process_field_offset(field_start);
 
 
@@ -735,10 +733,10 @@ generate_exec(&mut self)-> Exec
   let  text_start = get_word_aligned(callstack_start+callstack_size);
 
 
-  self.add_const("FONT8_START",font8_start as i64);
-  self.add_const("COMBI8_START",combi8_start as i64);
-  self.add_const("FONT14_START",font14_start as i64);
-  self.add_const("STACK_START",stack_start as i64);
+  self.add_const(    "FONT8_START",    font8_start as i64);
+  self.add_const(   "COMBI8_START",   combi8_start as i64);
+  self.add_const(   "FONT14_START",   font14_start as i64);
+  self.add_const(    "STACK_START",    stack_start as i64);
   self.add_const("CALLSTACK_START",callstack_start as i64);
 
 
@@ -769,7 +767,7 @@ generate_exec(&mut self)-> Exec
             }
 
 
-          exec.texts.push((sym.name.clone(),text));
+          exec.texts.push((sym.name.clone(),pos,text));
 
           let  pos_bytes = pos.to_ne_bytes();
 
@@ -813,7 +811,7 @@ generate_exec(&mut self)-> Exec
                           else if (ty == "i16") || (ty == "u16"){2}
                           else if (ty == "i32") || (ty == "u32"){4}
                           else if (ty == "i64")                 {8}
-                          else{panic!();};
+                          else                                  {1};
 
           exec.mini_symbols.push(MiniSymbol{offset: sym.offset, name: sym.name.clone(), kind: MiniSymbolKind::Str(ty.clone(),n)});
         }
@@ -826,7 +824,7 @@ generate_exec(&mut self)-> Exec
     }
 
 
-  Self::install_font8(&mut exec.memory[font8_start..]);
+  Self::install_font8( &mut exec.memory[ font8_start..]);
   Self::install_combi8(&mut exec.memory[combi8_start..]);
   Self::install_font14(&mut exec.memory[font14_start..]);
 
@@ -908,6 +906,47 @@ add_const(&mut self, name: &str, v: i64)
 
 
 pub fn
+add_img(&mut self, name: &str, w: u32, h: u32, data: Vec<u8>)
+{
+  let  mut new_data = Vec::<u8>::new();
+
+    for b in w.to_ne_bytes(){new_data.push(b);}
+    for b in h.to_ne_bytes(){new_data.push(b);}
+
+  let  mut iter = data.iter();
+
+    while let Some(r_ref) = iter.next()
+    {
+      let  r = *r_ref as u32;
+      let  g = *iter.next().unwrap() as u32;
+      let  b = *iter.next().unwrap() as u32;
+      let  _ = *iter.next().unwrap() as u32;
+
+      let  pix = (r<<24)
+                |(g<<16)
+                |(b<< 8);
+
+        for b in pix.to_ne_bytes()
+        {
+          new_data.push(b);
+        }
+    }
+
+
+  let  sym = Symbol{
+    name: name.to_string(),
+    kind: SymbolKind::Str("u8".to_string(),new_data),
+    offset: 0,
+    deps_parent_list: Vec::new(),
+    deps_child_list: Vec::new(),
+  };
+
+
+  self.symbols.push(sym);
+}
+
+
+pub fn
 print(&self)
 {
   println!("}}\nglobal symbols{{");
@@ -970,7 +1009,7 @@ Exec
 {
   mini_symbols: Vec<MiniSymbol>,
 
-  texts: Vec<(String,AsmText)>,
+  texts: Vec<(String,usize,AsmText)>,
 
   memory: Vec<u8>,
 
@@ -1215,10 +1254,10 @@ print_memory(&self)
       MiniSymbolKind::Const(v)=>{println!(": {}",v);}
       MiniSymbolKind::Str(ty,n)=>
         {
-          let  base = sym.offset;
+          let  base = off;
 
-          print!(" {} = {{",ty);
-
+          print!(" off: {}, ty: {} = {{",off,ty);
+/*
                if ty ==  "i8"{for i in 0..*n{print!("{},",self.get_u8( base+i    )       );}}
           else if ty ==  "u8"{for i in 0..*n{print!("0x{:X},",self.get_u8( base+i    ) as  i8);}}
           else if ty == "i16"{for i in 0..*n{print!("{},",self.get_u16(base+(2*i))       );}}
@@ -1227,12 +1266,12 @@ print_memory(&self)
           else if ty == "u32"{for i in 0..*n{print!("0x{:X},",self.get_u32(base+(4*i)) as i32);}}
           else if ty == "i64"{for i in 0..*n{print!("{},",self.get_u64(base+(8*i)) as i64);}}
           else{panic!("{}",ty);}
-
+*/
           println!("}}");
         }
       MiniSymbolKind::Field(sz)=>
         {
-          println!(" {}: {{...}}",*sz);
+          println!(" off: {}, sz: {}: {{...}}",off,*sz);
         }
       _=>{println!("");}
         }
@@ -1243,13 +1282,13 @@ print_memory(&self)
 pub fn
 print_text_to(&self, buf: &mut String)
 {
-    for (name,text) in &self.texts
+    for (name,start,text) in &self.texts
     {
       buf.push_str(name);
 
       buf.push_str("{\n");
 
-      text.print_to(buf);
+      text.print_to(buf,*start);
 
       buf.push_str("}\n");
     }
@@ -1259,14 +1298,11 @@ print_text_to(&self, buf: &mut String)
 pub fn
 print_text(&self)
 {
-    for (name,text) in &self.texts
-    {
-      println!("{}\n{{",name);
+  let  mut buf = String::new();
 
-      text.print();
+  self.print_text_to(&mut buf);
 
-      println!("}}");
-    }
+  print!("{}",&buf);
 }
 
 

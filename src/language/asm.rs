@@ -163,76 +163,79 @@ print(&self)
 
 
 impl
-std::convert::From<u8> for Opcode
+std::convert::TryFrom<u8> for Opcode
 {
+
+
+type  Error = ();
 
 
 fn
-from(b: u8)-> Self
+try_from(b: u8)-> Result<Self,Self::Error>
 {
     match b
     {
-  (op) if op == Self::Nop as u8=>{Self::Nop}
-  (op) if op == Self::Pushid as u8=>{Self::Pushid}
-  (op) if op == Self::Pushpc as u8=>{Self::Pushpc}
-  (op) if op == Self::Pushfp as u8=>{Self::Pushfp}
-  (op) if op == Self::Pushsp as u8=>{Self::Pushsp}
-  (op) if op == Self::Push8 as u8=>{Self::Push8}
-  (op) if op == Self::Push16 as u8=>{Self::Push16}
-  (op) if op == Self::Push32 as u8=>{Self::Push32}
-  (op) if op == Self::Push64 as u8=>{Self::Push64}
-  (op) if op == Self::Xs8 as u8=>{Self::Xs8}
-  (op) if op == Self::Xs16 as u8=>{Self::Xs16}
-  (op) if op == Self::Xs32 as u8=>{Self::Xs32}
-  (op) if op == Self::Jmp8 as u8=>{Self::Jmp8}
-  (op) if op == Self::Jmp16 as u8=>{Self::Jmp16}
-  (op) if op == Self::Jmp32 as u8=>{Self::Jmp32}
-  (op) if op == Self::Brz8 as u8=>{Self::Brz8}
-  (op) if op == Self::Brz16 as u8=>{Self::Brz16}
-  (op) if op == Self::Brz32 as u8=>{Self::Brz32}
-  (op) if op == Self::Brnz8 as u8=>{Self::Brnz8}
-  (op) if op == Self::Brnz16 as u8=>{Self::Brnz16}
-  (op) if op == Self::Brnz32 as u8=>{Self::Brnz32}
-  (op) if op == Self::Pop as u8=>{Self::Pop}
-  (op) if op == Self::Dup as u8=>{Self::Dup}
-  (op) if op == Self::Ld_i8 as u8=>{Self::Ld_i8}
-  (op) if op == Self::Ld_i16 as u8=>{Self::Ld_i16}
-  (op) if op == Self::Ld_i32 as u8=>{Self::Ld_i32}
-  (op) if op == Self::Ld_i64 as u8=>{Self::Ld_i64}
-  (op) if op == Self::Ld_u8 as u8=>{Self::Ld_u8}
-  (op) if op == Self::Ld_u16 as u8=>{Self::Ld_u16}
-  (op) if op == Self::Ld_u32 as u8=>{Self::Ld_u32}
-  (op) if op == Self::St_i8 as u8=>{Self::St_i8}
-  (op) if op == Self::St_i16 as u8=>{Self::St_i16}
-  (op) if op == Self::St_i32 as u8=>{Self::St_i32}
-  (op) if op == Self::St_i64 as u8=>{Self::St_i64}
-  (op) if op == Self::Neg  as u8=>{Self::Neg}
-  (op) if op == Self::Not  as u8=>{Self::Not}
-  (op) if op == Self::Add as u8=>{Self::Add}
-  (op) if op == Self::Sub as u8=>{Self::Sub}
-  (op) if op == Self::Mul as u8=>{Self::Mul}
-  (op) if op == Self::Div as u8=>{Self::Div}
-  (op) if op == Self::Rem as u8=>{Self::Rem}
-  (op) if op == Self::Shl as u8=>{Self::Shl}
-  (op) if op == Self::Shr as u8=>{Self::Shr}
-  (op) if op == Self::And as u8=>{Self::And}
-  (op) if op == Self::Or  as u8=>{Self::Or}
-  (op) if op == Self::Xor as u8=>{Self::Xor}
-  (op) if op == Self::Lnot as u8=>{Self::Lnot}
-  (op) if op == Self::Land as u8=>{Self::Land}
-  (op) if op == Self::Lor as u8=>{Self::Lor}
-  (op) if op == Self::Eq  as u8=>{Self::Eq}
-  (op) if op == Self::Neq as u8=>{Self::Neq}
-  (op) if op == Self::Lt   as u8=>{Self::Lt}
-  (op) if op == Self::Lteq as u8=>{Self::Lteq}
-  (op) if op == Self::Gt   as u8=>{Self::Gt}
-  (op) if op == Self::Gteq as u8=>{Self::Gteq}
-  (op) if op == Self::Prcal as u8=>{Self::Prcal}
-  (op) if op == Self::Cal as u8=>{Self::Cal}
-  (op) if op == Self::Ret as u8=>{Self::Ret}
-  (op) if op == Self::Hlt as u8=>{Self::Hlt}
-  (op) if op == Self::Pri as u8=>{Self::Pri}
-  _=>{panic!();}
+  (op) if op == Self::Nop as u8=>{Ok(Self::Nop)}
+  (op) if op == Self::Pushid as u8=>{Ok(Self::Pushid)}
+  (op) if op == Self::Pushpc as u8=>{Ok(Self::Pushpc)}
+  (op) if op == Self::Pushfp as u8=>{Ok(Self::Pushfp)}
+  (op) if op == Self::Pushsp as u8=>{Ok(Self::Pushsp)}
+  (op) if op == Self::Push8 as u8=>{Ok(Self::Push8)}
+  (op) if op == Self::Push16 as u8=>{Ok(Self::Push16)}
+  (op) if op == Self::Push32 as u8=>{Ok(Self::Push32)}
+  (op) if op == Self::Push64 as u8=>{Ok(Self::Push64)}
+  (op) if op == Self::Xs8 as u8=>{Ok(Self::Xs8)}
+  (op) if op == Self::Xs16 as u8=>{Ok(Self::Xs16)}
+  (op) if op == Self::Xs32 as u8=>{Ok(Self::Xs32)}
+  (op) if op == Self::Jmp8 as u8=>{Ok(Self::Jmp8)}
+  (op) if op == Self::Jmp16 as u8=>{Ok(Self::Jmp16)}
+  (op) if op == Self::Jmp32 as u8=>{Ok(Self::Jmp32)}
+  (op) if op == Self::Brz8 as u8=>{Ok(Self::Brz8)}
+  (op) if op == Self::Brz16 as u8=>{Ok(Self::Brz16)}
+  (op) if op == Self::Brz32 as u8=>{Ok(Self::Brz32)}
+  (op) if op == Self::Brnz8 as u8=>{Ok(Self::Brnz8)}
+  (op) if op == Self::Brnz16 as u8=>{Ok(Self::Brnz16)}
+  (op) if op == Self::Brnz32 as u8=>{Ok(Self::Brnz32)}
+  (op) if op == Self::Pop as u8=>{Ok(Self::Pop)}
+  (op) if op == Self::Dup as u8=>{Ok(Self::Dup)}
+  (op) if op == Self::Ld_i8 as u8=>{Ok(Self::Ld_i8)}
+  (op) if op == Self::Ld_i16 as u8=>{Ok(Self::Ld_i16)}
+  (op) if op == Self::Ld_i32 as u8=>{Ok(Self::Ld_i32)}
+  (op) if op == Self::Ld_i64 as u8=>{Ok(Self::Ld_i64)}
+  (op) if op == Self::Ld_u8 as u8=>{Ok(Self::Ld_u8)}
+  (op) if op == Self::Ld_u16 as u8=>{Ok(Self::Ld_u16)}
+  (op) if op == Self::Ld_u32 as u8=>{Ok(Self::Ld_u32)}
+  (op) if op == Self::St_i8 as u8=>{Ok(Self::St_i8)}
+  (op) if op == Self::St_i16 as u8=>{Ok(Self::St_i16)}
+  (op) if op == Self::St_i32 as u8=>{Ok(Self::St_i32)}
+  (op) if op == Self::St_i64 as u8=>{Ok(Self::St_i64)}
+  (op) if op == Self::Neg  as u8=>{Ok(Self::Neg)}
+  (op) if op == Self::Not  as u8=>{Ok(Self::Not)}
+  (op) if op == Self::Add as u8=>{Ok(Self::Add)}
+  (op) if op == Self::Sub as u8=>{Ok(Self::Sub)}
+  (op) if op == Self::Mul as u8=>{Ok(Self::Mul)}
+  (op) if op == Self::Div as u8=>{Ok(Self::Div)}
+  (op) if op == Self::Rem as u8=>{Ok(Self::Rem)}
+  (op) if op == Self::Shl as u8=>{Ok(Self::Shl)}
+  (op) if op == Self::Shr as u8=>{Ok(Self::Shr)}
+  (op) if op == Self::And as u8=>{Ok(Self::And)}
+  (op) if op == Self::Or  as u8=>{Ok(Self::Or)}
+  (op) if op == Self::Xor as u8=>{Ok(Self::Xor)}
+  (op) if op == Self::Lnot as u8=>{Ok(Self::Lnot)}
+  (op) if op == Self::Land as u8=>{Ok(Self::Land)}
+  (op) if op == Self::Lor as u8=>{Ok(Self::Lor)}
+  (op) if op == Self::Eq  as u8=>{Ok(Self::Eq)}
+  (op) if op == Self::Neq as u8=>{Ok(Self::Neq)}
+  (op) if op == Self::Lt   as u8=>{Ok(Self::Lt)}
+  (op) if op == Self::Lteq as u8=>{Ok(Self::Lteq)}
+  (op) if op == Self::Gt   as u8=>{Ok(Self::Gt)}
+  (op) if op == Self::Gteq as u8=>{Ok(Self::Gteq)}
+  (op) if op == Self::Prcal as u8=>{Ok(Self::Prcal)}
+  (op) if op == Self::Cal as u8=>{Ok(Self::Cal)}
+  (op) if op == Self::Ret as u8=>{Ok(Self::Ret)}
+  (op) if op == Self::Hlt as u8=>{Ok(Self::Hlt)}
+  (op) if op == Self::Pri as u8=>{Ok(Self::Pri)}
+  _=>{Err(())}
     }
 }
 
@@ -1123,7 +1126,7 @@ finalize(&mut self)
 
 
 pub fn
-print_to(&self, buf: &mut String)
+print_to(&self, buf: &mut String, offset: usize)
 {
   let  mut n = 0usize;
 
@@ -1138,7 +1141,7 @@ print_to(&self, buf: &mut String)
 
       else
         {
-          let  s = format!("  {:05} ",li.offset);
+          let  s = format!("  {:05}({:05}) ",li.offset,offset+li.offset);
 
           buf.push_str(&s);
 
@@ -1152,11 +1155,11 @@ print_to(&self, buf: &mut String)
 
 
 pub fn
-print(&self)
+print(&self, offset: usize)
 {
   let  mut buf = String::new();
 
-  self.print_to(&mut buf);
+  self.print_to(&mut buf,offset);
 
   print!("{}",&buf);
 }

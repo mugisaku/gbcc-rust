@@ -19,6 +19,7 @@ pub fn  check(s: &str);
 }
 
 
+static mut SYMTBL: SymbolTable = SymbolTable::new();
 static mut EXEC: Exec = Exec::new();
 static mut A_MACHINE: Machine = Machine::new();
 static mut B_MACHINE: Machine = Machine::new();
@@ -79,26 +80,52 @@ process()
 
 #[wasm_bindgen]
 pub fn
-setup(s: &str, freq: u32)-> Option<String>
+build(s: &str)-> bool
 {
     unsafe
     {
         if let Ok(root) = Decl::read_as_root(s)
         {
-            if let Ok(mut symtbl) = SymbolTable::build(root)
+            if let Ok(symtbl) = SymbolTable::build(root)
             {
-              EXEC = symtbl.generate_exec();
+              SYMTBL = symtbl;
 
-              A_MACHINE.reset(0,freq as usize,&mut EXEC,"main",0);
-//              B_MACHINE.reset(1,freq as usize,&mut EXEC,"main",1024);
-
-              let  mut buf = String::new();
-
-              EXEC.print_text_to(&mut buf);
-
-              return Some(buf);
+              return true;
             }
         }
+    }
+
+
+  false
+}
+
+
+#[wasm_bindgen]
+pub fn
+add_img(w: u32, h: u32, data: Vec<u8>)
+{
+    unsafe
+    {
+      SYMTBL.add_img("image",w,h,data);
+    }
+}
+
+
+#[wasm_bindgen]
+pub fn
+setup(freq: u32)-> Option<String>
+{
+    unsafe
+    {
+      EXEC = SYMTBL.generate_exec();
+
+      A_MACHINE.reset(0,freq as usize,&mut EXEC,"main",0);
+
+      let  mut buf = String::new();
+
+      EXEC.print_text_to(&mut buf);
+
+      return Some(buf);
     }
 
 

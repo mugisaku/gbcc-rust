@@ -431,7 +431,7 @@ print_bytes(bytes: &Vec<u8>)
     {
       print!("[{:0>5}] ",off);
 
-      let  op = Opcode::from(bytes[off]);
+      let  op = Opcode::try_from(bytes[off]).unwrap();
 
       off += 1;
 
