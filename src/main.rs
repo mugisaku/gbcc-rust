@@ -27,9 +27,9 @@ compile_and_run(s: &str)
 
           symtbl.add_img("image",384,384,tmp);
 
-          let  mut exec = symtbl.generate_exec();
-
 //          symtbl.print();
+
+          let  mut exec = symtbl.generate_exec();
 
           println!("");
 

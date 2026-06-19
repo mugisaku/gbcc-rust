@@ -4,7 +4,6 @@ use crate::token::{
   Token,
   TokenInfo,
   TokenData,
-  ParsedNumber,
   get_token,
   get_number,
   get_character,
@@ -257,11 +256,30 @@ read_by_operand(&mut self, o: &Operand)-> Option<Vec<Value>>
         {
             if let Some(pn) = get_number(&self.token_string,self.position)
             {
-              let  v = if pn.is_float(){Value::Float(pn.get_float().unwrap())} else{Value::Uint(pn.get_int())};
+                if pn.is_float()
+                {
+                  let  v = Value::Float(pn.to_f64().unwrap());
 
-              self.advance();
+                  self.advance();
 
-              return Some(vec![v]);
+                  return Some(vec![v]);
+                }
+
+              else
+                if let Ok(u) = pn.to_u64()
+                {
+                  let  v = Value::Uint(u);
+
+                  self.advance();
+
+                  return Some(vec![v]);
+                }
+
+              else
+                {
+pn.print();
+                  panic!();
+                }
             }
         },
   Operand::CharacterLiteral=>

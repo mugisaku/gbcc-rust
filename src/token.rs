@@ -20,83 +20,10 @@ use crate::token::is::{
 };
 
 
+use crate::token::read_number::{
+  ParsedNumber,
 
-
-#[derive(Clone)]
-pub struct
-ParsedNumber
-{
-  pub(crate) i_part: u64,
-
-  pub(crate) f_part_opt: Option<f64>,
-
-}
-
-
-impl
-ParsedNumber
-{
-
-
-pub fn
-new()-> Self
-{
-  Self{
-    i_part: 0,
-    f_part_opt: None,
-  }
-}
-
-
-pub fn
-is_float(&self)-> bool
-{
-    if let Some(_) = self.f_part_opt
-    {
-      return true;
-    }
-
-
-  false
-}
-
-
-pub fn
-get_float(&self)-> Option<f64>
-{
-    if let Some(f) = self.f_part_opt
-    {
-      return Some((self.i_part as f64)+f);
-    }
-
-
-  None
-}
-
-
-pub fn
-get_int(&self)-> u64
-{
-  self.i_part
-}
-
-
-pub fn
-print(&self)
-{
-    if let Some(f) = self.f_part_opt
-    {
-      print!("{}",(self.i_part as f64)+f);
-    }
-
-  else
-    {
-      print!("{}",self.i_part);
-    }
-}
-
-
-}
+};
 
 
 

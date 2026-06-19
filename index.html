@@ -87,6 +87,16 @@ const     X_KEY = 0b00100000;
 const     C_KEY = 0b01000000;
 const     V_KEY = 0b10000000;
 
+const FRONT_DIR = 0;
+const  LEFT_DIR = 1;
+const RIGHT_DIR = 2;
+const  BACK_DIR = 3;
+
+const  CHR_W = 24;
+const  CHR_H = 40;
+
+
+
 
 fn
 sleep(tm)
@@ -222,14 +232,25 @@ print14_unicode_s(s,x,y,pixel)
 
 
 fn
-print_character(src_x,src_y,src_w,src_h,dst_x,dst_y)
+print_character(dir,anim,dst_x,dst_y)
 {
+  var  src_x = 0;
+  var  src_y = 0;
+  var  rev = 0;
+
+       if (dir == LEFT_DIR) {src_y = CHR_H;}
+  else if (dir == RIGHT_DIR){src_y = CHR_H;  rev = 1;}
+  else if (dir == BACK_DIR) {src_y = CHR_H*2;}
+
+       if anim == 1{src_x = CHR_W;}
+  else if anim == 3{src_x = CHR_W*2;}
+
   var  dst_ptr_base = video+(4*VIDEO_W*dst_y)+(4*dst_x);
 
   var  src_pitch = 4*(image+4).u32;
   var  src_ptr_base = image+8+(src_pitch*src_y)+(4*src_x);
 
-    for y in src_h
+    for y in CHR_H
     {
       var  dst_ptr = dst_ptr_base;
                      dst_ptr_base += 4*VIDEO_W;
@@ -237,12 +258,28 @@ print_character(src_x,src_y,src_w,src_h,dst_x,dst_y)
       var  src_ptr = src_ptr_base;
                      src_ptr_base += src_pitch;
 
-        for x in src_w
+        if rev
         {
-          dst_ptr.u32 = src_ptr.u32;
+          dst_ptr += 4*CHR_W;
 
-          dst_ptr += 4;
-          src_ptr += 4;
+            for x in CHR_W
+            {
+              dst_ptr.u32 = src_ptr.u32;
+
+              dst_ptr -= 4;
+              src_ptr += 4;
+            }
+        }
+
+      else
+        {
+            for x in CHR_W
+            {
+              dst_ptr.u32 = src_ptr.u32;
+
+              dst_ptr += 4;
+              src_ptr += 4;
+            }
         }
     }
 }
@@ -273,22 +310,42 @@ main()
 {
   video = video_field;
 
+  var  dir = 0;
+
   var  x = 80;
   var  y = 80;
+  var  anim = 0;
+  var  x_move_value = 0;
+  var  y_move_value = 0;
+  var  last_time = 0;
 
   loop
   {
     fill(0,0,VIDEO_W,VIDEO_H,0);
 
-         if (input&UP_KEY   )&&(y >=                8){y -= 8;}
-    else if (input&DOWN_KEY )&&((y+24) <= (VIDEO_H-8)){y += 8;}
-         if (input&LEFT_KEY )&&(x >=                8){x -= 8;}
-    else if (input&RIGHT_KEY)&&((x+24) <= (VIDEO_W-8)){x += 8;}
+      if (x_move_value == 0) && (y_move_value == 0)
+      {
+             if (input&UP_KEY   ){dir =  BACK_DIR;  y_move_value = 24;}
+        else if (input&DOWN_KEY ){dir = FRONT_DIR;  y_move_value = 24;}
+             if (input&LEFT_KEY ){dir =  LEFT_DIR;  x_move_value = 24;}
+        else if (input&RIGHT_KEY){dir = RIGHT_DIR;  x_move_value = 24;}
+      }
+
+    else
+      {
+             if dir ==  BACK_DIR{y_move_value -= 2;  y -= 2;}
+        else if dir == FRONT_DIR{y_move_value -= 2;  y += 2;}
+             if dir ==  LEFT_DIR{x_move_value -= 2;  x -= 2;}
+        else if dir == RIGHT_DIR{x_move_value -= 2;  x += 2;}
+
+        anim += 1;
+      }
+
 
     print_int(x,print14_unicode,16*8, 0,16,0xFFFFFFFF);
     print_int(y,print14_unicode,16*8,16,16,0xFFFFFFFF);
-draw_rect(x,y,24,24,0xFFFFFFFF);
-    print_character(0,0,40,40,x,y);
+
+    print_character(dir,anim>>1&3,x,y);
 
     halt;
   }
