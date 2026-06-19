@@ -126,7 +126,7 @@ to_hexadecimal(c: char)-> Result<u32,()>
 
 
 pub fn
-to_unicode(a: char, b: char, c: char, d: char)-> Result<char,()>
+to_unicode(a: char, b: char, c: char, d: char)-> Result<char,String>
 {
     if let Ok(aa) = to_hexadecimal(a){
     if let Ok(bb) = to_hexadecimal(b){
@@ -145,12 +145,12 @@ to_unicode(a: char, b: char, c: char, d: char)-> Result<char,()>
     }}}}
 
 
-  Err(())
+  Err(format!("１６進数ではない文字"))
 }
 
 
 pub fn
-read_unicode_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
+read_unicode_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,String>
 {
     if let Some(a) = src.get_character(*cur)
     {
@@ -175,12 +175,12 @@ read_unicode_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,(
     }
 
 
-  Err(())
+  Err(format!("処理すべき文字が足りなし"))
 }
 
 
 pub fn
-read_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
+read_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,String>
 {
     if let Some(c) = src.get_character(*cur)
     {
@@ -190,9 +190,9 @@ read_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
       'r'=> {  cur.advance();  return Ok('\r');},
       't'=> {  cur.advance();  return Ok('\t');},
       'n'=> {  cur.advance();  return Ok('\n');},
-      '\\'=> {  cur.advance();  return Ok('\\');},
-      '\''=> {  cur.advance();  return Ok('\'');},
-      '\"'=> {  cur.advance();  return Ok('\"');},
+      '\\'=>{  cur.advance();  return Ok('\\');},
+      '\''=>{  cur.advance();  return Ok('\'');},
+      '\"'=>{  cur.advance();  return Ok('\"');},
       'u'=>
             {
               cur.advance();
@@ -209,21 +209,21 @@ read_escape_sequence(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
     }
 
 
-  Err(())
+  Err(format!("処理すべき文字がない"))
 }
 
 
 pub fn
-read_character(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
+read_character(src: &SourceFile, cur: &mut Cursor)-> Result<char,String>
 {
     if let Some(c) = src.get_character(*cur)
     {
         match c
         {
-      '\0'=> {  println!("Null文字が出現");  return Err(());},
-      '\r'=> {  println!("復帰文字が出現");  return Err(());},
-      '\t'=> {  println!("タブ文字が出現");  return Err(());},
-      '\n'=> {  println!("改行文字が出現");  return Err(());},
+      '\0'=> {return Err(format!("Null文字が出現"));},
+      '\r'=> {return Err(format!("復帰文字が出現"));},
+      '\t'=> {return Err(format!("タブ文字が出現"));},
+      '\n'=> {return Err(format!("改行文字が出現"));},
       '\\'=>
             {
               cur.advance();
@@ -240,12 +240,12 @@ read_character(src: &SourceFile, cur: &mut Cursor)-> Result<char,()>
     }
 
 
-  Err(())
+  Err(format!("処理すべき文字がない"))
 }
 
 
 pub fn
-read_string(src: &SourceFile, cur: &mut Cursor)-> Result<String,()>
+read_string(src: &SourceFile, cur: &mut Cursor)-> Result<String,String>
 {
   let  mut s = String::new();
 
@@ -259,14 +259,12 @@ read_string(src: &SourceFile, cur: &mut Cursor)-> Result<String,()>
         }
 
       else
-        if let Ok(cc) = read_character(src,cur)
         {
-          s.push(cc);
-        }
-
-      else
-        {
-          return Err(());
+            match read_character(src,cur)
+            {
+          Ok(cc)=>{s.push(cc);}
+          Err(s)=>{return Err(s);}
+            }
         }
     }
 

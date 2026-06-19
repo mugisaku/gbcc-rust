@@ -162,7 +162,7 @@ get_hexadecimal_integer(src: &SourceFile, cur: Cursor)-> Option<char>
 }
 
 
-pub fn
+fn
 read_integer_that_begins_from_zero(src: &SourceFile, mut cur: Cursor)-> (ParsedNumber,Cursor)
 {
     match src.get_character(cur)
@@ -220,7 +220,7 @@ read_integer_that_begins_from_zero(src: &SourceFile, mut cur: Cursor)-> (ParsedN
 }
 
 
-pub fn
+fn
 read_integer(src: &SourceFile, mut cur: Cursor)-> (ParsedNumber,Cursor)
 {
     if let Some(first_c) = src.get_character(cur)

@@ -113,6 +113,18 @@ print_string(s: &str)
 
 
 
+pub struct
+ParseTokenError
+{
+  info: TokenInfo,
+
+  message: String,
+
+}
+
+
+
+
 pub enum
 TokenData
 {

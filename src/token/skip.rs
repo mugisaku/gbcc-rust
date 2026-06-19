@@ -9,7 +9,7 @@ use super::is::*;
 
 
 pub fn
-skip_until_appears_newline(src: &SourceFile, cur: &mut Cursor)-> Result<(),()>
+skip_until_appears_newline(src: &SourceFile, cur: &mut Cursor)-> Result<(),String>
 {
     while let Some(c) = src.get_character(*cur)
     {
@@ -24,14 +24,12 @@ skip_until_appears_newline(src: &SourceFile, cur: &mut Cursor)-> Result<(),()>
     }
 
 
-  println!("コメントラインが正しく終了していない");
-
-  Err(())
+  Err(format!("コメントラインが正しく終了していない"))
 }
 
 
 pub fn
-skip_until_appears_end_of_comment_block(src: &SourceFile, cur: &mut Cursor)-> Result<(),()>
+skip_until_appears_end_of_comment_block(src: &SourceFile, cur: &mut Cursor)-> Result<(),String>
 {
     while let Some(first) = src.get_character(*cur)
     {
@@ -58,9 +56,7 @@ skip_until_appears_end_of_comment_block(src: &SourceFile, cur: &mut Cursor)-> Re
     }
 
 
-  println!("コメントブロックが正しく終了していない");
-
-  Err(())
+  Err(format!("コメントブロックが正しく終了していない"))
 }
 
 

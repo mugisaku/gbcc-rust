@@ -4,6 +4,7 @@ use super::{
   TokenInfo,
   TokenData,
   Token,
+  ParseTokenError,
   print_string,
   read_identifier,
 
@@ -107,7 +108,7 @@ read_data_that_begins_from_id_head(src: &SourceFile, cur: Cursor, first_c: char)
 
 
 pub fn
-read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),()>
+read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),String>
 {
   let  (s,new_cur) = read_identifier(&self.input,self.cursor);
 
@@ -127,9 +128,7 @@ read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),
             }
 
 
-          println!("文字リテラルに一文字を超える内容{},{}",last_c,s.len());
-
-          return Err(());
+          return Err(format!("文字リテラルに一文字を超える内容{},{}",last_c,s.len()));
         }
     }
 
@@ -142,7 +141,7 @@ read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),
 
 
 pub fn
-read_escape_sequence(&mut self)-> Result<(),()>
+read_escape_sequence(&mut self)-> Result<(),String>
 {
     if let Ok(esc) = read_escape_sequence(&self.input,&mut self.cursor)
     {
@@ -159,29 +158,24 @@ read_escape_sequence(&mut self)-> Result<(),()>
         }
 
 
-      println!("文字列リテラルが不正な閉じ方");
+      Err(format!("文字列リテラルが不正な閉じ方"))
     }
 
   else
     {
-      println!("文字列リテラルで不正なシーケンス文字");
+      Err(format!("文字列リテラルで不正なシーケンス文字"))
     }
-
-
-  Err(())
 }
 
 
 pub fn
-read_data_that_begins_from_single_quote(&mut self)-> Result<(),()>
+read_data_that_begins_from_single_quote(&mut self)-> Result<(),String>
 {
     if let Some(c) = self.get_character()
     {
         if c == '\''
         {
-          println!("empty character literal");
-
-          return Err(());
+          return Err(format!("empty character literal"));
         }
 
 
@@ -213,22 +207,18 @@ read_data_that_begins_from_single_quote(&mut self)-> Result<(),()>
                 }
 
 
-              println!("文字リテラルに不明な内容{}",last_c);
-
-              return Err(());
+              return Err(format!("文字リテラルに不明な内容{}",last_c));
             }
         }
     }
 
 
-  println!("不正なシングルクオート要素");
-
-  Err(())
+  Err(format!("不正なシングルクオート要素"))
 }
 
 
 pub fn
-read_data_that_begins_from_slash(&mut self)-> Result<(),()>
+read_data_that_begins_from_slash(&mut self)-> Result<(),String>
 {
     if let Some(c) = self.get_character()
     {
@@ -238,9 +228,9 @@ read_data_that_begins_from_slash(&mut self)-> Result<(),()>
 
           let  old_y = self.cursor.get_y();
 
-            if skip_until_appears_end_of_comment_block(&self.input,&mut self.cursor).is_err()
+            if let Err(s) = skip_until_appears_end_of_comment_block(&self.input,&mut self.cursor)
             {
-              return Err(());
+              return Err(s);
             }
 
 
@@ -263,9 +253,9 @@ read_data_that_begins_from_slash(&mut self)-> Result<(),()>
         {
           self.cursor.advance();
 
-            if skip_until_appears_newline(&self.input,&mut self.cursor).is_err()
+            if let Err(s) = skip_until_appears_newline(&self.input,&mut self.cursor)
             {
-              return Err(());
+              return Err(s);
             }
 
 
@@ -309,7 +299,7 @@ skip_spaces(&mut self)
 
 
 fn
-step(&mut self, c: char)-> Result<(),()>
+step(&mut self, c: char)-> Result<(),String>
 {
   self.update_token_info();
 
@@ -317,7 +307,7 @@ step(&mut self, c: char)-> Result<(),()>
     {
       self.skip_spaces();
 
-      return Ok(());
+      Ok(())
     }
 
   else
@@ -325,7 +315,7 @@ step(&mut self, c: char)-> Result<(),()>
     {
       self.cursor.advance();
 
-      return self.read_data_that_begins_from_slash();
+      self.read_data_that_begins_from_slash()
     }
 
   else
@@ -337,7 +327,7 @@ step(&mut self, c: char)-> Result<(),()>
 
       self.cursor = new_cur;
 
-      return Ok(());
+      Ok(())
     }
 
   else
@@ -349,7 +339,7 @@ step(&mut self, c: char)-> Result<(),()>
 
       self.cursor = cur;
 
-      return Ok(());
+      Ok(())
     }
 
   else
@@ -357,11 +347,15 @@ step(&mut self, c: char)-> Result<(),()>
     {
       self.cursor.advance();
 
-        if let Ok(s) = read_string(&self.input,&mut self.cursor)
+        match read_string(&self.input,&mut self.cursor)
+        {
+      Ok(s)=>
         {
           self.push(TokenData::String(s));
 
-          return Ok(());
+          Ok(())
+        }
+       Err(s)=>{Err(s)}
         }
     }
 
@@ -370,7 +364,7 @@ step(&mut self, c: char)-> Result<(),()>
     {
       self.cursor.advance();
 
-      return self.read_data_that_begins_from_single_quote();
+      self.read_data_that_begins_from_single_quote()
     }
 
   else
@@ -379,11 +373,8 @@ step(&mut self, c: char)-> Result<(),()>
 
       self.push(TokenData::Others(c));
 
-      return Ok(());
+      Ok(())
     }
-
-
-  Err(())
 }
 
 
@@ -422,7 +413,7 @@ push(&mut self, tokdat: TokenData)
 
 
 pub fn
-tokenize(src: &SourceFile)-> Result<TokenString,()>
+tokenize(src: &SourceFile)-> Result<TokenString,ParseTokenError>
 {
   let  mut toks: TokenString = Vec::new();
 
@@ -430,13 +421,9 @@ tokenize(src: &SourceFile)-> Result<TokenString,()>
 
     while let Some(c) = tk.get_character()
     {
-        if tk.step(c).is_err()
+        if let Err(s) = tk.step(c)
         {
-          print!("tokenize error: ");
-
-          tk.token_info.print();
-
-          return Err(());
+          return Err(ParseTokenError{info: tk.token_info.clone(), message: s});
         }
     }
 
@@ -446,7 +433,7 @@ tokenize(src: &SourceFile)-> Result<TokenString,()>
 
 
 pub fn
-tokenize_from_string(s: &str)-> Result<TokenString,()>
+tokenize_from_string(s: &str)-> Result<TokenString,ParseTokenError>
 {
   let  src = SourceFile::from_string(s);
 
