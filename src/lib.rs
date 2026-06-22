@@ -21,6 +21,7 @@ pub fn  check(s: &str);
 
 static mut SYMTBL: SymbolTable = SymbolTable::new();
 static mut EXEC: Exec = Exec::new();
+static mut ERR_MSG: String = String::new();
 static mut A_MACHINE: Machine = Machine::new();
 static mut B_MACHINE: Machine = Machine::new();
 
@@ -80,23 +81,42 @@ process()
 
 #[wasm_bindgen]
 pub fn
-build(s: &str)-> bool
+get_error_message()-> String
+{
+  unsafe{ERR_MSG.clone()}
+}
+
+
+#[wasm_bindgen]
+pub fn
+compile(s: &str)-> bool
 {
     unsafe
     {
-        if let Ok(root) = Decl::read_as_root(s)
+        match Decl::read_as_root(s)
         {
-            if let Ok(symtbl) = SymbolTable::build(root)
+      Ok(root)=>
+        {
+            match SymbolTable::build(root)
+            {
+          Ok(symtbl)=>
             {
               SYMTBL = symtbl;
 
-              return true;
+              true
+            }
+          Err(e)=>
+            {
+              false
+            }
             }
         }
+      Err(e)=>
+        {
+          false
+        }
+        }
     }
-
-
-  false
 }
 
 
@@ -117,19 +137,28 @@ setup(freq: u32)-> Option<String>
 {
     unsafe
     {
-      EXEC = SYMTBL.generate_exec();
+        match SYMTBL.generate_exec()
+        {
+      Ok(exec)=>
+        {
+          EXEC = exec;
 
-      A_MACHINE.reset(0,freq as usize,&mut EXEC,"main",0);
+          A_MACHINE.reset(0,freq as usize,&mut EXEC,"main",0);
 
-      let  mut buf = String::new();
+          let  mut buf = String::new();
 
-      EXEC.print_text_to(&mut buf);
+          EXEC.print_text_to(&mut buf);
 
-      return Some(buf);
+          Some(buf)
+        }
+      Err(msg)=>
+        {
+          ERR_MSG = msg;
+
+          None
+        }
+        }
     }
-
-
-  None
 }
 
 

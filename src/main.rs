@@ -17,9 +17,13 @@ compile_and_run(s: &str)
   use crate::language::symbol_table::*;
   use crate::language::machine::*;
 
-    if let Ok(root) = decl::Decl::read_as_root(s)
+    match decl::Decl::read_as_root(s)
     {
-        if let Ok(mut symtbl) = SymbolTable::build(root)
+   Ok(root)=>
+    {
+        match SymbolTable::build(root)
+        {
+       Ok(mut symtbl)=>
         {
           let  mut tmp = Vec::<u8>::new();
 
@@ -29,30 +33,44 @@ compile_and_run(s: &str)
 
 //          symtbl.print();
 
-          let  mut exec = symtbl.generate_exec();
+            match symtbl.generate_exec()
+            {
+          Ok(mut exec)=> 
+            {
+              println!("");
 
-          println!("");
+              let  mut m = Machine::new();
 
-          let  mut m = Machine::new();
+              m.reset(0,1024*1024*16,&mut exec,"main",0);
 
-          m.reset(0,1024*1024*16,&mut exec,"main",0);
+    //m.set_verbose();
 
-//m.set_verbose();
+              println!("machine runs");
+    //loop{
+              m.keep_run();
+    //}
+              println!("machine is finished");
 
-          println!("machine runs");
-//loop{
-          m.keep_run();
-//}
-          println!("machine is finished");
-
-          exec.print_memory();
-//          exec.print_text();
+              exec.print_memory();
+    //          exec.print_text();
+            }
+          Err(s)=>{println!("{}",s);}
+            }
         }
-
-      else
+      Err(e)=>
         {
           println!("build is failed");
+
+          e.print();
         }
+        }
+    }
+  Err(e)=>
+    {
+      e.print();
+
+      println!("");
+    }
     }
 }
 

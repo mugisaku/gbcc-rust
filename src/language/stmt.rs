@@ -37,7 +37,7 @@ collect(&self, buf: &mut Vec<Collectible>)
 {
     for (e,blk) in &self.cond_block_list
     {
-        e.collect_string(buf);
+      e.collect_string(buf);
       blk.collect(buf);
     }
 
@@ -282,7 +282,7 @@ read(s: &str)-> Result<Self,()>
 
   let  dic = super::dictionary::get_dictionary();
 
-    if let Ok(nd) = crate::syntax::parse::parse_from_string(s,dic,"statement",None)
+    if let Ok(nd) = crate::syntax::parse::parse_from_string(s,dic,"statement")
     {
       return Ok(read_stmt(&nd));
     }

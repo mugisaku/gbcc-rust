@@ -22,341 +22,265 @@ use crate::token::tokenize::{
 };
 
 use super::dictionary::{
-  Operand,
-  UnaryOperator,
-  UnaryOperation,
-  BinaryOperator,
-  BinaryOperation,
   Expression,
   Definition,
   Dictionary,
+
 };
 
 
-pub fn
-to_literal_operand(s: &str)-> Result<Operand,()>
+fn
+to_literal(s: &str)-> Result<Expression,String>
 {
-       if s == "Identifier"{return Ok(Operand::IdentifierLiteral);}
-  else if s ==     "Number"{return Ok(Operand::NumberLiteral    );}
-  else if s ==  "Character"{return Ok(Operand::CharacterLiteral );}
-  else if s ==     "String"{return Ok(Operand::StringLiteral    );}
-
-
-  println!("{} is unknown literal keyword",s);
-
-  Err(())
+       if s == "Identifier"{Ok(Expression::IdentifierLiteral)}
+  else if s ==     "Number"{Ok(Expression::NumberLiteral    )}
+  else if s ==  "Character"{Ok(Expression::CharacterLiteral )}
+  else if s ==     "String"{Ok(Expression::StringLiteral    )}
+  else
+    {Err(format!("{} is unknown literal keyword",s))}
 }
 
 
-pub fn
-read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: char)-> Result<Operand,()>
+fn
+read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: char)-> Result<Expression,String>
 {
     match c
     {
   '('=>
+    {
+        match read_binary_string(toks,pos,")")
         {
-            if let Ok(e) = read_expression(toks,pos,')')
-            {
-              return Ok(Operand::One(Box::new(e)));
-            }
-        },
-  '['=>
-        {
-            if let Ok(e) = read_expression(toks,pos,']')
-            {
-              return Ok(Operand::Option(Box::new(e)));
-            }
-        },
-  '{'=>
-        {
-            if let Ok(e) = read_expression(toks,pos,'}')
-            {
-              return Ok(Operand::Repetition(Box::new(e)));
-            }
-        },
-  '\''=>
-        {
-            if let Some(s) = get_identifier(toks,*pos)
-            {
-              advance(pos);
-
-              return Ok(Operand::Keyword(s.clone()));
-            }
-
-
-          println!("keyword is missing");
-        },
-  '.'=>
-        {
-            if let Some(s) = get_identifier(toks,*pos)
-            {
-              advance(pos);
-
-              return to_literal_operand(s.as_str());
-            }
-
-
-          println!("literal keyword is missing");
-        },
-    _=>{println!("unknown others element");},
+      Ok(e)=>{Ok(Expression::Expression(Box::new(e)))}
+      Err(s)=>{Err(s)}
+        }
     }
+  '['=>
+    {
+        match read_binary_string(toks,pos,"]")
+        {
+      Ok(e)=>{Ok(Expression::Option(Box::new(e)))}
+      Err(s)=>{Err(s)}
+        }
+    }
+  '{'=>
+    {
+        match read_binary_string(toks,pos,"}")
+        {
+      Ok(e)=>{Ok(Expression::Repetition(Box::new(e)))}
+      Err(s)=>{Err(s)}
+        }
+    }
+  '\''=>
+    {
+        if let Some(s) = get_identifier(toks,*pos)
+        {
+          advance(pos);
 
+          Ok(Expression::Keyword(s.clone()))
+        }
 
-  Err(())
+      else
+        {Err(format!("keyword is missing"))}
+    }
+  '.'=>
+    {
+        if let Some(s) = get_identifier(toks,*pos)
+        {
+          advance(pos);
+
+          to_literal(s.as_str())
+        }
+
+      else
+        {Err(format!("literal keyword is missing"))}
+    }
+    _=>{Err(format!("unknown others element"))}
+    }
 }
 
 
-pub fn
-read_operand(toks: &Vec<Token>, pos: &mut usize)-> Option<Operand>
+fn
+read_operand(toks: &Vec<Token>, pos: &mut usize)-> Result<Expression,String>
 {
     if let Some(tok) = get_token(toks,*pos)
     {
         match tok.get_data()
         {
       TokenData::Identifier(s)=>
+        {
+          advance(pos);
+
+          let  o = Expression::Identifier(s.clone());
+
+          Ok(o)
+        }
+      TokenData::String(s)=>
+        {
+          let  o = Expression::String(s.clone());
+
+          advance(pos);
+
+          Ok(o)
+        }
+      TokenData::Others(c)=>
+        {
+          advance(pos);
+
+            match read_operand_that_begins_others_token(toks,pos,*c)
             {
-              let  mut name = String::new();
+          Ok(o)=>{Ok(o)}
+          Err(s)=>{Err(s)}
+            }
+        }
+      _=>{Err(format!("unknown operand element"))}
+        }
+    }
 
-              let  mut d_name_opt: Option<String> = None;
+  else
+    {Err(format!("オペランドがない"))}
+}
 
-              advance(pos);
 
-                if read_string_of_others(toks,pos,"::")
+fn
+read_operator(toks: &Vec<Token>, pos: &mut usize)-> Result<&'static str,String>
+{
+       if read_string_of_others(toks,pos, "&"){Ok("&")}
+  else if read_string_of_others(toks,pos, "|"){Ok("|")}
+  else if read_string_of_others(toks,pos,"->"){Ok("->")}
+  else if read_string_of_others(toks,pos, ")"){Ok(")")}
+  else if read_string_of_others(toks,pos, "]"){Ok("]")}
+  else if read_string_of_others(toks,pos, "}"){Ok("}")}
+  else if read_string_of_others(toks,pos, ";"){Ok(";")}
+  else
+    {Err(format!("不明な演算子"))}
+}
+
+
+pub fn
+read_binary_string(toks: &Vec<Token>, pos: &mut usize, closer: &'static str)-> Result<Expression,String>
+{
+    match read_operand(toks,pos)
+    {
+  Ok(mut left_o)=>
+    {
+        loop
+        {
+            match read_operator(toks,pos)
+            {
+          Ok(op)=>
+            {
+                if op == closer
                 {
-                    if let Some(last_name) = get_identifier(toks,*pos)
-                    {
-                      advance(pos);
+                  return Ok(left_o);
+                }
 
-                      name = last_name.clone();
-
-                      d_name_opt = Some(s.clone());
-                    }
-
-                  else
-                    {
-                      println!("辞書名の後ろの識別子がない");
-
-                      return None;
-                    }
+              else
+                if (op == ")") || (op == "]") || (op == "}") || (op == ";")
+                {
+                  return Err(format!("wrong closer {}",closer));
                 }
 
               else
                 {
-                  name = s.clone();
+                    match read_operand(toks,pos)
+                    {
+                  Ok(right_o)=>
+                    {
+                      left_o = Expression::BinaryOperation(Box::new(left_o),Box::new(right_o),op.to_string());
+                    }
+                  Err(e)=>
+                    {
+                      return Err(format!("right operand is missing"));
+                    }
+                    }
                 }
-
-
-              let  o = Operand::Identifier(name,d_name_opt);
-
-              return Some(o);
-            },
-      TokenData::String(s)=>
-            {
-              let  o = Operand::String(s.clone());
-
-              advance(pos);
-
-              return Some(o);
-            },
-      TokenData::Others(c)=>
-            {
-              advance(pos);
-
-                if let Ok(o) = read_operand_that_begins_others_token(toks,pos,*c)
-                {
-                  return Some(o);
-                }
-            },
-      _=>{println!("unknown operand element");},
+            }
+          Err(s)=>{return Err(s);}
+            }
         }
     }
-
-
-  None
+  Err(e)=>{Err(format!("{}\nオペランドが一つもない",&e))}
+    }
 }
 
 
 pub fn
-read_unary_operation(toks: &Vec<Token>, pos: &mut usize)-> Option<UnaryOperation>
+read_definition(toks: &Vec<Token>, pos: &mut usize)-> Result<Option<Definition>,String>
 {
-    if let Some(o) = read_operand(toks,pos)
+    if let Some(first_tok) = get_token(toks,*pos)
     {
-      let  unop = UnaryOperation{
-                    operator: UnaryOperator::Nop,
-                     operand: o
-                  };
+      advance(pos);
 
-      return Some(unop);
-    }
-
-
-  None
-}
-
-
-pub fn
-read_binary_operator(toks: &Vec<Token>, pos: &mut usize)-> Option<BinaryOperator>
-{
-    if read_string_of_others(toks,pos,"&")
-    {
-      return Some(BinaryOperator::And);
-    }
-
-  else
-    if read_string_of_others(toks,pos,"|")
-    {
-      return Some(BinaryOperator::Or);
-    }
-
-  else
-    if read_string_of_others(toks,pos,"->")
-    {
-      return Some(BinaryOperator::Arrow);
-    }
-
-
-  None
-}
-
-
-pub fn
-read_closing(toks: &Vec<Token>, pos: &mut usize, closer: char)-> bool
-{
-    if let Some(c) = get_others(toks,*pos)
-    {
-        if c == closer
+        if let TokenData::Identifier(s) = first_tok.get_data()
         {
           advance(pos);
 
-          return true;
-        }
-    }
-
-
-  false
-}
-
-
-pub fn
-read_expression(toks: &Vec<Token>, pos: &mut usize, closer: char)-> Result<Expression,()>
-{
-    if read_closing(toks,pos,closer)
-    {
-      return Ok(Expression::Empty);
-    }
-
-
-    if let Some(first_o) = read_operand(toks,pos)
-    {
-        if read_closing(toks,pos,closer)
-        {
-          return Ok(Expression::Operand(first_o));
-        }
-
-
-      let  mut left_o = first_o;
-
-        while let Some(bin_op) = read_binary_operator(toks,pos)
-        {
-            if let Some(right_o) = read_operand(toks,pos)
+            if let Some(c) = get_others(toks,*pos)
             {
-              let  b = BinaryOperation{operator: bin_op, left: left_o, right: right_o };
-
-              let  e = Expression::BinaryOperation(b);
-
-                if read_closing(toks,pos,closer)
+                if c == ':'
                 {
-                  return Ok(e);
-                }
-
-
-              left_o = Operand::One(Box::new(e));
-            }
-
-          else
-            {
-              println!("right operand is missing");
-
-              break;
-            }
-        }
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-read_definition(toks: &Vec<Token>, pos: &mut usize)-> Option<Definition>
-{
-    if let Some(s) = get_identifier(toks,*pos)
-    {
-      let  mut def = Definition::new(s.as_str());
-
-      advance(pos);
-
-        if let Some(c) = get_others(toks,*pos)
-        {
-            if c == ':'
-            {
-              advance(pos);
-
-                if let Ok(e) = read_expression(toks,pos,';')
-                {
-                  def.set_expression(e);
-
-                  return Some(def);
+                  advance(pos);
                 }
             }
+
+
+            match read_binary_string(toks,pos,";")
+            {
+          Ok(expr)=>
+            {
+              let  def = Definition::new(s.clone(),expr);
+
+              Ok(Some(def))
+            }
+          Err(err_s)=>{Err(format!("{}の定義中のエラー: {}",s,err_s))}
+            }
         }
+
+      else
+        {Err(format!("定義の開始が不正"))}
     }
 
-
-  None
+  else
+    {Ok(None)}
 }
 
 
 pub fn
-read_dictionary(src: &SourceFile)-> Result<Dictionary,()>
+read_dictionary(src: &SourceFile)-> Result<Dictionary,String>
 {
-  let  mut dic = Dictionary::new("");
+  let  mut dic = Dictionary::new();
 
-    if let Ok(toks) = tokenize(src)
+    match tokenize(src)
+    {
+  Ok(toks)=> 
     {
       let  stripped = strip_spaces(toks);
 
       let  mut pos: usize = 0;
 
-        if read_string_of_others(&stripped,&mut pos,"#")
+        loop
         {
-            if let Some(s) = get_identifier(&stripped,pos)
+            match read_definition(&stripped,&mut pos)
             {
-              dic.name = s.clone();
-
-              advance(&mut pos);
+          Ok(def_opt)=>
+            {
+                match def_opt
+                {
+              Some(def)=>{dic.add(def);}
+              None=>{return Ok(dic);}
+                }
             }
-
-          else
-            {
-              println!("読むべき辞書名がない");
-
-              return Err(());
+          Err(s)=>{return Err(s);}
             }
         }
-
-
-        while let Some(def) = read_definition(&stripped,&mut pos)
-        {
-          dic.add(def);
-        }
-
-
-      return Ok(dic);
     }
+  Err(e)=>
+    {
+      let  s = e.to_string();
 
-
-  Err(())
+      Err(format!("辞書字句解析エラー: {}",&s))
+    }
+    }
 }
 
 

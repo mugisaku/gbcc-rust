@@ -1,6 +1,7 @@
 
 
 use crate::node::*;
+use crate::syntax::*;
 use super::expr::*;
 use super::stmt::*;
 use super::scope::*;
@@ -249,35 +250,41 @@ collect_string(&self, buf: &mut Vec<Collectible>)
 
 
 pub fn
-read(s: &str)-> Result<Self,()>
+read(s: &str)-> Result<Self,ParseSyntaxError>
 {
   use crate::syntax::dictionary::Dictionary;
 
   let  dic = super::dictionary::get_dictionary();
 
-    if let Ok(nd) = crate::syntax::parse::parse_from_string(s,dic,"declaration",None)
+    match crate::syntax::parse::parse_from_string(s,dic,"declaration")
+    {
+   Ok(nd)=>
     {
       let  mut cur = nd.cursor();
 
         if let Some(decl_nd) = cur.select_node("declaration")
         {
-          return Ok(read_decl(decl_nd));
+          Ok(read_decl(decl_nd))
         }
+
+      else
+        {Err(ParseSyntaxError::new(format!("no decl")))}
     }
-
-
-  Err(())
+  Err(e)=>{Err(e)}
+    }
 }
 
 
 pub fn
-read_as_root(s: &str)-> Result<Vec<Self>,()>
+read_as_root(s: &str)-> Result<Vec<Self>,ParseSyntaxError>
 {
   use crate::syntax::dictionary::Dictionary;
 
   let  dic = super::dictionary::get_dictionary();
 
-    if let Ok(nd) = crate::syntax::parse::parse_from_string(s,dic,"declaration",None)
+    match crate::syntax::parse::parse_from_string(s,dic,"declaration")
+    {
+  Ok(nd)=>
     {
       let  mut cur = nd.cursor();
 
@@ -299,11 +306,10 @@ read_as_root(s: &str)-> Result<Vec<Self>,()>
         }
 
 
-      return Ok(ls);
+      Ok(ls)
     }
-
-
-  Err(())
+  Err(e)=>{Err(e)}
+    }
 }
 
 

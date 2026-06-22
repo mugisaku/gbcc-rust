@@ -18,6 +18,39 @@ use super::font8::*;
 
 
 
+pub struct
+BuildError
+{
+  message: String,
+}
+
+
+impl
+BuildError
+{
+
+
+pub fn
+new(message: String)-> Self
+{
+  Self{
+    message,
+  }
+}
+
+
+pub fn
+print(&self)
+{
+  println!("{}",self.message);
+}
+
+
+}
+
+
+
+
 pub enum
 SymbolKind
 {
@@ -457,7 +490,7 @@ generate_symbols(&mut self, mut srcs: Vec<Source>, mut strs: Vec<String>)
 
 
 pub fn
-build(decls: Vec<Decl>)-> Result<Self,()>
+build(decls: Vec<Decl>)-> Result<Self,BuildError>
 {
   let  mut tbl = Self::new();
 
@@ -711,7 +744,7 @@ get_const_or(&mut self, s: &str, def: usize)-> usize
 
 
 pub fn
-generate_exec(&mut self)-> Exec
+generate_exec(&mut self)-> Result<Exec,String>
 {
   let  mut exec = Exec::new_with_memory();
 
@@ -760,6 +793,12 @@ generate_exec(&mut self)-> Exec
           text.finalize();
 
           let  bytes = text.to_bytes();
+
+            if (pos+bytes.len()) > exec.memory.len()
+            {
+              return Err(format!("プログラムおよびデータが、容量を超えている"));
+            }
+
 
             for i in 0..bytes.len()
             {
@@ -828,7 +867,7 @@ generate_exec(&mut self)-> Exec
   Self::install_combi8(&mut exec.memory[combi8_start..]);
   Self::install_font14(&mut exec.memory[font14_start..]);
 
-  exec
+  Ok(exec)
 }
 
 

@@ -5,7 +5,6 @@ use crate::syntax::dictionary::Dictionary;
 
 static DIC_S: &'static str =
 r##"
-#dynamic
 
 
 operand_core: .Identifier | .Number | .Character | .String | ("(" & expression & ")");

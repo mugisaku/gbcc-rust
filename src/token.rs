@@ -57,9 +57,18 @@ pub fn  get_y(&self)-> usize{self.cursor.get_y()}
 
 
 pub fn
+to_string(&self)-> String
+{
+  format!("[file: {} X: {:05} Y: {:05}]",self.get_filepath(),1+self.get_x(),1+self.get_y())
+}
+
+
+pub fn
 print(&self)
 {
-  print!("[X:{:05} Y:{:05}] ",1+self.get_x(),1+self.get_y())
+  let  s = self.to_string();
+
+  print!("{}",&s);
 }
 
 
@@ -119,6 +128,27 @@ ParseTokenError
   info: TokenInfo,
 
   message: String,
+
+}
+
+
+impl
+ParseTokenError
+{
+
+
+pub fn
+to_string(&self)-> String
+{
+  let  mut s = self.info.to_string();
+
+  s.push(' ');
+
+  s.push_str(&self.message);
+
+  s
+}
+
 
 }
 
@@ -454,6 +484,19 @@ get_token(toks: &[Token], pos: usize)-> Option<&Token>
     if pos < toks.len()
     {
       return Some(&toks[pos]);
+    }
+
+
+  None
+}
+
+
+pub fn
+get_token_info(toks: &[Token], pos: usize)-> Option<TokenInfo>
+{
+    if pos < toks.len()
+    {
+      return Some(toks[pos].info.clone());
     }
 
 

@@ -5,13 +5,14 @@ use crate::token::print_string;
 
 #[derive(Clone)]
 pub enum
-Operand
+Expression
 {
-  One(       Box<Expression>),
+  Expression(Box<Expression>),
+
   Option(    Box<Expression>),
   Repetition(Box<Expression>),
 
-  Identifier(String,Option<String>),
+  Identifier(String),
   Keyword(String),
   String(String),
 
@@ -20,288 +21,7 @@ Operand
   CharacterLiteral,
   StringLiteral,
 
-}
-
-
-impl
-Operand
-{
-
-
-pub fn
-test(&self, dic: &Dictionary)-> Result<(),()>
-{
-    match self
-    {
-  Operand::One(e)=>      {e.test(dic)},
-  Operand::Option(e)=>   {e.test(dic)},
-  Operand::Repetition(e)=>{e.test(dic)},
-  Operand::Identifier(s,d_name_opt)=>
-        {
-            if let None = d_name_opt
-            {
-                if let None = dic.find(s)
-                {
-                  print!("definition <{}> not found.\n",s);
-
-                  return Err(());
-                }
-            }
-
-
-          Ok(())
-        },
-  Operand::Keyword(_)=>{Ok(())},
-  Operand::String(_)=>{Ok(())},
-  Operand::IdentifierLiteral=>{Ok(())},
-  Operand::NumberLiteral=>{Ok(())},
-  Operand::CharacterLiteral=>{Ok(())},
-  Operand::StringLiteral=>{Ok(())},
-    }
-}
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  Operand::One(e)=>
-        {
-          print!("(");
-          e.print();
-          print!(")");
-        },
-  Operand::Option(e)=>
-        {
-          print!("[");
-          e.print();
-          print!("]");
-        },
-  Operand::Repetition(e)=>
-        {
-          print!("{}","{");
-          e.print();
-          print!("{}","}");
-        },
-  Operand::Identifier(s,d_name_opt)=>
-        {
-            if let Some(d_name) = d_name_opt
-            {
-              print!("{}::",d_name);
-            }
-
-
-          print_string(s);
-        },
-  Operand::Keyword(s)=>
-        {
-          print!("\'");
-          print_string(s);
-        },
-  Operand::String(s)=>
-        {
-          print!("\"");
-          print_string(s);
-          print!("\"");
-        },
-  Operand::IdentifierLiteral=>{print!(".Identifier");},
-  Operand::NumberLiteral=>{print!(".Number");},
-  Operand::CharacterLiteral=>{print!(".Character");},
-  Operand::StringLiteral=>{print!(".String");},
-    }
-}
-
-
-}
-
-
-
-
-#[derive(Clone,Copy)]
-pub enum
-UnaryOperator
-{
-  Nop,
-  Not,
-
-}
-
-
-impl
-UnaryOperator
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  UnaryOperator::Nop=>{},
-  UnaryOperator::Not=>{print!("!");},
-    }
-}
-
-
-}
-
-
-#[derive(Clone)]
-pub struct
-UnaryOperation
-{
-  pub(crate) operator: UnaryOperator,
-  pub(crate)  operand: Operand,
-
-}
-
-
-impl
-UnaryOperation
-{
-
-
-pub fn
-get_operator(&self)-> &UnaryOperator
-{
-  &self.operator
-}
-
-
-pub fn
-get_operand(&self)-> &Operand
-{
-  &self.operand
-}
-
-
-pub fn
-print(&self)
-{
-  self.operator.print();
-  self.operand.print();
-}
-
-
-}
-
-
-
-
-#[derive(Clone,Copy)]
-pub enum
-BinaryOperator
-{
-  And,
-  Or,
-  Arrow,
-
-}
-
-
-impl
-BinaryOperator
-{
-
-
-pub fn
-print(&self)
-{
-    match self
-    {
-  BinaryOperator::And=>{print!("&");},
-  BinaryOperator::Or=> {print!("|");},
-  BinaryOperator::Arrow=>{print!("->");},
-    }
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub struct
-BinaryOperation
-{
-  pub(crate) operator: BinaryOperator,
-
-  pub(crate)  left: Operand,
-  pub(crate) right: Operand,
-
-}
-
-
-impl
-BinaryOperation
-{
-
-
-pub fn
-get_operator(&self)-> &BinaryOperator
-{
-  &self.operator
-}
-
-
-pub fn
-get_left(&self)-> &Operand
-{
-  &self.left
-}
-
-
-pub fn
-get_right(&self)-> &Operand
-{
-  &self.right
-}
-
-
-pub fn
-test(&self, dic: &Dictionary)-> Result<(),()>
-{
-    if   self.left.test(dic).is_ok()
-     && self.right.test(dic).is_ok()
-    {
-      return Ok(());
-    }
-
-
-  Err(())
-}
-
-
-pub fn
-print(&self)
-{
-  self.left.print();
-
-  print!(" ");
-
-  self.operator.print();
-
-  print!(" ");
-
-  self.right.print();
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
-pub enum
-Expression
-{
-  Empty,
-  Operand(Operand),
-  UnaryOperation( UnaryOperation),
-  BinaryOperation(BinaryOperation),
+  BinaryOperation(Box<Expression>,Box<Expression>,String),
 
 }
 
@@ -312,14 +32,45 @@ Expression
 
 
 pub fn
-test(&self, dic: &Dictionary)-> Result<(),()>
+test(&self, dic: &Dictionary)-> Result<(),String>
 {
     match self
     {
-  Expression::Empty=>{Ok(())},
-  Expression::Operand(o)=>{o.test(dic)}
-  Expression::UnaryOperation(o)=>{o.operand.test(dic)},
-  Expression::BinaryOperation(o)=>{o.test(dic)},
+  Expression::Expression(e)=>{e.test(dic)}
+  Expression::Option(e)=>    {e.test(dic)}
+  Expression::Repetition(e)=>{e.test(dic)}
+  Expression::Identifier(s)=>
+    {
+        if let None = dic.find(s)
+        {
+          Err(format!("definition <{}> not found.\n",s))
+        }
+
+      else
+        {Ok(())}
+    }
+  Expression::Keyword(_)=>{Ok(())}
+  Expression::String(_)=>{Ok(())}
+  Expression::IdentifierLiteral=>{Ok(())}
+  Expression::NumberLiteral=>{Ok(())}
+  Expression::CharacterLiteral=>{Ok(())}
+  Expression::StringLiteral=>{Ok(())}
+
+  Expression::BinaryOperation(l,r,op)=>
+    {
+        match l.test(dic)
+        {
+      Ok(())=>
+        {
+            match r.test(dic)
+            {
+          Ok(())=>{Ok(())}
+          Err(s)=>{Err(s)}
+            }
+        }
+      Err(s)=>{Err(s)}
+        }
+    }
     }
 }
 
@@ -329,10 +80,52 @@ print(&self)
 {
     match self
     {
-  Expression::Empty=>{print!("EMPTY");},
-  Expression::Operand(o)=>{o.print();},
-  Expression::UnaryOperation(o)=>{o.print();},
-  Expression::BinaryOperation(o)=>{o.print();},
+  Expression::Expression(e)=>
+    {
+      print!("(");
+      e.print();
+      print!(")");
+    }
+  Expression::Option(e)=>
+    {
+      print!("[");
+      e.print();
+      print!("]");
+    }
+  Expression::Repetition(e)=>
+    {
+      print!("{}","{");
+      e.print();
+      print!("{}","}");
+    }
+  Expression::Identifier(s)=>
+    {
+      print_string(s);
+    }
+  Expression::Keyword(s)=>
+    {
+      print!("\'");
+      print_string(s);
+    }
+  Expression::String(s)=>
+    {
+      print!("\"");
+      print_string(s);
+      print!("\"");
+    }
+  Expression::IdentifierLiteral=>{print!(".Identifier");}
+  Expression::NumberLiteral=>{print!(".Number");}
+  Expression::CharacterLiteral=>{print!(".Character");}
+  Expression::StringLiteral=>{print!(".String");}
+
+  Expression::BinaryOperation(l,r,op)=>
+    {
+      l.print();
+
+      print!(" {} ",op);
+
+      r.print();
+    }
     }
 }
 
@@ -346,9 +139,8 @@ print(&self)
 pub struct
 Definition
 {
-  pub(crate) name: String,
-
-  pub(crate) expression: Expression,
+        name: String,
+  expression: Expression,
 
 }
 
@@ -359,9 +151,12 @@ Definition
 
 
 pub fn
-new(name: &str)-> Definition
+new(name: String, expression: Expression)-> Self
 {
-  Definition{ name: String::from(name), expression: Expression::Empty}
+  Self{
+    name,
+    expression,
+  }
 }
 
 
@@ -376,13 +171,6 @@ pub fn
 get_expression(&self)-> &Expression
 {
   &self.expression
-}
-
-
-pub fn
-set_expression(&mut self, expr: Expression)
-{
-  self.expression = expr;
 }
 
 
@@ -405,8 +193,7 @@ print(&self)
 pub struct
 Dictionary
 {
-  pub(crate) name: String,
-  pub(crate) definition_list: Vec<Definition>,
+  definition_list: Vec<Definition>,
 
 }
 
@@ -417,18 +204,18 @@ Dictionary
 
 
 pub fn
-new(name: &str)-> Dictionary
+new()-> Self
 {
-  Dictionary{name: String::from(name), definition_list: Vec::new()}
+  Self{definition_list: Vec::new()}
 }
 
 
 pub fn
-make_from_string(s: &str)-> Result<Dictionary,()>
+make_from_string(s: &str)-> Result<Self,String>
 {
   let  src = crate::source_file::SourceFile::from_string(s);
 
-  return super::read_dictionary::read_dictionary(&src);
+  super::read_dictionary::read_dictionary(&src)
 }
 
 
@@ -456,23 +243,13 @@ add(&mut self, def: Definition)
 
 
 pub fn
-copy_from(&mut self, src: &Dictionary)
-{
-    for def in &src.definition_list
-    {
-      self.add(def.clone());
-    }
-}
-
-
-pub fn
-test(&self)-> Result<(),()>
+test(&self)-> Result<(),String>
 {
     for def in &self.definition_list
     {
-        if def.expression.test(self).is_err()
+        if let Err(s) = def.expression.test(self)
         {
-          return Err(());
+          return Err(s);
         }
     }
 
@@ -486,7 +263,7 @@ test(&self)-> Result<(),()>
 pub fn
 print(&self)
 {
-  print!("dictionary\n{}\n{{\n",&self.name);
+  print!("{{\n");
 
     for def in &self.definition_list
     {

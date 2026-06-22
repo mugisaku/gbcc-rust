@@ -49,7 +49,7 @@ read(s: &str)-> Result<Self,()>
 
   let  dic = super::dictionary::get_dictionary();
 
-    if let Ok(nd) = crate::syntax::parse::parse_from_string(s,dic,"expression",None)
+    if let Ok(nd) = crate::syntax::parse::parse_from_string(s,dic,"expression")
     {
       return Ok(read_expr(&nd));
     }

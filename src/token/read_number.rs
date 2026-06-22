@@ -55,7 +55,7 @@ is_float(&self)-> bool
 
 
 pub fn
-to_u64(&self)-> Result<u64,std::num::ParseIntError>
+try_to_u64(&self)-> Result<u64,std::num::ParseIntError>
 {
     if self.integer.len() == 0{Ok(0)}
   else{u64::from_str_radix(&self.integer,self.radix)}
@@ -63,7 +63,7 @@ to_u64(&self)-> Result<u64,std::num::ParseIntError>
 
 
 pub fn
-to_f64(&self)-> Result<f64,std::num::ParseFloatError>
+try_to_f64(&self)-> Result<f64,std::num::ParseFloatError>
 {
   use std::str::FromStr;
 

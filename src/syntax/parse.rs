@@ -4,7 +4,9 @@ use crate::token::{
   Token,
   TokenInfo,
   TokenData,
+  ParseTokenError,
   get_token,
+  get_token_info,
   get_number,
   get_character,
   get_string,
@@ -21,9 +23,7 @@ use super::dictionary::{
   Definition,
   Dictionary,
   Expression,
-  BinaryOperation,
-  BinaryOperator,
-  Operand,
+
 };
 
 use crate::node::{
@@ -34,19 +34,39 @@ use crate::node::{
 };
 
 
+use super::ParseSyntaxError as Error;
+
+enum
+ParseSyntaxResult
+{
+  Some(Vec<Value>),
+  None,
+  Err(Error),
+
+}
+
+
+use ParseSyntaxResult::Some;
+use ParseSyntaxResult::None;
+use ParseSyntaxResult::Err;
+
+use std::result::Result       as StdResult;
+use StdResult::Ok             as     StdOk;
+use StdResult::Err            as    StdErr;
+
+use std::option::Option::Some as StdSome;
+use std::option::Option::None as StdNone;
+
+
 struct
 Status<'a,'b>
 {
-  dictionary_list : Vec<&'a Dictionary>,
-  dictionary_stack: Vec<&'a Dictionary>,
+  dictionary: &'a Dictionary,
 
   token_string: &'b Vec<Token>,
 
   position: usize,
-
-  depth: usize,
-
-  interruption: bool,
+     depth: usize,
 
 }
 
@@ -54,44 +74,6 @@ Status<'a,'b>
 impl<'a,'b>
 Status<'a,'b>
 {
-
-
-fn
-open_dictionary(&mut self, name: &str)-> Result<(),()>
-{
-    for dic in &self.dictionary_list
-    {
-        if dic.name == name
-        {
-          self.dictionary_stack.push(dic);
-
-          return Ok(());
-        }
-    }
-
-
-  println!("Status::open_directory error: dictionary {} is not found",name);
-
-  Err(())
-}
-
-
-fn
-close_dictionary(&mut self, name: &str)-> Result<(),()>
-{
-    if let Some(dic) = self.dictionary_stack.pop()
-    {
-        if dic.name == name
-        {
-          return Ok(());
-        }
-    }
-
-
-  println!("Status::close_directory error: opened dictionary {} is none",name);
-
-  Err(())
-}
 
 
 fn
@@ -122,7 +104,101 @@ get_token_info(&self)-> TokenInfo
 
 
 fn
-read_by_string(&mut self, s: &str)-> Option<Vec<Value>>
+read_repetition(&mut self, e: &Expression)-> ParseSyntaxResult
+{
+    match self.read_by_expression(e)
+    {
+  Some(mut first_vals)=>
+    {
+        loop
+        {
+            match self.read_by_expression(e)
+            {
+          Some(mut vals)=>{first_vals.append(&mut vals);}
+          None=>{break;}
+          Err(e)=>{return Err(e);}
+            }
+        }
+
+
+      Some(first_vals)
+    }
+  None=>{None}
+  Err(e)=>{Err(e)}
+    }
+}
+
+
+fn
+read_keyword(&mut self, s: &str)-> ParseSyntaxResult
+{
+    match get_identifier(&self.token_string,self.position)
+    {
+  StdSome(kw)=>
+    {
+        if kw == s
+        {
+          let  v = Value::Keyword(kw.clone());
+
+          self.position += 1;
+
+          Some(vec![v])
+        }
+
+      else
+        {None}
+    }
+  StdNone=>{None}
+    }
+}
+
+
+fn
+read_number_literal(&mut self)-> ParseSyntaxResult
+{
+    match get_number(&self.token_string,self.position)
+    {
+  StdSome(pn)=>
+    {
+      let  inf = get_token_info(&self.token_string,self.position).unwrap();
+
+      self.advance();
+
+        if pn.is_float()
+        {
+            match pn.try_to_f64()
+            {
+          StdOk(f)=>
+            {
+              let  v = Value::Float(f);
+
+              Some(vec![])
+            }
+          StdErr(_)=>{Err(Error::new_with_token_info(inf,format!("整数が不正")))}
+            }
+        }
+
+      else
+        {
+            match pn.try_to_u64()
+            {
+          StdOk(u)=>
+            {
+              let  v = Value::Uint(u);
+
+              Some(vec![v])
+            }
+          StdErr(_)=>{Err(Error::new_with_token_info(inf,format!("浮動小数点数が不正")))}
+            }
+        }
+    }
+  StdNone=>{None}
+    }
+}
+
+
+fn
+read_by_string(&mut self, s: &str)-> ParseSyntaxResult
 {
   let  old_pos = self.position;
 
@@ -130,466 +206,328 @@ read_by_string(&mut self, s: &str)-> Option<Vec<Value>>
     {
       let  v = Value::SemiString(s.to_string());
 
-      return Some(vec![v]);
+      Some(vec![v])
     }
 
+  else
+    {
+      self.position = old_pos;
 
-  self.position = old_pos;
-
-  None
+      None
+    }
 }
 
 
 fn
-read_by_identifier(&mut self, id: &str, d_name_opt: &Option<String>)-> Option<Vec<Value>>
+read_by_identifier(&mut self, s: &str)-> ParseSyntaxResult
 {
-   if let Some(d_name) = d_name_opt
-   {
-       if self.open_dictionary(d_name).is_err()
-       {
-         return None;
-       }
-   }
+    if let StdSome(def) = self.dictionary.find(s)
+    {
+        if self.depth >= 800
+        {
+          return Err(Error::new(format!("read_by_identifier: depth limit is over")));
+        }
 
 
-  let  mut vals_opt: Option<Vec<Value>> = None;
+      self.read_by_definition(def)
+    }
 
-   if let Some(vals) = self.read_by_name(id)
-   {
-     vals_opt = Some(vals);
-   }
-
-
-   if let Some(d_name) = d_name_opt
-   {
-       if self.close_dictionary(d_name).is_err()
-       {
-         return None;
-       }
-   }
-
-
-  vals_opt
+  else
+    {Err(Error::new(format!("read_by_identifier: {}という定義はない",s)))}
 }
 
 
 fn
-read_by_operand(&mut self, o: &Operand)-> Option<Vec<Value>>
+read_and(&mut self, l: &Expression, r: &Expression)-> ParseSyntaxResult
 {
   let  old_pos = self.position;
 
-    match o
+    match self.read_by_expression(l)
     {
-  Operand::One(e)=>
+  Some(mut l_vals)=>
+    {
+        match self.read_by_expression(r)
         {
-            if let Some(vals) = self.read_by_expression(e)
-            {
-              return Some(vals);
-            }
-        },
-  Operand::Option(e)=>
+      Some(mut r_vals)=>
         {
-            if let Some(vals) = self.read_by_expression(e)
-            {
-              return Some(vals);
-            }
+          l_vals.append(&mut r_vals);
 
-
-            if !self.interruption
-            {
-              return Some(vec![]);
-            }
-        },
-  Operand::Repetition(e)=>
+          Some(l_vals)
+        }
+      None=>
         {
-            if let Some(mut first_vals) = self.read_by_expression(e)
-            {
-                while let Some(mut vals) = self.read_by_expression(e)
-                {
-                  first_vals.append(&mut vals);
-                }
+          self.position = old_pos;
 
-
-                if !self.interruption
-                {
-                  return Some(first_vals);
-                }
-            }
-        },
-  Operand::Identifier(s,d_name_opt)=>
-        {
-          return self.read_by_identifier(s,d_name_opt);
-        },
-  Operand::String(s)=>
-        {
-            if let Some(vals) = self.read_by_string(s)
-            {
-              return Some(vals);
-            }
-        },
-  Operand::Keyword(kw)=>
-        {
-            if let Some(id) = get_identifier(&self.token_string,self.position)
-            {
-                if kw == id
-                {
-                  let  v = Value::Keyword(kw.clone());
-
-                  self.position += 1;
-
-                  return Some(vec![v]);
-                }
-            }
-        },
-  Operand::IdentifierLiteral=>
-        {
-            if let Some(s) = get_identifier(&self.token_string,self.position)
-            {
-              let  v = Value::Identifier(s.clone());
-
-              self.advance();
-
-              return Some(vec![v]);
-            }
-        },
-  Operand::NumberLiteral=>
-        {
-            if let Some(pn) = get_number(&self.token_string,self.position)
-            {
-                if pn.is_float()
-                {
-                  let  v = Value::Float(pn.to_f64().unwrap());
-
-                  self.advance();
-
-                  return Some(vec![v]);
-                }
-
-              else
-                if let Ok(u) = pn.to_u64()
-                {
-                  let  v = Value::Uint(u);
-
-                  self.advance();
-
-                  return Some(vec![v]);
-                }
-
-              else
-                {
-pn.print();
-                  panic!();
-                }
-            }
-        },
-  Operand::CharacterLiteral=>
-        {
-            if let Some(c) = get_character(&self.token_string,self.position)
-            {
-              let  v = Value::Char(c);
-
-              self.advance();
-
-              return Some(vec![v]);
-            }
-        },
-  Operand::StringLiteral=>
-        {
-            if let Some(s) = get_string(&self.token_string,self.position)
-            {
-              let  v = Value::String(s.clone());
-
-              self.advance();
-
-              return Some(vec![v]);
-            }
-        },
+          None
+        }
+      Err(e)=>{Err(e)}
+        }
     }
-
-
-  self.position = old_pos;
-
-  None
+  None=>{None}
+  Err(e)=>{Err(e)}
+    }
 }
 
 
 fn
-read_by_binary_operation(&mut self, op: &BinaryOperation)-> Option<Vec<Value>>
+read_or(&mut self, l: &Expression, r: &Expression)-> ParseSyntaxResult
 {
   let  old_pos = self.position;
 
-    match &op.operator
+    match self.read_by_expression(l)
     {
-  BinaryOperator::And=>
+  Some(l_vals)=>{Some(l_vals)}
+  None=>
+    {
+      self.position = old_pos;
+
+        match self.read_by_expression(r)
         {
-            if let Some(mut l_vals) = self.read_by_operand(op.get_left())
-            {
-                if let Some(mut r_vals) = self.read_by_operand(op.get_right())
-                {
-                  l_vals.append(&mut r_vals);
-
-                  return Some(l_vals);
-                }
-            }
-        },
-  BinaryOperator::Or=>
+      Some(r_vals)=>{Some(r_vals)}
+      None=>
         {
-            if let Some(pac) = self.read_by_operand(op.get_left())
-            {
-              return Some(pac);
-            }
+          self.position = old_pos;
 
-
-            if !self.interruption
-            {
-              self.position = old_pos;
-
-                if let Some(pac) = self.read_by_operand(op.get_right())
-                {
-                  return Some(pac);
-                }
-            }
-        },
-  BinaryOperator::Arrow=>
-        {
-            if let Some(mut l_vals) = self.read_by_operand(op.get_left())
-            {
-                if let Some(mut r_vals) = self.read_by_operand(op.get_right())
-                {
-                  l_vals.append(&mut r_vals);
-
-                  return Some(l_vals);
-                }
-
-
-              println!("確定構文の解析が失敗した");
-
-              self.interruption = true;
-            }
-        },
+          None
+        }
+      Err(e)=>{Err(e)}
+        }
     }
+  Err(e)=>{Err(e)}
+    }
+}
 
 
-  self.position = old_pos;
+fn
+read_arrow(&mut self, l: &Expression, r: &Expression)-> ParseSyntaxResult
+{
+  let  old_pos = self.position;
 
-  None
+    match self.read_by_expression(l)
+    {
+  Some(mut l_vals)=>
+    {
+        match self.read_by_expression(r)
+        {
+      Some(mut r_vals)=>
+        {
+          l_vals.append(&mut r_vals);
+
+          Some(l_vals)
+        }
+      None=>{Err(Error::new(format!("解析失敗を確定")))}
+      Err(e)=>{Err(e)}
+        }
+    }
+  None=>{None}
+  Err(e)=>{Err(e)}
+    }
+}
+
+
+fn
+read_by_binary_operation(&mut self, l: &Expression, r: &Expression, op: &str)-> ParseSyntaxResult
+{
+    match op
+    {
+  (s) if s == "&" =>{self.read_and(  l,r)}
+  (s) if s == "|" =>{self.read_or(   l,r)}
+  (s) if s == "->"=>{self.read_arrow(l,r)}
+  _=>{Err(Error::new(format!("不明な演算子 {}",op)))}
+    }
 }
 
 
 pub fn
-read_by_expression(&mut self, e: &Expression)-> Option<Vec<Value>>
+read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
 {
-  let  old_pos = self.position;
-
     match e
     {
-  Expression::Empty=>{},
-  Expression::UnaryOperation(op)=>
+  Expression::Expression(e_e)=>{self.read_by_expression(e_e)}
+  Expression::Option(op_e)=>
+    {
+        match self.read_by_expression(op_e)
         {
-            if let Some(vals) = self.read_by_operand(&op.operand)
-            {
-              return Some(vals);
-            }
-        },
-  Expression::BinaryOperation(op)=>
-        {
-            if let Some(vals) = self.read_by_binary_operation(op)
-            {
-              return Some(vals);
-            }
-        },
-  Expression::Operand(o)=>
-        {
-            if let Some(vals) = self.read_by_operand(o)
-            {
-              return Some(vals);
-            }
-        },
+      Some(vals)=>{Some(vals)}
+      None      =>{Some(vec![])}
+      Err(e)    =>{Err(e)}
+        }
     }
+  Expression::Repetition(rep_e)=>{self.read_repetition(rep_e)}
+  Expression::Identifier(s)=>{self.read_by_identifier(s)}
+  Expression::String(s)    =>{self.read_by_string(s)}
+  Expression::Keyword(s)   =>{self.read_keyword(s)}
+  Expression::IdentifierLiteral=>
+    {
+        match get_identifier(&self.token_string,self.position)
+        {
+      StdSome(s)=>
+        {
+          let  v = Value::Identifier(s.clone());
 
+          self.advance();
 
-  self.position = old_pos;
+          Some(vec![v])
+        }
+      StdNone=>{None}
+        }
+    }
+  Expression::NumberLiteral=>{self.read_number_literal()}
+  Expression::CharacterLiteral=>
+    {
+        match get_character(&self.token_string,self.position)
+        {
+      StdSome(c)=>
+        {
+          let  v = Value::Char(c);
 
-  None
+          self.advance();
+
+          Some(vec![v])
+        }
+      StdNone=>{None}
+        }
+    }
+  Expression::StringLiteral=>
+    {
+        match get_string(&self.token_string,self.position)
+        {
+      StdSome(s)=>
+        {
+          let  v = Value::String(s.clone());
+
+          self.advance();
+
+          Some(vec![v])
+        }
+      StdNone=>{None}
+        }
+    }
+  Expression::BinaryOperation(l,r,op)=>{self.read_by_binary_operation(&*l,&*r,op)}
+    }
 }
 
 
 fn
-read_by_definition(&mut self, def: &Definition)-> Option<Vec<Value>>
+read_by_definition(&mut self, def: &Definition)-> ParseSyntaxResult
 {
-    if let Some(tok) = get_token(&self.token_string,self.position)
+    if let StdSome(tok) = get_token(&self.token_string,self.position)
     {
       let  old_pos = self.position;
 
-//      self.print_indent();
-
-//      println!("{}としての解析を開始({})",&def.name,self.dictionary_stack.len());
-
       self.depth += 1;
 
-        if let Some(vals) = self.read_by_expression(def.get_expression())
+        match self.read_by_expression(def.get_expression())
         {
-          let  mut nd = Node::new(&def.name);
+      Some(vals)=>
+        {
+          self.depth -= 1;
+
+          let  mut nd = Node::new(&def.get_name());
 
           nd.add_value_list(vals);
 
           let  val = Value::Node(Box::new(nd));
 
+          Some(vec![val])
+        }
+      None=>
+        {
           self.depth -= 1;
 
-//          self.print_indent();
+          self.position = old_pos;
 
-//          println!("{}としての解析に成功",&def.name);
-
-          return Some(vec![val]);
+          None
         }
-
-
-      self.depth -= 1;
-
-//      self.print_indent();
-
-//      println!("{}としての解析に失敗",&def.name);
-
-      self.position = old_pos;
-    }
-
-
-  None
-}
-
-
-fn
-read_by_name(&mut self, name: &str)-> Option<Vec<Value>>
-{
-    if let Some(dic) = self.dictionary_stack.last()
-    {
-        if let Some(def) = dic.find(name)
-        {
-            if self.depth >= 800
-            {
-              println!("read_by_name: depth limit is over");
-
-              return None;
-            }
-
-
-          return self.read_by_definition(def);
-        }
-    }
-
-
-  None
-}
-
-
-}
-
-
-
-
-pub fn
-parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Node,()>
-{
-  let  mut nd = Node::new("");
-
-    if let Some(main_def) = dic.find(main_def_name) 
-    {
-      let  mut st = Status{
-                      dictionary_list : Vec::new(),
-                      dictionary_stack: Vec::new(),
-                      token_string: toks,
-                      position: 0,
-                      depth: 0,
-                      interruption: false,
-                    };
-
-
-      st.dictionary_list.push(&dic);
-
-        if let Some(mut dics) = dics_opt
-        {
-          st.dictionary_list.append(&mut dics);
-        }
-
-
-      st.dictionary_stack.push(dic);
-
-      let  mut prev_pos: usize = 0;
-
-        while let Some(vals) = st.read_by_definition(main_def)
-        {
-          nd.add_value_list(vals);
-
-            if st.position == prev_pos
-            {
-              println!("parse is stopped");
-
-              break;
-            }
-
-
-          prev_pos = st.position;
-
-          println!("\n--\n");
-        }
-
-      println!("parse is end");
-
-
-        if st.interruption
-        {
-          println!("parse is interrupted");
-
-          return Err(());
-        }
-
-
-        if st.position < toks.len()
-        {
-          println!("there are remained some unparsed tokens.");
-
-           for i in st.position..toks.len()
-           {
-             print!("{}: ",i);
-
-             toks[i].print();
-
-             println!();
-           }
-
-
-          println!("{} parsed",nd.get_length());
-
-          return Err(());
+      Err(e)=>{Err(e)}
         }
     }
 
   else
-    {
-      println!("{} as main definition is nout found.",main_def_name);
+    {None}
+}
 
-      return Err(());
+
+}
+
+
+
+
+pub fn
+parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResult<Node,Error>
+{
+  let  mut nd = Node::new("");
+
+  let  mut st = Status{
+                  dictionary: dic,
+                  token_string: toks,
+                  position: 0,
+                  depth: 0,
+                };
+
+
+  let  mut prev_pos: usize = 0;
+
+    loop
+    {
+        match st.read_by_identifier(main_def_name)
+        {
+      Some(vals)=>
+        {
+            if st.position == prev_pos
+            {
+              break;
+            }
+
+
+          nd.add_value_list(vals);
+        }
+      None=>{break;}
+      Err(e)=>{return StdErr(e);}
+        }
+
+
+      prev_pos = st.position;
     }
 
 
-  Ok(nd)
+    if st.position >= toks.len()
+    {
+      StdOk(nd)
+    }
+
+  else
+    {
+      let  mut buf = String::new();
+
+      let  tok = &toks[st.position];
+
+      buf.push_str("解析途中で停止");
+
+      StdErr(Error::new_with_token_info(tok.get_info().clone(),buf))
+    }
 }
 
 
 pub fn
-parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str, dics_opt: Option<Vec<&'a Dictionary>>)-> Result<Node,()>
+parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str)-> StdResult<Node,Error>
 {
-    if let Ok(toks) = tokenize_from_string(s)
+    match tokenize_from_string(s)
+    {
+  StdOk(toks)=>
     {
 //crate::token::print_token_string(&toks);
       let  stripped = strip_spaces(toks);
 
-      return parse(&stripped,dic,main_def_name,dics_opt);
+      parse(&stripped,dic,main_def_name)
     }
+  StdErr(e)=>
+    {
+      let  message = format!("字句解析エラー: {}",&e.to_string());
 
-
-  Err(())
+      StdErr(Error::new(message))
+    }
+    }
 }
 
 

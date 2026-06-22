@@ -368,7 +368,8 @@ main()
         get_io,
         get_const,
         process,
-        build,
+        get_error_message,
+        compile,
         add_img,
         setup } from "./pkg/gblib.js";
 
@@ -594,7 +595,13 @@ main()
 
         const  ex_imgdat = ctx.getImageData(0,0,ex_img_cv.width,ex_img_cv.height);
 
-        build(g_text.value);
+          if(!compile(g_text.value))
+          {
+            g_asmtext.value = get_error_message();
+
+            return;
+          }
+
 
         add_img(ex_imgdat.width,ex_imgdat.height,ex_imgdat.data);
 
