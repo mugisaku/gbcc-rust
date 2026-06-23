@@ -1,11 +1,14 @@
 
 
+use crate::source_file::SourceInfo;
 
 
 #[derive(Clone)]
 pub struct
 Node
 {
+  source_info: SourceInfo,
+
   name: String,
 
   list: Vec<Value>,
@@ -19,9 +22,11 @@ Node
 
 
 pub fn
-new(name: &str)-> Self
+new(source_info: SourceInfo, name: &str)-> Self
 {
   Self{
+    source_info,
+
     name: name.to_string(),
 
     list: Vec::new(),
@@ -40,7 +45,9 @@ get_list(&self)-> &Vec<Value>
 pub fn
 new_value(&mut self)-> &mut Value
 {
-  self.list.push(Value::Null);
+  let  v = Value{source_info: SourceInfo::new(), kind: ValueKind::Null};
+
+  self.list.push(v);
 
     if let Some(last) = self.list.last_mut()
     {
@@ -70,6 +77,8 @@ pub fn
 new_node(&mut self, name: &str)-> &mut Node
 {
   let  nd = Self{
+    source_info: SourceInfo::new(),
+
     name: name.to_string(),
 
     list: Vec::new(),
@@ -77,11 +86,15 @@ new_node(&mut self, name: &str)-> &mut Node
   };
 
 
-  self.list.push(Value::Node(Box::new(nd)));
+  let  kind = ValueKind::Node(Box::new(nd));
+
+  let  v = Value{source_info: SourceInfo::new(), kind};
+
+  self.list.push(v);
 
     if let Some(last) = self.list.last_mut()
     {
-        if let Value::Node(nd) = last
+        if let ValueKind::Node(nd) = &mut last.kind
         {
           return nd;
         }
@@ -95,7 +108,11 @@ new_node(&mut self, name: &str)-> &mut Node
 pub fn
 add_node(&mut self, nd: Self)
 {
-  self.list.push(Value::Node(Box::new(nd)));
+  let  kind = ValueKind::Node(Box::new(nd));
+
+  let  v = Value{source_info: SourceInfo::new(), kind};
+
+  self.list.push(v);
 }
 
 
@@ -104,7 +121,7 @@ find_node(&self, name: &str)-> Option<&Self>
 {
     for v in &self.list
     {
-        if let Value::Node(nd) = v
+        if let ValueKind::Node(nd) = &v.kind
         {
             if &nd.name == name
             {
@@ -123,7 +140,7 @@ find_node_mut(&mut self, name: &str)-> Option<&mut Self>
 {
     for v in &mut self.list
     {
-        if let Value::Node(nd) = v
+        if let ValueKind::Node(nd) = &mut v.kind
         {
             if &nd.name == name
             {
@@ -141,6 +158,20 @@ pub fn
 get_length(&self)-> usize
 {
   self.list.len()
+}
+
+
+pub fn
+get_source_info(&self)-> &SourceInfo
+{
+  &self.source_info
+}
+
+
+pub fn
+set_source_info(&mut self, info: SourceInfo)
+{
+  self.source_info = info;
 }
 
 
@@ -184,7 +215,7 @@ print_to(&self, buf: &mut String)
     for v in &self.list
     {
       buf.push('<');
-      v.print_to(buf);
+      v.kind.print_to(buf);
       buf.push('>');
     }
 }
@@ -199,7 +230,7 @@ print(&self)
 
     for v in &self.list
     {
-      v.print();
+      v.kind.print();
 
       print!("\n");
     }
@@ -216,7 +247,7 @@ print(&self)
 
 #[derive(Clone)]
 pub enum
-Value
+ValueKind
 {
   Null,
 
@@ -238,7 +269,7 @@ Value
 
 
 impl
-Value
+ValueKind
 {
 
 
@@ -315,6 +346,55 @@ print(&self)
 
 
 
+#[derive(Clone)]
+pub struct
+Value
+{
+  source_info: SourceInfo,
+         kind: ValueKind,
+}
+
+
+impl
+Value
+{
+
+
+pub fn
+new(source_info: SourceInfo, kind: ValueKind)-> Self
+{
+  Self{
+    source_info,
+    kind,
+  }
+}
+
+
+pub fn
+get_source_info(&self)-> &SourceInfo
+{&self.source_info}
+
+
+pub fn
+set_source_info(&mut self, info: SourceInfo)
+{self.source_info = info;}
+
+
+pub fn
+get_kind(&self)-> &ValueKind
+{&self.kind}
+
+
+pub fn
+set_kind(&mut self, kind: ValueKind)
+{self.kind = kind;}
+
+
+}
+
+
+
+
 pub struct
 Cursor<'a>
 {
@@ -357,7 +437,7 @@ get_bool(&self)-> Option<bool>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Bool(b) = v
+        if let ValueKind::Bool(b) = &v.kind
         {
           return Some(*b);
         }
@@ -373,7 +453,7 @@ get_char(&self)-> Option<char>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Char(c) = v
+        if let ValueKind::Char(c) = &v.kind
         {
           return Some(*c);
         }
@@ -389,7 +469,7 @@ get_int(&self)-> Option<i64>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Int(i) = v
+        if let ValueKind::Int(i) = &v.kind
         {
           return Some(*i);
         }
@@ -405,7 +485,7 @@ get_uint(&self)-> Option<u64>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Uint(u) = v
+        if let ValueKind::Uint(u) = &v.kind
         {
           return Some(*u);
         }
@@ -421,7 +501,7 @@ get_float(&self)-> Option<f64>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Float(f) = v
+        if let ValueKind::Float(f) = &v.kind
         {
           return Some(*f);
         }
@@ -437,7 +517,7 @@ get_string(&self)-> Option<&String>
 {
     if let Some(v) = self.current()
     {
-        if let Value::String(s) = v
+        if let ValueKind::String(s) = &v.kind
         {
           return Some(s);
         }
@@ -453,7 +533,7 @@ is_semi_string(&self)-> bool
 {
     if let Some(v) = self.current()
     {
-        if let Value::SemiString(ss) = v
+        if let ValueKind::SemiString(ss) = &v.kind
         {
           return true;
         }
@@ -469,7 +549,7 @@ get_semi_string(&self)-> Option<&String>
 {
     if let Some(v) = self.current()
     {
-        if let Value::SemiString(s) = v
+        if let ValueKind::SemiString(s) = &v.kind
         {
           return Some(s);
         }
@@ -485,7 +565,7 @@ get_identifier(&self)-> Option<&String>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Identifier(s) = v
+        if let ValueKind::Identifier(s) = &v.kind
         {
           return Some(s);
         }
@@ -501,7 +581,7 @@ is_keyword(&self)-> bool
 {
     if let Some(v) = self.current()
     {
-        if let Value::Keyword(k) = v
+        if let ValueKind::Keyword(k) = &v.kind
         {
           return true;
         }
@@ -517,7 +597,7 @@ get_keyword(&self)-> Option<&String>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Keyword(k) = v
+        if let ValueKind::Keyword(k) = &v.kind
         {
           return Some(k);
         }
@@ -533,7 +613,7 @@ select_keyword(&self, s: &str)-> bool
 {
     if let Some(v) = self.current()
     {
-        if let Value::Keyword(k) = v
+        if let ValueKind::Keyword(k) = &v.kind
         {
           return s == k;
         }
@@ -549,7 +629,7 @@ is_node(&self)-> bool
 {
     if let Some(v) = self.current()
     {
-        if let Value::Node(nd) = v
+        if let ValueKind::Node(nd) = &v.kind
         {
           return true;
         }
@@ -565,7 +645,7 @@ get_node(&self)-> Option<&Node>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Node(nd) = v
+        if let ValueKind::Node(nd) = &v.kind
         {
           return Some(nd);
         }
@@ -581,7 +661,7 @@ select_node(&self, name: &str)-> Option<&Node>
 {
     if let Some(v) = self.current()
     {
-        if let Value::Node(nd) = v
+        if let ValueKind::Node(nd) = &v.kind
         {
             if &nd.name == name
             {
@@ -605,7 +685,7 @@ seek_node(&mut self, name: &str)-> Option<&Node>
 
     while i < l
     {
-        if let Value::Node(nd) = &self.r.list[i]
+        if let ValueKind::Node(nd) = &self.r.list[i].kind
         {
             if &nd.name == name
             {
@@ -624,7 +704,7 @@ seek_node(&mut self, name: &str)-> Option<&Node>
     {
       self.i = i;
 
-        if let Value::Node(nd) = &self.r.list[i]
+        if let ValueKind::Node(nd) = &self.r.list[i].kind
         {
           return Some(nd);
         }
@@ -642,7 +722,7 @@ print(&self)
 
     if let Some(nd) = self.current()
     {
-      nd.print();
+      nd.kind.print();
     }
 }
 

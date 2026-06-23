@@ -2,12 +2,13 @@
 
 use crate::source_file::{
   SourceFile,
+  SourceInfo,
 
 };
 
 use crate::token::{
   Token,
-  TokenData,
+  TokenKind,
   advance,
   strip_spaces,
   read_string_of_others,
@@ -104,9 +105,9 @@ read_operand(toks: &Vec<Token>, pos: &mut usize)-> Result<Expression,String>
 {
     if let Some(tok) = get_token(toks,*pos)
     {
-        match tok.get_data()
+        match tok.get_kind()
         {
-      TokenData::Identifier(s)=>
+      TokenKind::Identifier(s)=>
         {
           advance(pos);
 
@@ -114,7 +115,7 @@ read_operand(toks: &Vec<Token>, pos: &mut usize)-> Result<Expression,String>
 
           Ok(o)
         }
-      TokenData::String(s)=>
+      TokenKind::String(s)=>
         {
           let  o = Expression::String(s.clone());
 
@@ -122,7 +123,7 @@ read_operand(toks: &Vec<Token>, pos: &mut usize)-> Result<Expression,String>
 
           Ok(o)
         }
-      TokenData::Others(c)=>
+      TokenKind::Others(c)=>
         {
           advance(pos);
 
@@ -211,7 +212,7 @@ read_definition(toks: &Vec<Token>, pos: &mut usize)-> Result<Option<Definition>,
     {
       advance(pos);
 
-        if let TokenData::Identifier(s) = first_tok.get_data()
+        if let TokenKind::Identifier(s) = first_tok.get_kind()
         {
           advance(pos);
 

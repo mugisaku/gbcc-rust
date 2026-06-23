@@ -1,6 +1,7 @@
 
 
 use crate::node::*;
+use crate::source_file::SourceInfo;
 use crate::syntax::*;
 use super::expr::*;
 use super::stmt::*;
@@ -159,6 +160,8 @@ print(&self, name: &str)
 pub struct
 Decl
 {
+  source_info: SourceInfo,
+
   name: String,
   kind: DeclKind,
 
@@ -174,6 +177,7 @@ pub fn
 new()-> Self
 {
   Self{
+    source_info: SourceInfo::new(),
     name: String::new(),
     kind: DeclKind::Undef,
   }
@@ -181,9 +185,16 @@ new()-> Self
 
 
 pub fn
-expire(self)-> (String,DeclKind)
+expire(self)-> (SourceInfo,String,DeclKind)
 {
-  (self.name,self.kind)
+  (self.source_info,self.name,self.kind)
+}
+
+
+pub fn
+get_source_info(&self)-> &SourceInfo
+{
+  &self.source_info
 }
 
 
@@ -531,6 +542,8 @@ read_fn_decl(start_nd: &Node)-> (String,FnDecl)
 pub fn
 read_decl(start_nd: &Node)-> Decl
 {
+  let  source_info = start_nd.get_source_info().clone();
+
   let  mut cur = start_nd.cursor();
 
     if let Some(nd) = cur.get_node()
@@ -541,7 +554,7 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  (name,f) = read_fn_decl(nd);
 
-          return Decl{name, kind: DeclKind::Fn(f)};
+          return Decl{source_info, name, kind: DeclKind::Fn(f)};
         }
 
       else
@@ -549,7 +562,7 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  (name,dk,sik) = read_str_decl(nd);
 
-          return Decl{name, kind: DeclKind::Str(dk,sik)};
+          return Decl{source_info, name, kind: DeclKind::Str(dk,sik)};
         }
 
       else
@@ -557,7 +570,7 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  (name,e) = read_field_decl(nd);
 
-          return Decl{name, kind: DeclKind::Field(e)};
+          return Decl{source_info, name, kind: DeclKind::Field(e)};
         }
 
       else
@@ -565,7 +578,7 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  name = read_io_decl(nd);
 
-          return Decl{name, kind: DeclKind::Io};
+          return Decl{source_info, name, kind: DeclKind::Io};
         }
 
       else
@@ -573,7 +586,7 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  (name,expr) = read_object_decl(nd);
 
-          return Decl{name, kind: DeclKind::Var(expr)};
+          return Decl{source_info, name, kind: DeclKind::Var(expr)};
         }
 
       else
@@ -581,7 +594,7 @@ read_decl(start_nd: &Node)-> Decl
         {
           let  (name,expr) = read_object_decl(nd);
 
-          return Decl{name, kind: DeclKind::Const(expr)};
+          return Decl{source_info, name, kind: DeclKind::Const(expr)};
         }
 
       else

@@ -1,8 +1,7 @@
 
 
 use super::{
-  TokenInfo,
-  TokenData,
+  TokenKind,
   Token,
   ParseTokenError,
   print_string,
@@ -26,6 +25,7 @@ use super::skip::*;
 
 use crate::source_file::{
   SourceFile,
+  SourceInfo,
   Cursor,
 
 };
@@ -35,16 +35,16 @@ use super::is::*;
 
 pub type TokenString = Vec<Token>;
 
-pub struct
+struct
 Tokenizer<'a,'b>
 {
-  pub(crate) token_info: TokenInfo,
+  source_info: SourceInfo,
 
-  pub(crate) input: &'a SourceFile,
+  input: &'a SourceFile,
 
-  pub(crate) cursor: Cursor,
+  cursor: Cursor,
 
-  pub(crate) output: &'b mut TokenString,
+  output: &'b mut TokenString,
 
 }
 
@@ -59,8 +59,12 @@ Tokenizer<'a,'b>
 pub fn
 new(src: &'a SourceFile, out: &'b mut TokenString)-> Tokenizer<'a,'b>
 {
+  let  mut source_info = SourceInfo::new();
+
+  source_info.set_filepath(src.get_path().as_str());
+
   let mut  tk = Tokenizer{
-                  token_info: TokenInfo::new(src.get_path().as_str()),
+                  source_info,
                   input: src,
                   cursor: Cursor::new(),
                   output: out,
@@ -71,15 +75,15 @@ new(src: &'a SourceFile, out: &'b mut TokenString)-> Tokenizer<'a,'b>
 }
 
 
-pub fn
+fn
 get_character(&self)-> Option<char>
 {
   self.input.get_character(self.cursor)
 }
 
 
-pub fn
-read_data_that_begins_from_id_head(src: &SourceFile, cur: Cursor, first_c: char)-> (TokenData,Cursor)
+fn
+read_data_that_begins_from_id_head(src: &SourceFile, cur: Cursor, first_c: char)-> (TokenKind,Cursor)
 {
     if first_c == 'r'
     {
@@ -95,7 +99,7 @@ read_data_that_begins_from_id_head(src: &SourceFile, cur: Cursor, first_c: char)
 
               read_raw_string(src,&mut st);
 
-              return (TokenData::String(st.0),st.1);
+              return (TokenKind::String(st.0),st.1);
             }
         }
     }
@@ -103,11 +107,11 @@ read_data_that_begins_from_id_head(src: &SourceFile, cur: Cursor, first_c: char)
 
   let  (s,new_cur) = read_identifier(src,cur);
 
-  (TokenData::Identifier(s),new_cur)
+  (TokenKind::Identifier(s),new_cur)
 }
 
 
-pub fn
+fn
 read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),String>
 {
   let  (s,new_cur) = read_identifier(&self.input,self.cursor);
@@ -122,7 +126,7 @@ read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),
             {
               self.cursor.advance();
 
-              self.push(TokenData::Character(c));
+              self.push(TokenKind::Character(c));
 
               return Ok(());
             }
@@ -133,14 +137,14 @@ read_character_or_identifier_after_single_quote(&mut self, c: char)-> Result<(),
     }
 
 
-  self.push(TokenData::Others('\''));
-  self.push(TokenData::Identifier(s));
+  self.push(TokenKind::Others('\''));
+  self.push(TokenKind::Identifier(s));
 
   Ok(())
 }
 
 
-pub fn
+fn
 read_escape_sequence(&mut self)-> Result<(),String>
 {
     if let Ok(esc) = read_escape_sequence(&self.input,&mut self.cursor)
@@ -151,7 +155,7 @@ read_escape_sequence(&mut self)-> Result<(),String>
             {
               self.cursor.advance();
 
-              self.push(TokenData::Character(esc));
+              self.push(TokenKind::Character(esc));
 
               return Ok(());
             }
@@ -168,7 +172,7 @@ read_escape_sequence(&mut self)-> Result<(),String>
 }
 
 
-pub fn
+fn
 read_data_that_begins_from_single_quote(&mut self)-> Result<(),String>
 {
     if let Some(c) = self.get_character()
@@ -201,7 +205,7 @@ read_data_that_begins_from_single_quote(&mut self)-> Result<(),String>
                 {
                   self.cursor.advance();
 
-                  self.push(TokenData::Character(c));
+                  self.push(TokenKind::Character(c));
 
                   return Ok(());
                 }
@@ -217,7 +221,7 @@ read_data_that_begins_from_single_quote(&mut self)-> Result<(),String>
 }
 
 
-pub fn
+fn
 read_data_that_begins_from_slash(&mut self)-> Result<(),String>
 {
     if let Some(c) = self.get_character()
@@ -236,12 +240,12 @@ read_data_that_begins_from_slash(&mut self)-> Result<(),String>
 
             if old_y != self.cursor.get_y()
             {
-              self.push(TokenData::Space);
+              self.push(TokenKind::Space);
             }
 
           else
             {
-              self.push(TokenData::Newline);
+              self.push(TokenKind::Newline);
             }
 
 
@@ -259,23 +263,23 @@ read_data_that_begins_from_slash(&mut self)-> Result<(),String>
             }
 
 
-          self.push(TokenData::Newline);
+          self.push(TokenKind::Newline);
 
           return Ok(());
         }
     }
 
 
-  self.push(TokenData::Others('/'));
+  self.push(TokenKind::Others('/'));
 
   Ok(())
 }
 
 
-pub fn
-update_token_info(&mut self)
+fn
+update_source_info(&mut self)
 {
-  self.token_info.cursor = self.cursor;
+  self.source_info.set_cursor(&self.cursor);
 }
 
 
@@ -288,12 +292,12 @@ skip_spaces(&mut self)
 
     if self.cursor.get_y() != old_y
     {
-      self.push(TokenData::Newline);
+      self.push(TokenKind::Newline);
     }
 
   else
     {
-      self.push(TokenData::Space);
+      self.push(TokenKind::Space);
     }
 }
 
@@ -301,7 +305,7 @@ skip_spaces(&mut self)
 fn
 step(&mut self, c: char)-> Result<(),String>
 {
-  self.update_token_info();
+  self.update_source_info();
 
     if is_space(c)
     {
@@ -321,9 +325,9 @@ step(&mut self, c: char)-> Result<(),String>
   else
     if is_id_head(c)
     {
-      let  (tokdat,new_cur) = Self::read_data_that_begins_from_id_head(&self.input,self.cursor,c);
+      let  (k,new_cur) = Self::read_data_that_begins_from_id_head(&self.input,self.cursor,c);
 
-      self.push(tokdat);
+      self.push(k);
 
       self.cursor = new_cur;
 
@@ -335,7 +339,7 @@ step(&mut self, c: char)-> Result<(),String>
     {
       let  (pn,cur) = read_number(self.input,self.cursor);
 
-      self.push(TokenData::Number(pn));
+      self.push(TokenKind::Number(pn));
 
       self.cursor = cur;
 
@@ -351,7 +355,7 @@ step(&mut self, c: char)-> Result<(),String>
         {
       Ok(s)=>
         {
-          self.push(TokenData::String(s));
+          self.push(TokenKind::String(s));
 
           Ok(())
         }
@@ -371,30 +375,30 @@ step(&mut self, c: char)-> Result<(),String>
     {
       self.cursor.advance();
 
-      self.push(TokenData::Others(c));
+      self.push(TokenKind::Others(c));
 
       Ok(())
     }
 }
 
 
-pub fn
-push(&mut self, tokdat: TokenData)
+fn
+push(&mut self, k: TokenKind)
 {
     if let Some(last) = self.output.last()
     {
-        if let TokenData::Space = tokdat
+        if let TokenKind::Space = k
         {
-            if let TokenData::Space = last.get_data()
+            if let TokenKind::Space = last.get_kind()
             {
               return;
             }
         }
 
       else
-        if let TokenData::Newline = tokdat
+        if let TokenKind::Newline = k
         {
-            if let TokenData::Newline = last.get_data()
+            if let TokenKind::Newline = last.get_kind()
             {
               return;
             }
@@ -402,7 +406,7 @@ push(&mut self, tokdat: TokenData)
     }
 
 
-  self.output.push(Token::new(tokdat,self.token_info.clone()));
+  self.output.push(Token::new(k,self.source_info.clone()));
 }
 
 
@@ -423,7 +427,7 @@ tokenize(src: &SourceFile)-> Result<TokenString,ParseTokenError>
     {
         if let Err(s) = tk.step(c)
         {
-          return Err(ParseTokenError{info: tk.token_info.clone(), message: s});
+          return Err(ParseTokenError{source_info: tk.source_info.clone(), message: s});
         }
     }
 

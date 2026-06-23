@@ -2,11 +2,10 @@
 
 use crate::token::{
   Token,
-  TokenInfo,
-  TokenData,
+  TokenKind,
   ParseTokenError,
   get_token,
-  get_token_info,
+  get_source_info,
   get_number,
   get_character,
   get_string,
@@ -29,7 +28,13 @@ use super::dictionary::{
 use crate::node::{
   Node,
   Value,
+  ValueKind,
   Cursor,
+
+};
+
+use crate::source_file::{
+  SourceInfo,
 
 };
 
@@ -97,13 +102,6 @@ print_indent(&self)
 
 
 fn
-get_token_info(&self)-> TokenInfo
-{
-  self.token_string[self.position].get_info().clone()
-}
-
-
-fn
 read_repetition(&mut self, e: &Expression)-> ParseSyntaxResult
 {
     match self.read_by_expression(e)
@@ -130,23 +128,31 @@ read_repetition(&mut self, e: &Expression)-> ParseSyntaxResult
 
 
 fn
-read_keyword(&mut self, s: &str)-> ParseSyntaxResult
+read_keyword(&mut self, kw_s: &str)-> ParseSyntaxResult
 {
-    match get_identifier(&self.token_string,self.position)
+    match get_token(&self.token_string,self.position)
     {
-  StdSome(kw)=>
+  StdSome(tok)=>
     {
-        if kw == s
+        match tok.get_kind()
         {
-          let  v = Value::Keyword(kw.clone());
+      TokenKind::Identifier(s)=>
+        {
+            if kw_s == s
+            {
+              let  info = tok.get_source_info().clone();
+              let  kind = ValueKind::Keyword(s.clone());
 
-          self.position += 1;
+              self.position += 1;
 
-          Some(vec![v])
+              Some(vec![Value::new(info,kind)])
+            }
+
+          else
+            {None}
         }
-
-      else
-        {None}
+      _=>{None}
+        }
     }
   StdNone=>{None}
     }
@@ -160,7 +166,7 @@ read_number_literal(&mut self)-> ParseSyntaxResult
     {
   StdSome(pn)=>
     {
-      let  inf = get_token_info(&self.token_string,self.position).unwrap();
+      let  info_opt = get_source_info(&self.token_string,self.position);
 
       self.advance();
 
@@ -170,11 +176,11 @@ read_number_literal(&mut self)-> ParseSyntaxResult
             {
           StdOk(f)=>
             {
-              let  v = Value::Float(f);
+              let  kind = ValueKind::Float(f);
 
-              Some(vec![])
+              Some(vec![Value::new(info_opt.unwrap(),kind)])
             }
-          StdErr(_)=>{Err(Error::new_with_token_info(inf,format!("整数が不正")))}
+          StdErr(_)=>{Err(Error::new_with_source_info(info_opt.unwrap(),format!("整数が不正")))}
             }
         }
 
@@ -184,11 +190,11 @@ read_number_literal(&mut self)-> ParseSyntaxResult
             {
           StdOk(u)=>
             {
-              let  v = Value::Uint(u);
+              let  kind = ValueKind::Uint(u);
 
-              Some(vec![v])
+              Some(vec![Value::new(info_opt.unwrap(),kind)])
             }
-          StdErr(_)=>{Err(Error::new_with_token_info(inf,format!("浮動小数点数が不正")))}
+          StdErr(_)=>{Err(Error::new_with_source_info(info_opt.unwrap(),format!("浮動小数点数が不正")))}
             }
         }
     }
@@ -202,11 +208,13 @@ read_by_string(&mut self, s: &str)-> ParseSyntaxResult
 {
   let  old_pos = self.position;
 
+  let  info_opt = get_source_info(&self.token_string,self.position);
+
     if read_string_of_others(&self.token_string,&mut self.position,s)
     {
-      let  v = Value::SemiString(s.to_string());
+      let  kind = ValueKind::SemiString(s.to_string());
 
-      Some(vec![v])
+      Some(vec![Value::new(info_opt.unwrap(),kind)])
     }
 
   else
@@ -359,15 +367,22 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
   Expression::Keyword(s)   =>{self.read_keyword(s)}
   Expression::IdentifierLiteral=>
     {
-        match get_identifier(&self.token_string,self.position)
+        match get_token(&self.token_string,self.position)
         {
-      StdSome(s)=>
+      StdSome(tok)=>
         {
-          let  v = Value::Identifier(s.clone());
+            if let TokenKind::Identifier(s) = tok.get_kind()
+            {
+              let  info = tok.get_source_info().clone();
+              let  kind = ValueKind::Identifier(s.clone());
 
-          self.advance();
+              self.advance();
 
-          Some(vec![v])
+              Some(vec![Value::new(info,kind)])
+            }
+
+          else
+            {None}
         }
       StdNone=>{None}
         }
@@ -375,30 +390,44 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
   Expression::NumberLiteral=>{self.read_number_literal()}
   Expression::CharacterLiteral=>
     {
-        match get_character(&self.token_string,self.position)
+        match get_token(&self.token_string,self.position)
         {
-      StdSome(c)=>
+      StdSome(tok)=>
         {
-          let  v = Value::Char(c);
+            if let TokenKind::Character(c) = tok.get_kind()
+            {
+              let  info = tok.get_source_info().clone();
+              let  kind = ValueKind::Char(*c);
 
-          self.advance();
+              self.advance();
 
-          Some(vec![v])
+              Some(vec![Value::new(info,kind)])
+            }
+
+          else
+            {None}
         }
       StdNone=>{None}
         }
     }
   Expression::StringLiteral=>
     {
-        match get_string(&self.token_string,self.position)
+        match get_token(&self.token_string,self.position)
         {
-      StdSome(s)=>
+      StdSome(tok)=>
         {
-          let  v = Value::String(s.clone());
+            if let TokenKind::String(s) = tok.get_kind()
+            {
+              let  info = tok.get_source_info().clone();
+              let  kind = ValueKind::String(s.clone());
 
-          self.advance();
+              self.advance();
 
-          Some(vec![v])
+              Some(vec![Value::new(info,kind)])
+            }
+
+          else
+            {None}
         }
       StdNone=>{None}
         }
@@ -423,13 +452,15 @@ read_by_definition(&mut self, def: &Definition)-> ParseSyntaxResult
         {
           self.depth -= 1;
 
-          let  mut nd = Node::new(&def.get_name());
+          let  info = tok.get_source_info().clone();
+
+          let  mut nd = Node::new(info.clone(),&def.get_name());
 
           nd.add_value_list(vals);
 
-          let  val = Value::Node(Box::new(nd));
+          let  kind = ValueKind::Node(Box::new(nd));
 
-          Some(vec![val])
+          Some(vec![Value::new(info,kind)])
         }
       None=>
         {
@@ -456,7 +487,7 @@ read_by_definition(&mut self, def: &Definition)-> ParseSyntaxResult
 pub fn
 parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResult<Node,Error>
 {
-  let  mut nd = Node::new("");
+  let  mut nd = Node::new(SourceInfo::new(),"");
 
   let  mut st = Status{
                   dictionary: dic,
@@ -504,7 +535,7 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResu
 
       buf.push_str("解析途中で停止");
 
-      StdErr(Error::new_with_token_info(tok.get_info().clone(),buf))
+      StdErr(Error::new_with_source_info(tok.get_source_info().clone(),buf))
     }
 }
 

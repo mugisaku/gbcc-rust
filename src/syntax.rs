@@ -5,13 +5,13 @@ pub mod read_dictionary;
 pub mod parse;
 
 
-use super::token::TokenInfo;
+use super::source_file::SourceInfo;
 
 
 pub struct
 ParseSyntaxError
 {
-  token_info_opt: Option<TokenInfo>,
+  source_info_opt: Option<SourceInfo>,
 
   message: String,
 
@@ -29,7 +29,7 @@ pub fn
 new(message: String)-> Self
 {
   Self{
-    token_info_opt: None,
+    source_info_opt: None,
     message,
     child_opt: None,
   }
@@ -37,10 +37,10 @@ new(message: String)-> Self
 
 
 pub fn
-new_with_token_info(token_info: TokenInfo, message: String)-> Self
+new_with_source_info(source_info: SourceInfo, message: String)-> Self
 {
   Self{
-    token_info_opt: Some(token_info),
+    source_info_opt: Some(source_info),
     message,
     child_opt: None,
   }
@@ -59,7 +59,7 @@ join(mut self, child: Self)-> Self
 pub fn
 print(&self)
 {
-    if let Some(info) = &self.token_info_opt
+    if let Some(info) = &self.source_info_opt
     {
       info.print();
 

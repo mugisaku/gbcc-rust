@@ -1,5 +1,6 @@
 
 
+use std::rc::Rc;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -162,6 +163,70 @@ print(&self)
           print!("{}",c);
         }
     }
+}
+
+
+}
+
+
+
+
+#[derive(Clone)]
+pub struct
+SourceInfo
+{
+  filepath: Rc<String>,
+
+  cursor: Cursor,
+
+}
+
+
+impl
+SourceInfo
+{
+
+
+pub fn
+new()-> Self
+{
+  Self{ filepath: Rc::new(String::new()), cursor: Cursor::new()}
+}
+
+
+pub fn
+set_filepath(&mut self, filepath: &str)
+{
+  self.filepath = Rc::new(String::from(filepath));
+}
+
+
+pub fn
+set_cursor(&mut self, cur: &Cursor)
+{
+  self.cursor.x = cur.x;
+  self.cursor.y = cur.y;
+}
+
+
+pub fn  get_filepath(&self)-> &String{&*self.filepath}
+pub fn  get_x(&self)-> usize{self.cursor.get_x()}
+pub fn  get_y(&self)-> usize{self.cursor.get_y()}
+
+
+pub fn
+to_string(&self)-> String
+{
+  format!("[file: {} X: {:05} Y: {:05}]",self.get_filepath(),1+self.get_x(),1+self.get_y())
+}
+
+
+pub fn
+print(&self)
+{
+  let  s = self.to_string();
+
+  print!("{}",&s);
 }
 
 

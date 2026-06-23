@@ -356,14 +356,14 @@ read_operand_core(start_nd: &Node)-> Expr
 
     if let Some(v) = cur.current()
     {
-        match v
+        match v.get_kind()
         {
-      Value::Identifier(s)=>{return Expr::Identifier(s.clone());}
-      Value::String(s)=>{return Expr::String(s.clone());}
-      Value::Uint(u) =>{return Expr::Int(*u as i64);}
-      Value::Char(c) =>{return Expr::Int(*c as i64);}
-      Value::Float(_) =>{panic!("do not use floating point number");}
-      Value::SemiString(s)=>
+      ValueKind::Identifier(s)=>{return Expr::Identifier(s.clone());}
+      ValueKind::String(s)=>{return Expr::String(s.clone());}
+      ValueKind::Uint(u) =>{return Expr::Int(*u as i64);}
+      ValueKind::Char(c) =>{return Expr::Int(*c as i64);}
+      ValueKind::Float(_) =>{panic!("do not use floating point number");}
+      ValueKind::SemiString(s)=>
           {
               if s == "("
               {

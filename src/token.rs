@@ -7,10 +7,11 @@ pub mod skip;
 pub mod is;
 
 
-use std::rc::Rc;
 use crate::source_file::{
   SourceFile,
+  SourceInfo,
   Cursor,
+
 };
 
 
@@ -24,57 +25,6 @@ use crate::token::read_number::{
   ParsedNumber,
 
 };
-
-
-
-
-#[derive(Clone)]
-pub struct
-TokenInfo
-{
-  pub(crate) filepath: Rc<String>,
-
-  pub(crate) cursor: Cursor,
-
-}
-
-
-impl
-TokenInfo
-{
-
-
-pub fn
-new(filepath: &str)-> TokenInfo
-{
-  TokenInfo{ filepath: Rc::new(String::from(filepath)), cursor: Cursor::new()}
-}
-
-
-pub fn  get_filepath(&self)-> &String{&*self.filepath}
-pub fn  get_x(&self)-> usize{self.cursor.get_x()}
-pub fn  get_y(&self)-> usize{self.cursor.get_y()}
-
-
-pub fn
-to_string(&self)-> String
-{
-  format!("[file: {} X: {:05} Y: {:05}]",self.get_filepath(),1+self.get_x(),1+self.get_y())
-}
-
-
-pub fn
-print(&self)
-{
-  let  s = self.to_string();
-
-  print!("{}",&s);
-}
-
-
-}
-
-
 
 
 
@@ -125,7 +75,7 @@ print_string(s: &str)
 pub struct
 ParseTokenError
 {
-  info: TokenInfo,
+  source_info: SourceInfo,
 
   message: String,
 
@@ -140,7 +90,7 @@ ParseTokenError
 pub fn
 to_string(&self)-> String
 {
-  let  mut s = self.info.to_string();
+  let  mut s = self.source_info.to_string();
 
   s.push(' ');
 
@@ -156,7 +106,7 @@ to_string(&self)-> String
 
 
 pub enum
-TokenData
+TokenKind
 {
   Space,
   Newline,
@@ -170,7 +120,7 @@ TokenData
 
 
 impl
-TokenData
+TokenKind
 {
 
 
@@ -179,25 +129,25 @@ print(&self)
 {
     match self
     {
-  TokenData::Space=>
+  TokenKind::Space=>
       {
         print!("SPACE");
       },
-  TokenData::Newline=>
+  TokenKind::Newline=>
       {
         print!("NEWLINE");
       },
-  TokenData::Identifier(s)=>
+  TokenKind::Identifier(s)=>
       {
         print_string(s);
       },
-  TokenData::String(s)=>
+  TokenKind::String(s)=>
       {
         print!("\"");
         print_string(s);
         print!("\"");
       },
-  TokenData::Character(c)=>
+  TokenKind::Character(c)=>
       {
           match c
           {
@@ -208,11 +158,11 @@ print(&self)
         _   => {print!("\'{}\'",c);},
           }
       },
-  TokenData::Number(pn)=>
+  TokenKind::Number(pn)=>
       {
         pn.print();
       },
-  TokenData::Others(c)=>
+  TokenKind::Others(c)=>
       {
         print!("{}",c);
       },
@@ -228,8 +178,9 @@ print(&self)
 pub struct
 Token
 {
-  data: TokenData,
-  info: TokenInfo,
+  kind: TokenKind,
+
+  source_info: SourceInfo,
 
 }
 
@@ -240,30 +191,30 @@ Token
 
 
 pub fn
-new(data: TokenData, info: TokenInfo)-> Token
+new(kind: TokenKind, source_info: SourceInfo)-> Self
 {
-  Token{data,info}
+  Self{kind,source_info}
 }
 
 
 pub fn
-get_info(&self)-> &TokenInfo
+get_source_info(&self)-> &SourceInfo
 {
-  &self.info
+  &self.source_info
 }
 
 
 pub fn
-get_data(&self)-> &TokenData
+get_kind(&self)-> &TokenKind
 {
-  &self.data
+  &self.kind
 }
 
 
 pub fn
 is_space(&self)-> bool
 {
-    if let TokenData::Space = &self.data
+    if let TokenKind::Space = &self.kind
     {
       return true;
     }
@@ -276,7 +227,7 @@ is_space(&self)-> bool
 pub fn
 is_newline(&self)-> bool
 {
-    if let TokenData::Newline = &self.data
+    if let TokenKind::Newline = &self.kind
     {
       return true;
     }
@@ -289,7 +240,7 @@ is_newline(&self)-> bool
 pub fn
 is_identifier(&self, s: &str)-> bool
 {
-    if let TokenData::Identifier(target_s) = &self.data
+    if let TokenKind::Identifier(target_s) = &self.kind
     {
       return s == target_s;
     }
@@ -302,7 +253,7 @@ is_identifier(&self, s: &str)-> bool
 pub fn
 get_identifier(&self)-> Option<&String>
 {
-    if let TokenData::Identifier(s) = &self.data
+    if let TokenKind::Identifier(s) = &self.kind
     {
       return Some(s);
     }
@@ -315,7 +266,7 @@ get_identifier(&self)-> Option<&String>
 pub fn
 get_string(&self)-> Option<&String>
 {
-    if let TokenData::String(s) = &self.data
+    if let TokenKind::String(s) = &self.kind
     {
       return Some(s);
     }
@@ -328,7 +279,7 @@ get_string(&self)-> Option<&String>
 pub fn
 get_number(&self)-> Option<&ParsedNumber>
 {
-    if let TokenData::Number(pn) = &self.data
+    if let TokenKind::Number(pn) = &self.kind
     {
       return Some(pn);
     }
@@ -341,7 +292,7 @@ get_number(&self)-> Option<&ParsedNumber>
 pub fn
 get_character(&self)-> Option<char>
 {
-    if let TokenData::Character(c) = self.data
+    if let TokenKind::Character(c) = self.kind
     {
       return Some(c);
     }
@@ -354,7 +305,7 @@ get_character(&self)-> Option<char>
 pub fn
 get_others(&self)-> Option<char>
 {
-    if let TokenData::Others(c) = self.data
+    if let TokenKind::Others(c) = self.kind
     {
       return Some(c);
     }
@@ -380,29 +331,29 @@ is_others(&self, c: char)-> bool
 pub fn
 print(&self)
 {
-  print!("[X:{:06} Y:{:06}] ",1+self.info.get_x(),1+self.info.get_y());
+  print!("[X:{:06} Y:{:06}] ",1+self.source_info.get_x(),1+self.source_info.get_y());
 
-    match &self.data
+    match &self.kind
     {
-  TokenData::Space=>
+  TokenKind::Space=>
       {
         print!("Space");
       },
-  TokenData::Newline=>
+  TokenKind::Newline=>
       {
         print!("Newline");
       },
-  TokenData::Identifier(s)=>
+  TokenKind::Identifier(s)=>
       {
         print!("Identifier: {}",s);
       },
-  TokenData::String(s)=>
+  TokenKind::String(s)=>
       {
         print!("String: \"");
         print_string(s);
         print!("\"");
       },
-  TokenData::Character(c)=>
+  TokenKind::Character(c)=>
       {
           match c
           {
@@ -413,13 +364,13 @@ print(&self)
         _   => {print!("Character: \'{}\'",c);},
           }
       },
-  TokenData::Number(pn)=>
+  TokenKind::Number(pn)=>
       {
         print!("Number: ");
 
         pn.print();
       },
-  TokenData::Others(c)=>
+  TokenKind::Others(c)=>
       {
         print!("Others: {}",c);
       },
@@ -437,28 +388,28 @@ restore_token_string(toks: &[Token])
 {
     for tok in toks
     {
-        match tok.get_data()
+        match &tok.kind
         {
-      TokenData::Space=>         {print!(" ");},
-      TokenData::Newline=>       {print!("\n");},
-      TokenData::Identifier(s)=> {print_string(s);},
-      TokenData::String(s)=>
+      TokenKind::Space=>         {print!(" ");},
+      TokenKind::Newline=>       {print!("\n");},
+      TokenKind::Identifier(s)=> {print_string(s);},
+      TokenKind::String(s)=>
             {
               print!("\"");
               print_string(s);
               print!("\"");
             },
-      TokenData::Character(c)=>
+      TokenKind::Character(c)=>
             {
               print!("\'");
               crate::token::print_character(*c);
               print!("\'");
             },
-      TokenData::Number(pn)=>
+      TokenKind::Number(pn)=>
             {
               pn.print();
             },
-      TokenData::Others(c)=>{print!("{}",c);},
+      TokenKind::Others(c)=>{print!("{}",c);},
         }
     }
 }
@@ -492,11 +443,11 @@ get_token(toks: &[Token], pos: usize)-> Option<&Token>
 
 
 pub fn
-get_token_info(toks: &[Token], pos: usize)-> Option<TokenInfo>
+get_source_info(toks: &[Token], pos: usize)-> Option<SourceInfo>
 {
     if pos < toks.len()
     {
-      return Some(toks[pos].info.clone());
+      return Some(toks[pos].source_info.clone());
     }
 
 

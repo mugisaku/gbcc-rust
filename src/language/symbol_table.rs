@@ -199,7 +199,7 @@ make_name_for_string(s: &str)-> String
 pub fn
 build_from_string(s: String, symtbl: &SymbolTable)-> Self
 {
-  let  name =Self::make_name_for_string(&s);
+  let  name = Self::make_name_for_string(&s);
 
   let  ik = StrInitKind::String(s);
 
@@ -218,7 +218,7 @@ build_from_string(s: String, symtbl: &SymbolTable)-> Self
 pub fn
 build(src: Source, symtbl: &SymbolTable)-> Self
 {
-  let  (name,kind) = src.decl.expire();
+  let  (source_info,name,kind) = src.decl.expire();
 
   let  deps_parent_list = src.deps_parent_list;
   let   deps_child_list =  src.deps_child_list;
