@@ -3,7 +3,6 @@
 use super::{
   TokenKind,
   Token,
-  ParseTokenError,
   print_string,
   read_identifier,
 
@@ -26,6 +25,7 @@ use super::skip::*;
 use crate::source_file::{
   SourceFile,
   SourceInfo,
+  Error,
   Cursor,
 
 };
@@ -417,7 +417,7 @@ push(&mut self, k: TokenKind)
 
 
 pub fn
-tokenize(src: &SourceFile)-> Result<TokenString,ParseTokenError>
+tokenize(src: &SourceFile)-> Result<TokenString,Error>
 {
   let  mut toks: TokenString = Vec::new();
 
@@ -427,7 +427,7 @@ tokenize(src: &SourceFile)-> Result<TokenString,ParseTokenError>
     {
         if let Err(s) = tk.step(c)
         {
-          return Err(ParseTokenError{source_info: tk.source_info.clone(), message: s});
+          return Err(Error::new(s));
         }
     }
 
@@ -437,7 +437,7 @@ tokenize(src: &SourceFile)-> Result<TokenString,ParseTokenError>
 
 
 pub fn
-tokenize_from_string(s: &str)-> Result<TokenString,ParseTokenError>
+tokenize_from_string(s: &str)-> Result<TokenString,Error>
 {
   let  src = SourceFile::from_string(s);
 

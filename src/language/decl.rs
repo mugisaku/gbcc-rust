@@ -1,7 +1,13 @@
 
 
 use crate::node::*;
-use crate::source_file::SourceInfo;
+
+use crate::source_file::{
+  SourceInfo,
+  Error,
+
+};
+
 use crate::syntax::*;
 use super::expr::*;
 use super::stmt::*;
@@ -261,7 +267,7 @@ collect_string(&self, buf: &mut Vec<Collectible>)
 
 
 pub fn
-read(s: &str)-> Result<Self,ParseSyntaxError>
+read(s: &str)-> Result<Self,Error>
 {
   use crate::syntax::dictionary::Dictionary;
 
@@ -279,7 +285,7 @@ read(s: &str)-> Result<Self,ParseSyntaxError>
         }
 
       else
-        {Err(ParseSyntaxError::new(format!("no decl")))}
+        {Err(Error::new(format!("no decl")))}
     }
   Err(e)=>{Err(e)}
     }
@@ -287,7 +293,7 @@ read(s: &str)-> Result<Self,ParseSyntaxError>
 
 
 pub fn
-read_as_root(s: &str)-> Result<Vec<Self>,ParseSyntaxError>
+read_as_root(s: &str)-> Result<Vec<Self>,Error>
 {
   use crate::syntax::dictionary::Dictionary;
 

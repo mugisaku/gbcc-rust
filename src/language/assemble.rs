@@ -266,11 +266,11 @@ process_block(blk: &Block, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option
 fn
 process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)
 {
-    match stmt
+    match stmt.get_kind()
     {
-  Stmt::Empty=>{}
-  Stmt::Block(blk)=>{process_block(blk,tbl,lid,clh_opt,scp,output);}
-  Stmt::Decl(decl)=>
+  StmtKind::Empty=>{}
+  StmtKind::Block(blk)=>{process_block(blk,tbl,lid,clh_opt,scp,output);}
+  StmtKind::Decl(decl)=>
     {
         match decl.get_kind()
         {
@@ -301,7 +301,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       _=>{panic!();}
         }
     }
-  Stmt::Expr(e)=>
+  StmtKind::Expr(e)=>
     {
       let  res = evaluate(e,tbl,Some(scp));
 
@@ -316,8 +316,8 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       _=>{}
         }
     }
-  Stmt::If(i)=>{process_if(i,tbl,lid,clh_opt,scp,output);}
-  Stmt::Loop(blk)=>
+  StmtKind::If(i)=>{process_if(i,tbl,lid,clh_opt,scp,output);}
+  StmtKind::Loop(blk)=>
     {
       let  clh = lid.make_ctrl_label_holder();
 
@@ -329,7 +329,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
       output.push_label(&clh.on_break);
     }
-  Stmt::While(e,blk)=>
+  StmtKind::While(e,blk)=>
     {
       let  clh = lid.make_ctrl_label_holder();
 
@@ -350,8 +350,8 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
       output.push_label(&clh.on_break);
     }
-  Stmt::For(f)=>{process_for(f,tbl,lid,clh_opt,scp,output);}
-  Stmt::Return(e_opt)=>
+  StmtKind::For(f)=>{process_for(f,tbl,lid,clh_opt,scp,output);}
+  StmtKind::Return(e_opt)=>
     {
         if let Some(e) = e_opt
         {
@@ -370,26 +370,26 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
       output.push_opcode(Opcode::Ret);
     }
-  Stmt::Assign(l,r,op)=>
+  StmtKind::Assign(l,r,op)=>
     {
       let  l_asm = evaluate(l,tbl,Some(scp)).to_text();
       let  r_asm = evaluate(r,tbl,Some(scp)).to_text();
 
       output.push_assign(l_asm,r_asm,op);
     }
-  Stmt::Break=>
+  StmtKind::Break=>
     {
       output.push_jmp(&clh_opt.unwrap().on_break);
     }
-  Stmt::Continue=>
+  StmtKind::Continue=>
     {
       output.push_jmp(&clh_opt.unwrap().on_continue);
     }
-  Stmt::Halt=>
+  StmtKind::Halt=>
     {
       output.push_opcode(Opcode::Hlt);
     }
-  Stmt::Print(e)=>
+  StmtKind::Print(e)=>
     {
       let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
 

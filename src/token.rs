@@ -72,39 +72,6 @@ print_string(s: &str)
 
 
 
-pub struct
-ParseTokenError
-{
-  source_info: SourceInfo,
-
-  message: String,
-
-}
-
-
-impl
-ParseTokenError
-{
-
-
-pub fn
-to_string(&self)-> String
-{
-  let  mut s = self.source_info.to_string();
-
-  s.push(' ');
-
-  s.push_str(&self.message);
-
-  s
-}
-
-
-}
-
-
-
-
 pub enum
 TokenKind
 {

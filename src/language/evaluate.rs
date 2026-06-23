@@ -2,6 +2,8 @@
 
 use std::convert::{From, TryFrom};
 
+use crate::source_file::Error;
+
 use super::*;
 use super::scope::*;
 use super::symbol_table::*;
@@ -20,7 +22,7 @@ EvalResult
   Value(AsmEvalText),
   Const(i64),
 
-  Err,
+  Err(Error),
 
 }
 
@@ -40,7 +42,7 @@ is_ok(&self)-> bool
 pub fn
 is_err(&self)-> bool
 {
-  if let Self::Err = self{true} else{false}
+  if let Self::Err(_) = self{true} else{false}
 }
 
 
@@ -60,7 +62,12 @@ to_text(self)-> AsmEvalText
 
       text
     }
-  Self::Err=>{panic!();}
+  Self::Err(e)=>
+    {
+      e.print();
+
+      panic!();
+    }
     }
 }
 
@@ -73,7 +80,7 @@ print(&self)
   Self::Value(_)=>{print!("value");}
   Self::Const(i)=>{print!("const {}",*i);}
 
-  Self::Err=>{print!("ERR");}
+  Self::Err(e)=>{print!("ERR");}
     }
 }
 
@@ -155,7 +162,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
 
               EvalResult::Value(txt)
             }
-          _=>{EvalResult::Err}
+          _=>{EvalResult::Err(Error::new(format!("evaluate_identifier error: {} is invalid symbol kind",s)))}
             };
         }
     }
@@ -209,12 +216,12 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
 
           EvalResult::Value(txt)
         }
-      _=>{panic!("evaluate_identifier error: {} is invalid symbol kind",s);}
+      _=>{EvalResult::Err(Error::new(format!("evaluate_identifier error: {} is invalid symbol kind",s)))}
         };
     }
 
 
-  panic!("evaluate_identifier error: {} not found",s);
+  EvalResult::Err(Error::new(format!("evaluate_identifier error: {} not found",s)))
 }
 
 
@@ -245,8 +252,8 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
   let  lcres = evaluate_const(le,tbl,scp_opt);
   let  rcres = evaluate_const(re,tbl,scp_opt);
 
-  let  mut lres = EvalResult::Err;
-  let  mut rres = EvalResult::Err;
+  let  mut lres = EvalResult::Err(Error::new(format!("")));
+  let  mut rres = EvalResult::Err(Error::new(format!("")));
 
     if let Ok(l) = lcres
     {
@@ -258,7 +265,7 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
             }
 
           else
-            {return EvalResult::Err;}
+            {panic!();}
         }
 
       else
@@ -302,13 +309,17 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
     }
 
 
-    match e
+    match e.get_kind()
     {
-  Expr::Identifier(s)=>
+  ExprKind::Identifier(s)=>
     {
       evaluate_identifier(s,tbl,scp_opt)
     }
-  Expr::String(s)=>
+  ExprKind::Int(i)=>
+    {
+      EvalResult::Const(*i)
+    }
+  ExprKind::String(s)=>
     {
       let  sym = tbl.find_string_symbol(s).unwrap();
 
@@ -318,27 +329,26 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 
       EvalResult::Value(txt)
     }
-  Expr::CallOp(f,args)=>
+  ExprKind::CallOp(f,args)=>
     {
       evaluate_call(f,args,tbl,scp_opt)
     }
-  Expr::AccessOp(ins,s)=>
+  ExprKind::AccessOp(ins,s)=>
     {
       evaluate_access(ins,s,tbl,scp_opt)
     }
-  Expr::Expr(e)=>
+  ExprKind::Expr(e)=>
     {
       evaluate(e,tbl,scp_opt)
     }
-  Expr::UnaryOp(o,op)=>
+  ExprKind::UnaryOp(o,op)=>
     {
       evaluate_unary(o,op,tbl,scp_opt)
     }
-  Expr::BinaryOp(l,r,op)=>
+  ExprKind::BinaryOp(l,r,op)=>
     {
       evaluate_binary(l,r,op,tbl,scp_opt)
     }
-  _=>{EvalResult::Err}
     }
 }
 

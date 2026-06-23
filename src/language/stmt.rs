@@ -1,8 +1,7 @@
 
 
-use std::rc::Rc;
-
 use crate::node::*;
+use crate::source_file::SourceInfo;
 use super::expr::*;
 use super::decl::*;
 use super::evaluate::*;
@@ -246,7 +245,7 @@ print(&self)
 
 
 pub enum
-Stmt
+StmtKind
 {
   Empty,
 
@@ -266,6 +265,17 @@ Stmt
   Return(Option<Expr>),
 
   Print(Expr),
+
+}
+
+
+
+
+pub struct
+Stmt
+{
+  source_info: SourceInfo,
+  kind: StmtKind,
 
 }
 
@@ -295,35 +305,49 @@ read(s: &str)-> Result<Self,()>
 
 
 pub fn
+get_source_info(&self)-> &SourceInfo
+{
+  &self.source_info
+}
+
+
+pub fn
+get_kind(&self)-> &StmtKind
+{
+  &self.kind
+}
+
+
+pub fn
 collect(&self, buf: &mut Vec<Collectible>)
 {
-    match self
+    match &self.kind
     {
-  Self::Empty=>{}
-  Self::Block(blk)=>{blk.collect(buf);}
-  Self::Decl(decl)=>{decl.collect_string(buf);}
-  Self::Expr(e)=>{e.collect_string(buf);}
-  Self::If(i)=>{i.collect(buf);}
-  Self::Loop(blk)=>{blk.collect(buf);}
-  Self::While(e,blk)=>
+  StmtKind::Empty=>{}
+  StmtKind::Block(blk)=>{blk.collect(buf);}
+  StmtKind::Decl(decl)=>{decl.collect_string(buf);}
+  StmtKind::Expr(e)=>{e.collect_string(buf);}
+  StmtKind::If(i)=>{i.collect(buf);}
+  StmtKind::Loop(blk)=>{blk.collect(buf);}
+  StmtKind::While(e,blk)=>
     {
         e.collect_string(buf);
       blk.collect(buf);
     }
-  Self::For(f)=>{f.collect(buf);}
-  Self::Return(e_opt)=>
+  StmtKind::For(f)=>{f.collect(buf);}
+  StmtKind::Return(e_opt)=>
     {
         if let Some(e) = e_opt
         {
           e.collect_string(buf);
         }
     }
-  Self::Assign(l,r,_)=>
+  StmtKind::Assign(l,r,_)=>
     {
       l.collect_string(buf);
       r.collect_string(buf);
     }
-  Self::Print(e)=>{e.collect_string(buf);}
+  StmtKind::Print(e)=>{e.collect_string(buf);}
   _=>{}
     }
 }
@@ -332,16 +356,16 @@ collect(&self, buf: &mut Vec<Collectible>)
 pub fn
 is_executable_as_const(&self)-> bool
 {
-    match self
+    match &self.kind
     {
-  Self::Block(blk)=>{blk.is_executable_as_const()}
+  StmtKind::Block(blk)=>{blk.is_executable_as_const()}
 
-  Self::Expr(e)=>{true}
-  Self::If(i)       =>{i.is_executable_as_const()}
-  Self::Loop(blk)   =>{blk.is_executable_as_const()}
-  Self::While(e,blk)=>{blk.is_executable_as_const()}
-  Self::For(f)=>{f.is_executable_as_const()}
-  Self::Return(e_opt)=>
+  StmtKind::Expr(e)=>{true}
+  StmtKind::If(i)       =>{i.is_executable_as_const()}
+  StmtKind::Loop(blk)   =>{blk.is_executable_as_const()}
+  StmtKind::While(e,blk)=>{blk.is_executable_as_const()}
+  StmtKind::For(f)=>{f.is_executable_as_const()}
+  StmtKind::Return(e_opt)=>
     {
         if let Some(e) = e_opt
         {
@@ -358,29 +382,29 @@ is_executable_as_const(&self)-> bool
 pub fn
 print(&self)
 {
-    match self
+    match &self.kind
     {
-  Self::Empty=>{print!(";");}
+  StmtKind::Empty=>{print!(";");}
 
-  Self::Block(blk)=>{blk.print();}
+  StmtKind::Block(blk)=>{blk.print();}
 
-  Self::Expr(e)=>{e.print();}
-  Self::Decl(decl)=>{decl.print();}
-  Self::Assign(l,r,op)=>
+  StmtKind::Expr(e)=>{e.print();}
+  StmtKind::Decl(decl)=>{decl.print();}
+  StmtKind::Assign(l,r,op)=>
     {
       l.print();
       print!("{}",op);
       r.print();
     }
-  Self::If(i)=>{i.print();}
-  Self::Loop(blk)=>{  print!("loop");  blk.print();}
-  Self::While(e,blk)=>{  print!("while");  e.print();  blk.print();}
-  Self::For(f)=>{f.print();}
-  Self::Break=>{print!("break");}
-  Self::Continue=>{print!("continue");}
-  Self::Halt=>{print!("halt");}
+  StmtKind::If(i)=>{i.print();}
+  StmtKind::Loop(blk)=>{  print!("loop");  blk.print();}
+  StmtKind::While(e,blk)=>{  print!("while");  e.print();  blk.print();}
+  StmtKind::For(f)=>{f.print();}
+  StmtKind::Break=>{print!("break");}
+  StmtKind::Continue=>{print!("continue");}
+  StmtKind::Halt=>{print!("halt");}
 
-  Self::Return(e_opt)=>
+  StmtKind::Return(e_opt)=>
     {
       print!("return ");
 
@@ -389,7 +413,7 @@ print(&self)
           e.print();
         }
     }
-  Self::Print(e)=>
+  StmtKind::Print(e)=>
     {
       print!("print ");
 
@@ -405,7 +429,7 @@ print(&self)
 
 
 pub fn
-read_assign(start_nd: &Node)-> Stmt
+read_assign(start_nd: &Node)-> StmtKind
 {
   let  mut cur = start_nd.cursor();
 
@@ -425,7 +449,7 @@ read_assign(start_nd: &Node)-> Stmt
             {
               let  r = read_expr(r_nd);
 
-              return Stmt::Assign(l,r,op);
+              return StmtKind::Assign(l,r,op);
             }
         }
     }
@@ -451,7 +475,7 @@ read_assign_operator(start_nd: &Node)-> String
 
 
 pub fn
-read_return(start_nd: &Node)-> Stmt
+read_return(start_nd: &Node)-> StmtKind
 {
   let  mut cur = start_nd.cursor();
 
@@ -461,16 +485,16 @@ read_return(start_nd: &Node)-> Stmt
     {
       let  e = read_expr(nd);
 
-      return Stmt::Return(Some(e));
+      return StmtKind::Return(Some(e));
     }
 
 
-  Stmt::Return(None)
+  StmtKind::Return(None)
 }
 
 
 pub fn
-read_print(start_nd: &Node)-> Stmt
+read_print(start_nd: &Node)-> StmtKind
 {
   let  mut cur = start_nd.cursor();
 
@@ -480,7 +504,7 @@ read_print(start_nd: &Node)-> Stmt
     {
       let  e = read_expr(nd);
 
-      return Stmt::Print(e);
+      return StmtKind::Print(e);
     }
 
 
@@ -562,7 +586,7 @@ read_if_stmt(start_nd: &Node)-> IfStmt
 
 
 pub fn
-read_while(start_nd: &Node)-> Stmt
+read_while(start_nd: &Node)-> StmtKind
 {
   let  mut cur = start_nd.cursor();
 
@@ -578,7 +602,7 @@ read_while(start_nd: &Node)-> Stmt
         {
           let  blk = read_block(ls_d);
 
-          return Stmt::While(e,blk);
+          return StmtKind::While(e,blk);
         }
     }
 
@@ -588,7 +612,7 @@ read_while(start_nd: &Node)-> Stmt
 
 
 pub fn
-read_loop(start_nd: &Node)-> Stmt
+read_loop(start_nd: &Node)-> StmtKind
 {
   let  mut cur = start_nd.cursor();
 
@@ -596,7 +620,7 @@ read_loop(start_nd: &Node)-> Stmt
 
     if let Some(ls_d) = cur.select_node("block")
     {
-      return Stmt::Loop(read_block(ls_d));
+      return StmtKind::Loop(read_block(ls_d));
     }
 
 
@@ -650,7 +674,7 @@ read_block(start_nd: &Node)-> Block
     {
       let  stmt = read_stmt(d);
 
-        if let Stmt::Empty = stmt
+        if let StmtKind::Empty = &stmt.kind
         {
         }
 
@@ -671,13 +695,15 @@ read_block(start_nd: &Node)-> Block
 pub fn
 read_stmt(start_nd: &Node)-> Stmt
 {
+  let  source_info = start_nd.get_source_info().clone();
+
   let  mut cur = start_nd.cursor();
 
     if let Some(s) = cur.get_semi_string()
     {
         if s == ";"
         {
-          return Stmt::Empty;
+          return Stmt{source_info, kind: StmtKind::Empty};
         }
     }
 
@@ -688,61 +714,61 @@ read_stmt(start_nd: &Node)-> Stmt
 
         if d_name == "block"
         {
-          return Stmt::Block(read_block(d));
+          return Stmt{source_info, kind: StmtKind::Block(read_block(d))}
         }
 
       else
         if d_name == "if"
         {
-          return Stmt::If(read_if_stmt(d));
+          return Stmt{source_info, kind: StmtKind::If(read_if_stmt(d))}
         }
 
       else
         if d_name == "for"
         {
-          return Stmt::For(read_for_stmt(d));
+          return Stmt{source_info, kind: StmtKind::For(read_for_stmt(d))}
         }
 
       else
         if d_name == "while"
         {
-          return read_while(d);
+          return Stmt{source_info, kind: read_while(d)}
         }
 
       else
         if d_name == "loop"
         {
-          return read_loop(d);
+          return Stmt{source_info, kind: read_loop(d)}
         }
 
       else
         if d_name == "break"
         {
-          return Stmt::Break;
+          return Stmt{source_info, kind: StmtKind::Break}
         }
 
       else
         if d_name == "continue"
         {
-          return Stmt::Continue;
+          return Stmt{source_info, kind: StmtKind::Continue}
         }
 
       else
         if d_name == "halt"
         {
-          return Stmt::Halt;
+          return Stmt{source_info, kind: StmtKind::Halt}
         }
 
       else
         if d_name == "return"
         {
-          return read_return(d);
+          return Stmt{source_info, kind: read_return(d)}
         }
 
       else
         if d_name == "declaration"
         {
-          return Stmt::Decl(read_decl(d));
+          return Stmt{source_info, kind: StmtKind::Decl(read_decl(d))}
         }
 
       else
@@ -750,19 +776,19 @@ read_stmt(start_nd: &Node)-> Stmt
         {
           let  e = read_expr(d);
 
-          return Stmt::Expr(e);
+          return Stmt{source_info, kind: StmtKind::Expr(e)}
         }
 
       else
         if d_name == "assign"
         {
-          return read_assign(d);
+          return Stmt{source_info, kind: read_assign(d)}
         }
 
       else
         if d_name == "print"
         {
-          return read_print(d);
+          return Stmt{source_info, kind: read_print(d)}
         }
     }
 

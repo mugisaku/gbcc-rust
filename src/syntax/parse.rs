@@ -3,7 +3,6 @@
 use crate::token::{
   Token,
   TokenKind,
-  ParseTokenError,
   get_token,
   get_source_info,
   get_number,
@@ -35,11 +34,10 @@ use crate::node::{
 
 use crate::source_file::{
   SourceInfo,
+  Error,
 
 };
 
-
-use super::ParseSyntaxError as Error;
 
 enum
 ParseSyntaxResult

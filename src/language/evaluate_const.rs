@@ -1,7 +1,5 @@
 
 
-use std::rc::Rc;
-
 use super::*;
 use super::expr::*;
 use super::scope::*;
@@ -60,9 +58,9 @@ evaluate_binary_const(l: i64, r: i64, op: &str)-> Result<i64,()>
 pub fn
 evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> Result<i64,()>
 {
-    match e
+    match e.get_kind()
     {
-  Expr::Identifier(s)=>
+  ExprKind::Identifier(s)=>
     {
         if let Some(scp) = scp_opt
         {
@@ -91,9 +89,9 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> Result
 
       Err(())
     }
-  Expr::String(s)=>{Err(())}
-  Expr::Int(i)=>{Ok(*i)}
-  Expr::CallOp(f,args)=>
+  ExprKind::String(s)=>{Err(())}
+  ExprKind::Int(i)=>{Ok(*i)}
+  ExprKind::CallOp(f,args)=>
     {
       let  mut buf = Vec::<i64>::new();
 
@@ -121,12 +119,12 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> Result
           Err(())
         }
     }
-  Expr::AccessOp(ins,s)=>
+  ExprKind::AccessOp(ins,s)=>
     {
       Err(())
     }
-  Expr::Expr(e)=>{evaluate_const(e,symtbl,scp_opt)}
-  Expr::UnaryOp(o,op)=>
+  ExprKind::Expr(e)=>{evaluate_const(e,symtbl,scp_opt)}
+  ExprKind::UnaryOp(o,op)=>
     {
         if let Ok(i) = evaluate_const(o,symtbl,scp_opt)
         {
@@ -138,7 +136,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> Result
           Err(())
         }
     }
-  Expr::BinaryOp(l,r,op)=>
+  ExprKind::BinaryOp(l,r,op)=>
     {
       let  l_res = evaluate_const(l,symtbl,scp_opt);
       let  r_res = evaluate_const(r,symtbl,scp_opt);
