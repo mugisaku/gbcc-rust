@@ -215,6 +215,13 @@ pub fn  get_y(&self)-> usize{self.cursor.get_y()}
 
 
 pub fn
+to_error(&self, msg: String)-> Error
+{
+  Error::new_with_source_info(self,msg)
+}
+
+
+pub fn
 to_string(&self)-> String
 {
   format!("[file: {} X: {:05} Y: {:05}]",self.get_filepath(),1+self.get_x(),1+self.get_y())
@@ -265,10 +272,10 @@ new(message: String)-> Self
 
 
 pub fn
-new_with_source_info(source_info: SourceInfo, message: String)-> Self
+new_with_source_info(source_info: &SourceInfo, message: String)-> Self
 {
   Self{
-    source_info_opt: Some(source_info),
+    source_info_opt: Some(source_info.clone()),
     message,
     child_opt: None,
   }
@@ -276,7 +283,7 @@ new_with_source_info(source_info: SourceInfo, message: String)-> Self
 
 
 pub fn
-join(mut self, child: Self)-> Self
+wrap(mut self, child: Self)-> Self
 {
   self.child_opt = Some(Box::new(child));
 

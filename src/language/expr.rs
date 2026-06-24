@@ -8,10 +8,56 @@ use super::asm::*;
 
 
 pub enum
+CollectibleKind
+{
+  Identifier,
+      String,
+
+}
+
+
+pub struct
 Collectible
 {
-  Identifier(String),
-      String(String),
+  source_info: SourceInfo,
+  content: String,
+  kind: CollectibleKind,
+  
+}
+
+
+impl
+Collectible
+{
+
+
+pub fn
+destruct(self)-> (SourceInfo,String,CollectibleKind)
+{
+  (self.source_info,self.content,self.kind)
+}
+
+
+pub fn
+get_source_info(&self)-> &SourceInfo
+{
+  &self.source_info
+}
+
+
+pub fn
+get_content(&self)-> &String
+{
+  &self.content
+}
+
+
+pub fn
+get_kind(&self)-> &CollectibleKind
+{
+  &self.kind
+}
+
 
 }
 
@@ -91,8 +137,26 @@ collect(&self, buf: &mut Vec<Collectible>)
 {
     match &self.kind
     {
-  ExprKind::Identifier(s)=>{buf.push(Collectible::Identifier(s.clone()));}
-  ExprKind::String(s)=>{buf.push(Collectible::String(s.clone()));}
+  ExprKind::Identifier(s)=>
+    {
+      let  source_info = self.source_info.clone();
+
+      let  content = s.clone();
+
+      let  kind = CollectibleKind::Identifier;
+
+      buf.push(Collectible{source_info, content, kind});
+    }
+  ExprKind::String(s)=>
+    {
+      let  source_info = self.source_info.clone();
+
+      let  content = s.clone();
+
+      let  kind = CollectibleKind::String;
+
+      buf.push(Collectible{source_info, content, kind});
+    }
   ExprKind::CallOp(f,args)=>
     {
       f.collect(buf);
@@ -123,7 +187,16 @@ collect_string(&self, buf: &mut Vec<Collectible>)
 {
     match &self.kind
     {
-  ExprKind::String(s)=>{buf.push(Collectible::String(s.clone()));}
+  ExprKind::String(s)=>
+    {
+      let  source_info = self.source_info.clone();
+
+      let  content = s.clone();
+
+      let  kind = CollectibleKind::String;
+
+      buf.push(Collectible{source_info, content, kind});
+    }
   ExprKind::CallOp(f,args)=>
     {
       f.collect_string(buf);

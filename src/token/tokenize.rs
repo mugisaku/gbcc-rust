@@ -406,7 +406,7 @@ push(&mut self, k: TokenKind)
     }
 
 
-  self.output.push(Token::new(k,self.source_info.clone()));
+  self.output.push(Token::new(self.source_info.clone(),k));
 }
 
 

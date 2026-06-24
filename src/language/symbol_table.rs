@@ -1,7 +1,5 @@
 
 
-use std::rc::Rc;
-
 use super::*;
 use super::decl::*;
 use super::expr::*;
@@ -15,38 +13,11 @@ use super::tplg_sort::*;
 use super::font14::*;
 use super::font8::*;
 
+use crate::source_file::{
+  SourceInfo,
+  Error,
 
-
-
-pub struct
-BuildError
-{
-  message: String,
-}
-
-
-impl
-BuildError
-{
-
-
-pub fn
-new(message: String)-> Self
-{
-  Self{
-    message,
-  }
-}
-
-
-pub fn
-print(&self)
-{
-  println!("{}",self.message);
-}
-
-
-}
+};
 
 
 
@@ -62,7 +33,7 @@ SymbolKind
   Str(String,Vec<u8>),
   Field(usize),
 
-  Fn(FnDecl),
+  Fn(SourceInfo,FnDecl),
 
 }
 
@@ -101,13 +72,13 @@ Symbol
 
 
 fn
-make_str_bytes(dk: &str, ik: &StrInitKind, symtbl: &SymbolTable)-> Vec<u8>
+make_str_bytes(srcinf: &SourceInfo, dk: &str, ik: &StrInitKind, symtbl: &SymbolTable)-> Result<Vec<u8>,Error>
 {
     if (dk == "i8") || (dk == "u8")
     {
         if let StrInitKind::String(s) = ik
         {
-          return s.as_bytes().to_vec();
+          return Ok(s.as_bytes().to_vec());
         }
     }
 
@@ -128,7 +99,11 @@ make_str_bytes(dk: &str, ik: &StrInitKind, symtbl: &SymbolTable)-> Vec<u8>
     {
         for e in ls
         {
-          tmp.push(evaluate_const(e,symtbl,None).unwrap());
+            match evaluate_const(e,symtbl,None)
+            {
+          Ok(v)=>{tmp.push(v);}
+          Err(())=>{return Err(e.get_source_info().to_error(format!("make_str_bytes error")));}
+            }
         }
     }
     }
@@ -185,7 +160,7 @@ make_str_bytes(dk: &str, ik: &StrInitKind, symtbl: &SymbolTable)-> Vec<u8>
     }
 
 
-  bytes
+  Ok(bytes)
 }
 
 
@@ -197,102 +172,127 @@ make_name_for_string(s: &str)-> String
 
 
 pub fn
-build_from_string(s: String, symtbl: &SymbolTable)-> Self
+build_from_string(srcinf: SourceInfo, s: String, symtbl: &SymbolTable)-> Result<Self,Error>
 {
   let  name = Self::make_name_for_string(&s);
 
   let  ik = StrInitKind::String(s);
 
-  let  bytes = Self::make_str_bytes("u16",&ik,symtbl);
-
-  Self{
-    name,
-    kind: SymbolKind::Str("u16".to_string(),bytes),
-    offset: 0,
-    deps_parent_list: Vec::new(),
-    deps_child_list: Vec::new(),
-  }
+    match Self::make_str_bytes(&srcinf,"u16",&ik,symtbl)
+    {
+  Ok(bytes)=>
+    {
+      Ok(Self{
+        name,
+        kind: SymbolKind::Str("u16".to_string(),bytes),
+        offset: 0,
+        deps_parent_list: Vec::new(),
+        deps_child_list: Vec::new(),
+      })
+    }
+  Err(e)=>{Err(srcinf.to_error(format!("文字列リテラルのシンボル化に失敗")).wrap(e))}
+   }
 }
 
 
 pub fn
-build(src: Source, symtbl: &SymbolTable)-> Self
+build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
 {
-  let  (source_info,name,kind) = src.decl.expire();
+  let  (srcinf,name,kind) = src.decl.expire();
 
   let  deps_parent_list = src.deps_parent_list;
   let   deps_child_list =  src.deps_child_list;
 
     match kind
     {
-  DeclKind::Undef=>{panic!("symbol build error: {} is undef",&name);}
+  DeclKind::Undef=>{Err(srcinf.to_error(format!("symbol build error: {} is undef",&name)))}
   DeclKind::Const(e)=>
     {
-      let  res = evaluate_const(&e,symtbl,None);
-
-      Self{
-        name,
-        kind: SymbolKind::Const(res.unwrap()),
-        offset: 0,
-        deps_parent_list,
-        deps_child_list,
-      }
+        match evaluate_const(&e,symtbl,None)
+        {
+      Ok(v)=>
+        {
+          Ok(Self{
+            name,
+            kind: SymbolKind::Const(v),
+            offset: 0,
+            deps_parent_list,
+            deps_child_list,
+          })
+        }
+      Err(())=>{Err(srcinf.to_error(format!("constの初期化に失敗")))}
+        }
     }
   DeclKind::Var(e)=>
     {
-      let  res = evaluate_const(&e,symtbl,None);
-
-      Self{
-        name,
-        kind: SymbolKind::GlobalVar(res.unwrap()),
-        offset: 0,
-        deps_parent_list,
-        deps_child_list,
-      }
+        match evaluate_const(&e,symtbl,None)
+        {
+      Ok(v)=>
+        {
+          Ok(Self{
+            name,
+            kind: SymbolKind::GlobalVar(v),
+            offset: 0,
+            deps_parent_list,
+            deps_child_list,
+          })
+        }
+      Err(())=>{Err(srcinf.to_error(format!("varの初期化に失敗")))}
+        }
     }
   DeclKind::Io=>
     {
-      Self{
+      Ok(Self{
         name,
         kind: SymbolKind::Io,
         offset: 0,
         deps_parent_list,
         deps_child_list,
-      }
+      })
     }
   DeclKind::Str(dk,sik)=>
     {
-      let  bytes = Self::make_str_bytes(&dk,&sik,symtbl);
-
-      Self{
-        name,
-        kind: SymbolKind::Str(dk,bytes),
-        offset: 0,
-        deps_parent_list,
-        deps_child_list,
-      }
+        match Self::make_str_bytes(&srcinf,&dk,&sik,symtbl)
+        {
+      Ok(bytes)=>
+        {
+          Ok(Self{
+            name,
+            kind: SymbolKind::Str(dk,bytes),
+            offset: 0,
+            deps_parent_list,
+            deps_child_list,
+          })
+        }
+      Err(e)=>{Err(srcinf.to_error(format!("styrの初期化に失敗")).wrap(e))}
+        }
     }
   DeclKind::Field(e)=>
     {
-      let  res = evaluate_const(&e,symtbl,None);
-
-      Self{
-        name,
-        kind: SymbolKind::Field(res.unwrap() as usize),
-        offset: 0,
-        deps_parent_list,
-        deps_child_list,
-      }
+        match evaluate_const(&e,symtbl,None)
+        {
+      Ok(v)=>
+        {
+          Ok(Self{
+            name,
+            kind: SymbolKind::Field(v as usize),
+            offset: 0,
+            deps_parent_list,
+            deps_child_list,
+          })
+        }
+      Err(())=>{Err(srcinf.to_error(format!("fieldの大きさの算出に失敗")))}
+        }
     }
   DeclKind::Fn(fd)=>
     {
-      Self{
+      Ok(Self{
         name,
-        kind: SymbolKind::Fn(fd),
+        kind: SymbolKind::Fn(srcinf,fd),
         offset: 0,
         deps_parent_list,
         deps_child_list,
-      }
+      })
     }
   _=>{panic!();}
     }
@@ -337,7 +337,7 @@ print(&self)
   SymbolKind::Io          =>{print!("io");}
   SymbolKind::Str(_,_)    =>{print!("str");}
   SymbolKind::Field(_)    =>{print!("field");}
-  SymbolKind::Fn(_)       =>{print!("fn");}
+  SymbolKind::Fn(_,_)     =>{print!("fn");}
     }
 
 
@@ -350,7 +350,7 @@ print(&self)
   SymbolKind::Io            =>{}
   SymbolKind::Str(ty,data)  =>{print!("{} {{..{}}}",ty,data.len());}
   SymbolKind::Field(sz)     =>{print!("{}",sz);}
-  SymbolKind::Fn(_,)=>{}
+  SymbolKind::Fn(_,_)=>{}
     }
 
 
@@ -423,7 +423,7 @@ join_child(srcs: &mut Vec<Source>, parent_name: &String, child_name: String)
 
 
 fn
-make_tplg_sorted_names(srcs: &Vec<Source>)-> Vec<String>
+make_tplg_sorted_names(srcs: &Vec<Source>)-> Result<Vec<String>,Error>
 {
   let  mut buf = Vec::<TplgNode>::new();
 
@@ -435,13 +435,7 @@ make_tplg_sorted_names(srcs: &Vec<Source>)-> Vec<String>
     }
 
 
-    if let Ok(names) = tplg_sort(buf)
-    {
-      return names;
-    }
-
-
-  panic!();
+  tplg_sort(buf)
 }
 
 
@@ -466,36 +460,48 @@ take_source(srcs: &mut Vec<Source>, name: &str)-> Source
 
 
 fn
-generate_symbols(&mut self, mut srcs: Vec<Source>, mut strs: Vec<String>)
+generate_symbols(mut self, mut srcs: Vec<Source>, mut strs: Vec<(SourceInfo,String)>)-> Result<Self,Error>
 {
-  let  names = Self::make_tplg_sorted_names(&srcs);
-
-    for name in names
+    match Self::make_tplg_sorted_names(&srcs)
     {
-      let  src = Self::take_source(&mut srcs,&name);
+  Ok(names)=>
+    {
+        for name in names
+        {
+          let  src = Self::take_source(&mut srcs,&name);
 
-      let  sym = Symbol::build(src,self);
+            match Symbol::build(src,&self)
+            {
+          Ok(sym)=>{self.symbols.push(sym);}
+          Err(e)=>{return Err(e);}
+            }
+        }
 
-      self.symbols.push(sym);
+
+        for (srcinf,s) in strs
+        {
+            match Symbol::build_from_string(srcinf,s,&self)
+            {
+          Ok(sym)=>{self.symbols.push(sym);}
+          Err(e)=>{return Err(e);}
+            }
+        }
+
+
+      Ok(self)
     }
-
-
-    for s in strs
-    {
-      let  sym = Symbol::build_from_string(s,self);
-
-      self.symbols.push(sym);
+  Err(e)=>{Err(e)}
     }
 }
 
 
 pub fn
-build(decls: Vec<Decl>)-> Result<Self,BuildError>
+build(decls: Vec<Decl>)-> Result<Self,Error>
 {
   let  mut tbl = Self::new();
 
   let  mut srcs = Vec::<Source>::new();
-  let  mut strs = Vec::<String>::new();
+  let  mut strs = Vec::<(SourceInfo,String)>::new();
 
     for decl in decls
     {
@@ -513,9 +519,11 @@ build(decls: Vec<Decl>)-> Result<Self,BuildError>
 
         for co in buf
         {
-            match co
+          let  (srcinf,s,k) = co.destruct();
+
+            match k
             {
-          Collectible::Identifier(s)=>
+          CollectibleKind::Identifier=>
             {
               let  child_name = srcs[i].decl.get_name().clone();
 
@@ -523,18 +531,16 @@ build(decls: Vec<Decl>)-> Result<Self,BuildError>
 
               srcs[i].deps_parent_list.push(s);
             }
-          Collectible::String(s)=>
+          CollectibleKind::String=>
             {
-              strs.push(s);
+              strs.push((srcinf,s));
             }
             }
         }
     }
 
 
-  tbl.generate_symbols(srcs,strs);
-
-  Ok(tbl)
+  tbl.generate_symbols(srcs,strs)
 }
 
 
@@ -571,7 +577,7 @@ process_data_offset(&mut self, start: usize)-> usize
         match &sym.kind
         {
       SymbolKind::GlobalVar(_)
-     |SymbolKind::Fn(_)=>
+     |SymbolKind::Fn(_,_)=>
         {
           sym.offset = get_word_aligned(pos)            ;
                                         pos += WORD_SIZE;
@@ -744,7 +750,7 @@ get_const_or(&mut self, s: &str, def: usize)-> usize
 
 
 pub fn
-generate_exec(&mut self)-> Result<Exec,String>
+generate_exec(&mut self)-> Result<Exec,Error>
 {
   let  mut exec = Exec::new_with_memory();
 
@@ -779,7 +785,7 @@ generate_exec(&mut self)-> Result<Exec,String>
     {
         match &sym.kind
         {
-      SymbolKind::Fn(fd)=>
+      SymbolKind::Fn(srcinf,fd)=>
         {
           let   ptr_minsym = MiniSymbol{offset: sym.offset, name: sym.name.clone(), kind: MiniSymbolKind::Data};
           let  text_minsym = MiniSymbol{offset:        pos, name: sym.name.clone(), kind: MiniSymbolKind::Text};
@@ -787,36 +793,40 @@ generate_exec(&mut self)-> Result<Exec,String>
           exec.mini_symbols.push( ptr_minsym);
           exec.mini_symbols.push(text_minsym);
 
-
-          let  mut text = assemble(fd,self);
-
-          text.finalize();
-
-          let  bytes = text.to_bytes();
-
-            if (pos+bytes.len()) > exec.memory.len()
+            match assemble(srcinf,fd,self)
             {
-              return Err(format!("プログラムおよびデータが、容量を超えている"));
-            }
-
-
-            for i in 0..bytes.len()
+          Ok(mut text)=>
             {
-              exec.memory[pos+i] = bytes[i];
+              text.finalize();
+
+              let  bytes = text.to_bytes();
+
+                if (pos+bytes.len()) > exec.memory.len()
+                {
+                  return Err(Error::new(format!("プログラムおよびデータが、容量を超えている")));
+                }
+
+
+                for i in 0..bytes.len()
+                {
+                  exec.memory[pos+i] = bytes[i];
+                }
+
+
+              exec.texts.push((sym.name.clone(),pos,text));
+
+              let  pos_bytes = pos.to_ne_bytes();
+
+                for i in 0..pos_bytes.len()
+                {
+                  exec.memory[sym.offset+i] = pos_bytes[i];
+                }
+
+
+              pos += bytes.len();
             }
-
-
-          exec.texts.push((sym.name.clone(),pos,text));
-
-          let  pos_bytes = pos.to_ne_bytes();
-
-            for i in 0..pos_bytes.len()
-            {
-              exec.memory[sym.offset+i] = pos_bytes[i];
+          Err(e)=>{return Err(Error::new(format!("関数{}のアセンブルに失敗",&sym.name)).wrap(e));}
             }
-
-
-          pos += bytes.len();
         }
       SymbolKind::Const(v)=>
         {

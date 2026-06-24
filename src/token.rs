@@ -145,9 +145,9 @@ print(&self)
 pub struct
 Token
 {
-  kind: TokenKind,
-
   source_info: SourceInfo,
+
+  kind: TokenKind,
 
 }
 
@@ -158,9 +158,9 @@ Token
 
 
 pub fn
-new(kind: TokenKind, source_info: SourceInfo)-> Self
+new(source_info: SourceInfo, kind: TokenKind)-> Self
 {
-  Self{kind,source_info}
+  Self{source_info,kind}
 }
 
 

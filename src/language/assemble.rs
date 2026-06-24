@@ -10,6 +10,12 @@ use super::scope::*;
 use super::evaluate::*;
 use super::evaluate_const::*;
 
+use crate::source_file::{
+  SourceInfo,
+  Error,
+
+};
+
 
 
 
@@ -406,7 +412,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
 
 pub fn
-assemble(decl: &FnDecl, tbl: &SymbolTable)-> AsmText
+assemble(srcinf: &SourceInfo, decl: &FnDecl, tbl: &SymbolTable)-> Result<AsmText,Error>
 {
   let  mut text = AsmText::new();
   let   mut lid = LabelID::new();
@@ -418,7 +424,7 @@ assemble(decl: &FnDecl, tbl: &SymbolTable)-> AsmText
   text.set_xs(scp.get_offset_max());
   text.terminate();
 
-  text
+  Ok(text)
 }
 
 

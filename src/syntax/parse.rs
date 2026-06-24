@@ -164,7 +164,7 @@ read_number_literal(&mut self)-> ParseSyntaxResult
     {
   StdSome(pn)=>
     {
-      let  info_opt = get_source_info(&self.token_string,self.position);
+      let  info = get_source_info(&self.token_string,self.position).unwrap().clone();
 
       self.advance();
 
@@ -176,9 +176,9 @@ read_number_literal(&mut self)-> ParseSyntaxResult
             {
               let  kind = ValueKind::Float(f);
 
-              Some(vec![Value::new(info_opt.unwrap(),kind)])
+              Some(vec![Value::new(info,kind)])
             }
-          StdErr(_)=>{Err(Error::new_with_source_info(info_opt.unwrap(),format!("整数が不正")))}
+          StdErr(_)=>{Err(info.to_error(format!("整数が不正")))}
             }
         }
 
@@ -190,9 +190,9 @@ read_number_literal(&mut self)-> ParseSyntaxResult
             {
               let  kind = ValueKind::Uint(u);
 
-              Some(vec![Value::new(info_opt.unwrap(),kind)])
+              Some(vec![Value::new(info,kind)])
             }
-          StdErr(_)=>{Err(Error::new_with_source_info(info_opt.unwrap(),format!("浮動小数点数が不正")))}
+          StdErr(_)=>{Err(info.to_error(format!("浮動小数点数が不正")))}
             }
         }
     }
@@ -533,7 +533,7 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResu
 
       buf.push_str("解析途中で停止");
 
-      StdErr(Error::new_with_source_info(tok.get_source_info().clone(),buf))
+      StdErr(tok.get_source_info().to_error(buf))
     }
 }
 

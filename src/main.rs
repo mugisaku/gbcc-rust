@@ -54,7 +54,7 @@ compile_and_run(s: &str)
               exec.print_memory();
     //          exec.print_text();
             }
-          Err(s)=>{println!("{}",s);}
+          Err(e)=>{e.print();}
             }
         }
       Err(e)=>

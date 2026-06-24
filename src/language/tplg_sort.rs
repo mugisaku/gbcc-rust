@@ -1,5 +1,10 @@
 
 
+use crate::source_file::{
+  SourceInfo,
+  Error,
+
+};
 
 
 pub struct
@@ -76,7 +81,7 @@ step(nodes: &mut Vec<TplgNode>, remains: &mut Vec<TplgNode>)-> Vec<TplgNode>
 
 
 pub fn
-tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<String>,()>
+tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<String>,Error>
 {
   let  mut remains = Vec::<TplgNode>::new();
   let  mut  output = Vec::<String>::new();
@@ -89,9 +94,18 @@ tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<String>,()>
 
         if res.is_empty()
         {
-          println!("循環参照を検出したので中断");
+          let  mut s = "循環参照を検出したので中断\n".to_string();
 
-          return Err(());
+            for nd in remains
+            {
+              s.push_str(&nd.name);
+              s.push_str(" ");
+            }
+
+
+          s.push_str("\nが残った");
+
+          return Err(Error::new(s));
         }
 
 

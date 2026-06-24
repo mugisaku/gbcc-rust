@@ -2,7 +2,11 @@
 
 use std::convert::{From, TryFrom};
 
-use crate::source_file::Error;
+use crate::source_file::{
+  SourceInfo,
+  Error,
+
+};
 
 use super::*;
 use super::scope::*;
@@ -46,6 +50,11 @@ is_err(&self)-> bool
 }
 
 
+pub fn
+make_err(e: &Expr, msg: String)-> Self
+{
+  Self::Err(e.get_source_info().to_error(msg))
+}
 
 
 pub fn
@@ -134,7 +143,10 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
   else if s ==  "u8"{txt.change_kind(AsmEvalKind::DerefU8 );}
   else if s == "u16"{txt.change_kind(AsmEvalKind::DerefU16);}
   else if s == "u32"{txt.change_kind(AsmEvalKind::DerefU32);}
-  else{panic!("evalute_access error: unknown field {}",s);}
+  else
+    {
+      return EvalResult::make_err(ins,format!("evalute_access error: unknown field {}",s));
+    }
 
 
   EvalResult::Value(txt)
@@ -142,7 +154,7 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
 
 
 pub fn
-evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_identifier(srcinf: &SourceInfo, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
     if let Some(scp) = scp_opt
     {
@@ -162,7 +174,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
 
               EvalResult::Value(txt)
             }
-          _=>{EvalResult::Err(Error::new(format!("evaluate_identifier error: {} is invalid symbol kind",s)))}
+          _=>{EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} is invalid local symbol kind",s)))}
             };
         }
     }
@@ -208,7 +220,7 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
 
           EvalResult::Value(txt)
         }
-      SymbolKind::Fn(_)=>
+      SymbolKind::Fn(_,_)=>
         {
           let  mut txt = AsmEvalText::new();
 
@@ -216,12 +228,12 @@ evaluate_identifier(s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalR
 
           EvalResult::Value(txt)
         }
-      _=>{EvalResult::Err(Error::new(format!("evaluate_identifier error: {} is invalid symbol kind",s)))}
+      _=>{EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} is invalid symbol kind",s)))}
         };
     }
 
 
-  EvalResult::Err(Error::new(format!("evaluate_identifier error: {} not found",s)))
+  EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} not found",s)))
 }
 
 
@@ -252,8 +264,8 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
   let  lcres = evaluate_const(le,tbl,scp_opt);
   let  rcres = evaluate_const(re,tbl,scp_opt);
 
-  let  mut lres = EvalResult::Err(Error::new(format!("")));
-  let  mut rres = EvalResult::Err(Error::new(format!("")));
+  let  mut lres = EvalResult::Const(0);
+  let  mut rres = EvalResult::Const(0);
 
     if let Ok(l) = lcres
     {
@@ -313,7 +325,7 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
     {
   ExprKind::Identifier(s)=>
     {
-      evaluate_identifier(s,tbl,scp_opt)
+      evaluate_identifier(e.get_source_info(),s,tbl,scp_opt)
     }
   ExprKind::Int(i)=>
     {

@@ -151,9 +151,9 @@ setup(freq: u32)-> Option<String>
 
           Some(buf)
         }
-      Err(msg)=>
+      Err(e)=>
         {
-          ERR_MSG = msg;
+          ERR_MSG = e.to_string();
 
           None
         }
