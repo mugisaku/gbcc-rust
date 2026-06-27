@@ -1,28 +1,8 @@
 
 
-pub mod tokenize;
-pub mod read_number;
-pub mod read_string;
-pub mod skip;
-pub mod is;
-
-
 use crate::source_file::{
   SourceFile,
   SourceInfo,
-  Cursor,
-
-};
-
-
-use crate::token::is::{
-  is_id_body,
-
-};
-
-
-use crate::token::read_number::{
-  ParsedNumber,
 
 };
 
@@ -72,12 +52,118 @@ print_string(s: &str)
 
 
 
+
+
+pub struct
+ParsedNumber
+{
+  radix: u32,
+
+   integer: String,
+  fraction: String,
+
+}
+
+
+impl
+ParsedNumber
+{
+
+
+pub fn
+new(radix: u32)-> Self
+{
+  Self{
+    radix,
+     integer: String::new(),
+    fraction: String::new(),
+  }
+}
+
+
+pub fn
+new_zero()-> Self
+{
+  Self{
+    radix: 10,
+     integer: "0".to_string(),
+    fraction: String::new(),
+  }
+}
+
+
+pub fn
+is_float(&self)-> bool
+{
+  self.fraction.len() != 0
+}
+
+
+pub fn
+push_to_integer(&mut self, c: char)
+{
+  self.integer.push(c);
+}
+
+
+pub fn
+push_to_fraction(&mut self, c: char)
+{
+  self.fraction.push(c);
+}
+
+
+pub fn
+try_to_u64(&self)-> Result<u64,std::num::ParseIntError>
+{
+    if self.integer.len() == 0{Ok(0)}
+  else{u64::from_str_radix(&self.integer,self.radix)}
+}
+
+
+pub fn
+try_to_f64(&self)-> Result<f64,std::num::ParseFloatError>
+{
+  use std::str::FromStr;
+
+  let  s = format!("{}.{}",&self.integer,&self.fraction);
+
+  f64::from_str(&s)
+}
+
+
+pub fn
+print(&self)
+{
+    match self.radix
+    {
+   2=>{print!("0b");}
+   8=>{print!("0o");}
+  10=>{}
+  16=>{print!("0x");}
+  _=>{panic!();}
+    }
+
+
+  print!("{}",&self.integer);
+
+  if self.fraction.len() != 0{print!(".{}",&self.fraction);}
+}
+
+
+}
+
+
+
+
 pub enum
 TokenKind
 {
+  Null,
   Space,
   Newline,
   Identifier(String),
+  WithApostrophe(String),
   String(String),
   Character(char),
   Number(ParsedNumber),
@@ -96,6 +182,10 @@ print(&self)
 {
     match self
     {
+  TokenKind::Null=>
+      {
+        print!("NULL");
+      },
   TokenKind::Space=>
       {
         print!("SPACE");
@@ -106,7 +196,11 @@ print(&self)
       },
   TokenKind::Identifier(s)=>
       {
-        print_string(s);
+        print!("{}",s);
+      },
+  TokenKind::WithApostrophe(s)=>
+      {
+        print!("\'{}",s);
       },
   TokenKind::String(s)=>
       {
@@ -298,50 +392,9 @@ is_others(&self, c: char)-> bool
 pub fn
 print(&self)
 {
-  print!("[X:{:06} Y:{:06}] ",1+self.source_info.get_x(),1+self.source_info.get_y());
+  self.source_info.print();
 
-    match &self.kind
-    {
-  TokenKind::Space=>
-      {
-        print!("Space");
-      },
-  TokenKind::Newline=>
-      {
-        print!("Newline");
-      },
-  TokenKind::Identifier(s)=>
-      {
-        print!("Identifier: {}",s);
-      },
-  TokenKind::String(s)=>
-      {
-        print!("String: \"");
-        print_string(s);
-        print!("\"");
-      },
-  TokenKind::Character(c)=>
-      {
-          match c
-          {
-        '\0'=> {print!("Null Character");},
-        '\n'=> {print!("Newline Character");},
-        '\t'=> {print!("Tab Character");},
-        '\r'=> {print!("Return Character");},
-        _   => {print!("Character: \'{}\'",c);},
-          }
-      },
-  TokenKind::Number(pn)=>
-      {
-        print!("Number: ");
-
-        pn.print();
-      },
-  TokenKind::Others(c)=>
-      {
-        print!("Others: {}",c);
-      },
-    }
+  self.kind.print();
 }
 
 
@@ -357,9 +410,11 @@ restore_token_string(toks: &[Token])
     {
         match &tok.kind
         {
-      TokenKind::Space=>         {print!(" ");},
-      TokenKind::Newline=>       {print!("\n");},
-      TokenKind::Identifier(s)=> {print_string(s);},
+      TokenKind::Null=>             {print!("");},
+      TokenKind::Space=>            {print!(" ");},
+      TokenKind::Newline=>          {print!("\n");},
+      TokenKind::Identifier(s)=>    {print!("{}",s);},
+      TokenKind::WithApostrophe(s)=>{print!("\'{}",s);},
       TokenKind::String(s)=>
             {
               print!("\"");
@@ -582,33 +637,6 @@ is_newline(toks: &[Token], pos: usize)-> bool
 
 
   false
-}
-
-
-
-
-pub fn
-read_identifier(src: &SourceFile, mut cur: Cursor)-> (String,Cursor)
-{
-  let  mut s = String::new();
-
-    while let Some(c) = src.get_character(cur)
-    {
-        if is_id_body(c)
-        {
-          s.push(c);
-
-          cur.advance();
-        }
-
-      else
-        {
-          break;
-        }
-    }
-
-
-  (s,cur)
 }
 
 

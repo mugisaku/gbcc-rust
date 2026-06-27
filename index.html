@@ -56,7 +56,7 @@
       </span>
     </span>
   <span>
-    <textarea id="text" cols="30" rows="12">
+    <textarea id="text" cols="48" rows="12">
 io input;
 io video;
 io time;
@@ -354,7 +354,7 @@ main()
   loop{halt;}
 }
     </textarea>
-    <textarea id="asm_text" cols="16" rows="12">
+    <textarea id="asm_text" cols="48" rows="12">
     </textarea>
   </span>
 
@@ -607,42 +607,47 @@ main()
 
         g_ready = setup(1024*1024*32);
 
-          if(g_ready)
+          if(!g_ready)
           {
-            g_asmtext.value = g_ready;
+            g_asmtext.value = get_error_message();
 
-            g_input_addr = get_io("input");
-            g_video_addr = get_io("video");
-            g_time_addr  = get_io("time");
-            g_sin_freq_addr = get_io("sin_freq");
-            g_sin_vol_addr  = get_io("sin_vol");
-            g_squ_freq_addr = get_io("squ_freq");
-            g_squ_vol_addr  = get_io("squ_vol");
-            g_saw_freq_addr = get_io("saw_freq");
-            g_saw_vol_addr  = get_io("saw_vol");
-            g_tri_freq_addr = get_io("tri_freq");
-            g_tri_vol_addr  = get_io("tri_vol");
-            g_noi_vol_addr  = get_io("noi_vol");
-            g_report_addr   = get_io("report");
+            return;
+          }
 
-            g_up_key    = get_const("UP_KEY");
-            g_left_key  = get_const("LEFT_KEY");
-            g_right_key = get_const("RIGHT_KEY");
-            g_down_key  = get_const("DOWN_KEY");
-            g_z_key     = get_const("Z_KEY");
-            g_x_key     = get_const("X_KEY");
-            g_c_key     = get_const("C_KEY");
-            g_v_key     = get_const("V_KEY");
 
-            g_cv.width  = get_const("VIDEO_W");
-            g_cv.height = get_const("VIDEO_H");
+        g_asmtext.value = g_ready;
 
-            g_imgdat = g_cvctx.createImageData(g_cv.width,g_cv.height);
+        g_input_addr = get_io("input");
+        g_video_addr = get_io("video");
+        g_time_addr  = get_io("time");
+        g_sin_freq_addr = get_io("sin_freq");
+        g_sin_vol_addr  = get_io("sin_vol");
+        g_squ_freq_addr = get_io("squ_freq");
+        g_squ_vol_addr  = get_io("squ_vol");
+        g_saw_freq_addr = get_io("saw_freq");
+        g_saw_vol_addr  = get_io("saw_vol");
+        g_tri_freq_addr = get_io("tri_freq");
+        g_tri_vol_addr  = get_io("tri_vol");
+        g_noi_vol_addr  = get_io("noi_vol");
+        g_report_addr   = get_io("report");
 
-              for(let  i = 0|0;  i < (g_imgdat.width*g_imgdat.height);  ++i)
-              {
-                g_imgdat.data[(4*i)+3] = 255;
-              }
+        g_up_key    = get_const("UP_KEY");
+        g_left_key  = get_const("LEFT_KEY");
+        g_right_key = get_const("RIGHT_KEY");
+        g_down_key  = get_const("DOWN_KEY");
+        g_z_key     = get_const("Z_KEY");
+        g_x_key     = get_const("X_KEY");
+        g_c_key     = get_const("C_KEY");
+        g_v_key     = get_const("V_KEY");
+
+        g_cv.width  = get_const("VIDEO_W");
+        g_cv.height = get_const("VIDEO_H");
+
+        g_imgdat = g_cvctx.createImageData(g_cv.width,g_cv.height);
+
+          for(let  i = 0|0;  i < (g_imgdat.width*g_imgdat.height);  ++i)
+          {
+            g_imgdat.data[(4*i)+3] = 255;
           }
       }
 

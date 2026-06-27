@@ -148,7 +148,7 @@ new(id: usize)-> Self
 
 
 fn
-process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)
+process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
 {
   let  mut blh = lid.make_br_label_holder();
 
@@ -156,21 +156,28 @@ process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Optio
 
     for (cond,blk) in ifstmt.get_cond_block_list()
     {
-      let  mut txt = evaluate(cond,tbl,Some(scp)).to_text();
+        match evaluate(cond,tbl,Some(scp)).try_to_text()
+        {
+      Ok(mut txt)=>
+        {
+          output.push_label(blh.get_label());
 
-      output.push_label(blh.get_label());
+          blh.increment();
 
-      blh.increment();
+          txt.push_load();
 
-      txt.push_load();
+          output.push_eval_text(txt);
 
-      output.push_eval_text(txt);
+          output.push_brz(blh.get_label());
 
-      output.push_brz(blh.get_label());
-
-      process_block(blk,tbl,lid,clh_opt,scp,output);
-
-      output.push_jmp(&end_label);
+            match process_block(blk,tbl,lid,clh_opt,scp,output)
+            {
+          Ok(())=>{output.push_jmp(&end_label);}
+          Err(e)=>{return Err(e);}
+            }
+        }
+    Err(e)=>{return Err(e);}
+        }
     }
 
 
@@ -178,16 +185,22 @@ process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Optio
 
     if let Some(blk) = ifstmt.get_else_block_opt()
     {
-      process_block(blk,tbl,lid,clh_opt,scp,output);
+        match process_block(blk,tbl,lid,clh_opt,scp,output)
+        {
+      Ok(())=>{}
+      Err(e)=>{return Err(e);}
+        }
     }
 
 
   output.push_label(&end_label);
+
+  Ok(())
 }
 
 
 fn
-process_for(forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)
+process_for(srcinf: &SourceInfo, forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
 {
   let  clh = lid.make_ctrl_label_holder();
 
@@ -198,15 +211,24 @@ process_for(forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Op
 
   let  mut count_max_off = 0usize;
 
-  let  mut count_max_txt = evaluate(forstmt.get_expr(),tbl,Some(scp)).to_text();
+    match evaluate(forstmt.get_expr(),tbl,Some(scp)).try_to_text()
+    {
+  Ok(mut count_max_txt)=>
+    {
+      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>");
 
-  count_max_off = new_scp.add_var("<FOR_COUNT_MAX>");
+      let  mut var_txt = AsmEvalText::new();
 
-  let  mut var_txt = AsmEvalText::new();
+      var_txt.push_local_var(count_max_off);
 
-  var_txt.push_local_var(count_max_off);
-
-  output.push_assign(var_txt,count_max_txt,"=");
+        match output.try_push_assign(srcinf,var_txt,count_max_txt,"=")
+        {
+      Ok(())=>{}
+      Err(e)=>{return Err(e);}
+        }
+    }
+  Err(e)=>{return Err(e);}
+    }
 
 
   let  count_cur_off = new_scp.add_var(forstmt.get_var_name());
@@ -249,91 +271,120 @@ process_for(forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Op
 
   output.push_brz(&clh.on_break);
 
-  process_block(forstmt.get_block(),tbl,lid,Some(&clh),&new_scp,output);
-
-  output.push_jmp(&clh.on_continue);
-
-  output.push_label(&clh.on_break);
-}
-
-
-fn
-process_block(blk: &Block, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)
-{
-  let  mut new_scp = Scope::new(scp);
-
-    for stmt in blk.get_stmt_list()
+    match process_block(forstmt.get_block(),tbl,lid,Some(&clh),&new_scp,output)
     {
-      process_stmt(stmt,tbl,lid,clh_opt,&mut new_scp,output);
+  Ok(())=>
+    {
+      output.push_jmp(&clh.on_continue);
+
+      output.push_label(&clh.on_break);
+
+      Ok(())
+    }
+  Err(e)=>{Err(e)}
     }
 }
 
 
 fn
-process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)
+process_block(blk: &Block, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
 {
+  let  mut new_scp = Scope::new(scp);
+
+    for stmt in blk.get_stmt_list()
+    {
+        match process_stmt(stmt,tbl,lid,clh_opt,&mut new_scp,output)
+        {
+      Ok(())=>{}
+      Err(e)=>{return Err(e);}
+        }
+    }
+
+
+  Ok(())
+}
+
+
+fn
+process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)-> Result<(),Error>
+{
+  let  srcinf = stmt.get_source_info();
+
     match stmt.get_kind()
     {
-  StmtKind::Empty=>{}
-  StmtKind::Block(blk)=>{process_block(blk,tbl,lid,clh_opt,scp,output);}
+  StmtKind::Empty=>{Ok(())}
+  StmtKind::Block(blk)=>{process_block(blk,tbl,lid,clh_opt,scp,output)}
   StmtKind::Decl(decl)=>
     {
         match decl.get_kind()
         {
       DeclKind::Const(e)=>
         {
-          let  cres = evaluate_const(e,tbl,Some(scp));
-
-            if let Ok(i) = cres
+            match evaluate_const(e,tbl,Some(scp))
+            {
+          Ok(i)=>
             {
               scp.add_const_int(decl.get_name(),i);
-            }
 
-          else
-            {panic!();}
+              Ok(())
+            }
+          Err(())=>{Err(srcinf.to_error(format!("constの算出に失敗")))}
+            }
         }
       DeclKind::Var(e)=>
         {
-          let  r_txt = evaluate(e,tbl,Some(scp)).to_text();
+            match evaluate(e,tbl,Some(scp)).try_to_text()
+            {
+          Ok(r_txt)=>
+            {
+              let  off = scp.add_var(decl.get_name());
 
-          let  off = scp.add_var(decl.get_name());
+              let  mut l_txt = AsmEvalText::new();
 
-          let  mut l_txt = AsmEvalText::new();
+              l_txt.push_local_var(off);
 
-          l_txt.push_local_var(off);
-
-          output.push_assign(l_txt,r_txt,"=");
+              output.try_push_assign(srcinf,l_txt,r_txt,"=")
+            }
+          Err(e)=>{Err(e)}
+            }
         }
-      _=>{panic!();}
+      _=>{Err(srcinf.to_error(format!("invalid decl")))}
         }
     }
   StmtKind::Expr(e)=>
     {
-      let  res = evaluate(e,tbl,Some(scp));
-
-        match res
+        match evaluate(e,tbl,Some(scp)).try_to_text()
         {
-      EvalResult::Value(txt)=>
+      Ok(txt)=>
         {
           output.push_eval_text(txt);
 
           output.push_opcode(Opcode::Pop);
+
+          Ok(())
         }
-      _=>{}
+      Err(e)=>{Err(e)}
         }
     }
-  StmtKind::If(i)=>{process_if(i,tbl,lid,clh_opt,scp,output);}
+  StmtKind::If(i)=>{process_if(i,tbl,lid,clh_opt,scp,output)}
   StmtKind::Loop(blk)=>
     {
       let  clh = lid.make_ctrl_label_holder();
 
       output.push_label(&clh.on_continue);
 
-      process_block(blk,tbl,lid,Some(&clh),scp,output);
+        match process_block(blk,tbl,lid,Some(&clh),scp,output)
+        {
+      Ok(())=>
+        {
+          output.push_jmp(&clh.on_continue);
 
-      output.push_jmp(&clh.on_continue);
+          output.push_label(&clh.on_break);
 
-      output.push_label(&clh.on_break);
+          Ok(())
+        }
+      Err(e)=>{Err(e)}
+        }
     }
   StmtKind::While(e,blk)=>
     {
@@ -342,30 +393,47 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       output.push_label(&clh.on_continue);
 
 
-      let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
+        match evaluate(e,tbl,Some(scp)).try_to_text()
+        {
+      Ok(mut txt)=>
+        {
+          txt.push_load();
 
-      txt.push_load();
+          output.push_eval_text(txt);
 
-      output.push_eval_text(txt);
+          output.push_brz(&clh.on_break);
 
-      output.push_brz(&clh.on_break);
+            match process_block(blk,tbl,lid,Some(&clh),scp,output)
+            {
+          Ok(())=>
+            {
+              output.push_jmp(&clh.on_continue);
 
-      process_block(blk,tbl,lid,Some(&clh),scp,output);
+              output.push_label(&clh.on_break);
 
-      output.push_jmp(&clh.on_continue);
-
-      output.push_label(&clh.on_break);
+              Ok(())
+            }
+          Err(e)=>{Err(e)}
+            }
+        }
+      Err(e)=>{Err(e)}
+        }
     }
-  StmtKind::For(f)=>{process_for(f,tbl,lid,clh_opt,scp,output);}
+  StmtKind::For(f)=>{process_for(srcinf,f,tbl,lid,clh_opt,scp,output)}
   StmtKind::Return(e_opt)=>
     {
         if let Some(e) = e_opt
         {
-          let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
+            match evaluate(e,tbl,Some(scp)).try_to_text()
+            {
+          Ok(mut txt)=>
+            {
+              txt.push_load();
 
-          txt.push_load();
-
-          output.push_eval_text(txt);
+              output.push_eval_text(txt);
+            }
+          Err(e)=>{return Err(e);}
+            }
         }
 
       else
@@ -375,35 +443,72 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
 
       output.push_opcode(Opcode::Ret);
+
+      Ok(())
     }
   StmtKind::Assign(l,r,op)=>
     {
-      let  l_asm = evaluate(l,tbl,Some(scp)).to_text();
-      let  r_asm = evaluate(r,tbl,Some(scp)).to_text();
-
-      output.push_assign(l_asm,r_asm,op);
+        match evaluate(l,tbl,Some(scp)).try_to_text()
+        {
+      Ok(l_asm)=>
+        {
+            match evaluate(r,tbl,Some(scp)).try_to_text()
+            {
+          Ok(r_asm)=>{output.try_push_assign(srcinf,l_asm,r_asm,op)}
+          Err(e)=>{Err(e)}
+            }
+        }
+      Err(e)=>{Err(e)}
+        }
     }
   StmtKind::Break=>
     {
-      output.push_jmp(&clh_opt.unwrap().on_break);
+        match clh_opt
+        {
+      Some(clh)=>
+        {
+          output.push_jmp(&clh.on_break);
+
+          Ok(())
+        }
+      None=>{Err(srcinf.to_error(format!("無効なbreak")))}
+        }
     }
   StmtKind::Continue=>
     {
-      output.push_jmp(&clh_opt.unwrap().on_continue);
+        match clh_opt
+        {
+      Some(clh)=>
+        {
+          output.push_jmp(&clh.on_continue);
+
+          Ok(())
+        }
+      None=>{Err(srcinf.to_error(format!("無効なcontinue")))}
+        }
     }
   StmtKind::Halt=>
     {
       output.push_opcode(Opcode::Hlt);
+
+      Ok(())
     }
   StmtKind::Print(e)=>
     {
-      let  mut txt = evaluate(e,tbl,Some(scp)).to_text();
+        match evaluate(e,tbl,Some(scp)).try_to_text()
+        {
+      Ok(mut txt)=>
+        {
+          txt.push_load();
 
-      txt.push_load();
+          txt.push_opcode(Opcode::Pri);
 
-      txt.push_opcode(Opcode::Pri);
+          output.push_eval_text(txt);
 
-      output.push_eval_text(txt);
+          Ok(())
+        }
+      Err(e)=>{Err(e)}
+        }
     }
     }
 }
@@ -419,12 +524,17 @@ assemble(srcinf: &SourceInfo, decl: &FnDecl, tbl: &SymbolTable)-> Result<AsmText
 
   let  scp = Scope::new_root(decl,tbl);
 
-  process_block(decl.get_block(),tbl,&mut lid,None,&scp,&mut text);
+    match process_block(decl.get_block(),tbl,&mut lid,None,&scp,&mut text)
+    {
+  Ok(())=>
+    {
+      text.set_xs(scp.get_offset_max());
+      text.terminate();
 
-  text.set_xs(scp.get_offset_max());
-  text.terminate();
-
-  Ok(text)
+      Ok(text)
+    }
+  Err(e)=>{Err(e)}
+    }
 }
 
 

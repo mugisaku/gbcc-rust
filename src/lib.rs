@@ -107,12 +107,16 @@ compile(s: &str)-> bool
             }
           Err(e)=>
             {
+              ERR_MSG = e.to_string();
+
               false
             }
             }
         }
       Err(e)=>
         {
+          ERR_MSG = e.to_string();
+
           false
         }
         }

@@ -1,8 +1,12 @@
 
 
+use std::rc::Rc;
+
 use crate::source_file::{
   SourceFile,
   SourceInfo,
+  SourceReader,
+  Error,
 
 };
 
@@ -16,10 +20,6 @@ use crate::token::{
   get_identifier,
   get_string,
   get_others,
-};
-
-use crate::token::tokenize::{
-  tokenize,
 };
 
 use super::dictionary::{
@@ -71,18 +71,6 @@ read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: cha
       Err(s)=>{Err(s)}
         }
     }
-  '\''=>
-    {
-        if let Some(s) = get_identifier(toks,*pos)
-        {
-          advance(pos);
-
-          Ok(Expression::Keyword(s.clone()))
-        }
-
-      else
-        {Err(format!("keyword is missing"))}
-    }
   '.'=>
     {
         if let Some(s) = get_identifier(toks,*pos)
@@ -95,7 +83,7 @@ read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: cha
       else
         {Err(format!("literal keyword is missing"))}
     }
-    _=>{Err(format!("unknown others element"))}
+  _=>{Err(format!("unknown others element"))}
     }
 }
 
@@ -112,6 +100,14 @@ read_operand(toks: &Vec<Token>, pos: &mut usize)-> Result<Expression,String>
           advance(pos);
 
           let  o = Expression::Identifier(s.clone());
+
+          Ok(o)
+        }
+      TokenKind::WithApostrophe(s)=>
+        {
+          advance(pos);
+
+          let  o = Expression::Keyword(s.clone());
 
           Ok(o)
         }
@@ -247,11 +243,13 @@ read_definition(toks: &Vec<Token>, pos: &mut usize)-> Result<Option<Definition>,
 
 
 pub fn
-read_dictionary(src: &SourceFile)-> Result<Dictionary,String>
+read_dictionary(file: &Rc<SourceFile>)-> Result<Dictionary,Error>
 {
   let  mut dic = Dictionary::new();
 
-    match tokenize(src)
+  let  mut r = SourceReader::new(file);
+
+    match r.read_token_string()
     {
   Ok(toks)=> 
     {
@@ -271,15 +269,13 @@ read_dictionary(src: &SourceFile)-> Result<Dictionary,String>
               None=>{return Ok(dic);}
                 }
             }
-          Err(s)=>{return Err(s);}
+          Err(s)=>{return Err(Error::new(s));}
             }
         }
     }
   Err(e)=>
     {
-      let  s = e.to_string();
-
-      Err(format!("辞書字句解析エラー: {}",&s))
+      Err(Error::new(format!("辞書字句解析エラー")).wrap(e))
     }
     }
 }

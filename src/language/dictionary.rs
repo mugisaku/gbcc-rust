@@ -136,7 +136,9 @@ get_dictionary()-> &'static Dictionary
     {
         if let None = DIC_OPT
         {
-            if let Ok(mut tmp_dic) = Dictionary::make_from_string(&DIC_S)
+            match Dictionary::make_from_string(&DIC_S)
+            {
+          Ok(mut tmp_dic)=>
             {
                 if tmp_dic.test().is_ok()
                 {
@@ -145,6 +147,8 @@ get_dictionary()-> &'static Dictionary
 
               else
                 {panic!();}
+            }
+          Err(e)=>{e.print();}
             }
         }
 

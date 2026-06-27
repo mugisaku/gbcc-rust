@@ -12,8 +12,7 @@ use crate::token::{
   get_others,
   read_string_of_others,
   strip_spaces,
-  tokenize::tokenize,
-  tokenize::tokenize_from_string,
+
 };
 
 
@@ -33,32 +32,22 @@ use crate::node::{
 };
 
 use crate::source_file::{
+  SourceFile,
   SourceInfo,
+  SourceReader,
   Error,
 
 };
 
 
 enum
-ParseSyntaxResult
+ParseResult
 {
   Some(Vec<Value>),
   None,
   Err(Error),
 
 }
-
-
-use ParseSyntaxResult::Some;
-use ParseSyntaxResult::None;
-use ParseSyntaxResult::Err;
-
-use std::result::Result       as StdResult;
-use StdResult::Ok             as     StdOk;
-use StdResult::Err            as    StdErr;
-
-use std::option::Option::Some as StdSome;
-use std::option::Option::None as StdNone;
 
 
 struct
@@ -100,37 +89,37 @@ print_indent(&self)
 
 
 fn
-read_repetition(&mut self, e: &Expression)-> ParseSyntaxResult
+read_repetition(&mut self, e: &Expression)-> ParseResult
 {
     match self.read_by_expression(e)
     {
-  Some(mut first_vals)=>
+  ParseResult::Some(mut first_vals)=>
     {
         loop
         {
             match self.read_by_expression(e)
             {
-          Some(mut vals)=>{first_vals.append(&mut vals);}
-          None=>{break;}
-          Err(e)=>{return Err(e);}
+          ParseResult::Some(mut vals)=>{first_vals.append(&mut vals);}
+          ParseResult::None=>{break;}
+          ParseResult::Err(e)=>{return ParseResult::Err(e);}
             }
         }
 
 
-      Some(first_vals)
+      ParseResult::Some(first_vals)
     }
-  None=>{None}
-  Err(e)=>{Err(e)}
+  ParseResult::None=>{ParseResult::None}
+  ParseResult::Err(e)=>{ParseResult::Err(e)}
     }
 }
 
 
 fn
-read_keyword(&mut self, kw_s: &str)-> ParseSyntaxResult
+read_keyword(&mut self, kw_s: &str)-> ParseResult
 {
     match get_token(&self.token_string,self.position)
     {
-  StdSome(tok)=>
+  Some(tok)=>
     {
         match tok.get_kind()
         {
@@ -143,26 +132,26 @@ read_keyword(&mut self, kw_s: &str)-> ParseSyntaxResult
 
               self.position += 1;
 
-              Some(vec![Value::new(info,kind)])
+              ParseResult::Some(vec![Value::new(info,kind)])
             }
 
           else
-            {None}
+            {ParseResult::None}
         }
-      _=>{None}
+      _=>{ParseResult::None}
         }
     }
-  StdNone=>{None}
+  None=>{ParseResult::None}
     }
 }
 
 
 fn
-read_number_literal(&mut self)-> ParseSyntaxResult
+read_number_literal(&mut self)-> ParseResult
 {
     match get_number(&self.token_string,self.position)
     {
-  StdSome(pn)=>
+  Some(pn)=>
     {
       let  info = get_source_info(&self.token_string,self.position).unwrap().clone();
 
@@ -172,13 +161,13 @@ read_number_literal(&mut self)-> ParseSyntaxResult
         {
             match pn.try_to_f64()
             {
-          StdOk(f)=>
+          Ok(f)=>
             {
               let  kind = ValueKind::Float(f);
 
-              Some(vec![Value::new(info,kind)])
+              ParseResult::Some(vec![Value::new(info,kind)])
             }
-          StdErr(_)=>{Err(info.to_error(format!("整数が不正")))}
+          Err(_)=>{ParseResult::Err(info.to_error(format!("整数が不正")))}
             }
         }
 
@@ -186,23 +175,23 @@ read_number_literal(&mut self)-> ParseSyntaxResult
         {
             match pn.try_to_u64()
             {
-          StdOk(u)=>
+          Ok(u)=>
             {
               let  kind = ValueKind::Uint(u);
 
-              Some(vec![Value::new(info,kind)])
+              ParseResult::Some(vec![Value::new(info,kind)])
             }
-          StdErr(_)=>{Err(info.to_error(format!("浮動小数点数が不正")))}
+          Err(_)=>{ParseResult::Err(info.to_error(format!("浮動小数点数が不正")))}
             }
         }
     }
-  StdNone=>{None}
+  None=>{ParseResult::None}
     }
 }
 
 
 fn
-read_by_string(&mut self, s: &str)-> ParseSyntaxResult
+read_by_string(&mut self, s: &str)-> ParseResult
 {
   let  old_pos = self.position;
 
@@ -212,26 +201,26 @@ read_by_string(&mut self, s: &str)-> ParseSyntaxResult
     {
       let  kind = ValueKind::SemiString(s.to_string());
 
-      Some(vec![Value::new(info_opt.unwrap(),kind)])
+      ParseResult::Some(vec![Value::new(info_opt.unwrap(),kind)])
     }
 
   else
     {
       self.position = old_pos;
 
-      None
+      ParseResult::None
     }
 }
 
 
 fn
-read_by_identifier(&mut self, s: &str)-> ParseSyntaxResult
+read_by_identifier(&mut self, s: &str)-> ParseResult
 {
-    if let StdSome(def) = self.dictionary.find(s)
+    if let Some(def) = self.dictionary.find(s)
     {
         if self.depth >= 800
         {
-          return Err(Error::new(format!("read_by_identifier: depth limit is over")));
+          return ParseResult::Err(Error::new(format!("read_by_identifier: depth limit is over")));
         }
 
 
@@ -239,113 +228,113 @@ read_by_identifier(&mut self, s: &str)-> ParseSyntaxResult
     }
 
   else
-    {Err(Error::new(format!("read_by_identifier: {}という定義はない",s)))}
+    {ParseResult::Err(Error::new(format!("read_by_identifier: {}という定義はない",s)))}
 }
 
 
 fn
-read_and(&mut self, l: &Expression, r: &Expression)-> ParseSyntaxResult
+read_and(&mut self, l: &Expression, r: &Expression)-> ParseResult
 {
   let  old_pos = self.position;
 
     match self.read_by_expression(l)
     {
-  Some(mut l_vals)=>
+  ParseResult::Some(mut l_vals)=>
     {
         match self.read_by_expression(r)
         {
-      Some(mut r_vals)=>
+      ParseResult::Some(mut r_vals)=>
         {
           l_vals.append(&mut r_vals);
 
-          Some(l_vals)
+          ParseResult::Some(l_vals)
         }
-      None=>
+      ParseResult::None=>
         {
           self.position = old_pos;
 
-          None
+          ParseResult::None
         }
-      Err(e)=>{Err(e)}
+      ParseResult::Err(e)=>{ParseResult::Err(e)}
         }
     }
-  None=>{None}
-  Err(e)=>{Err(e)}
+  ParseResult::None=>{ParseResult::None}
+  ParseResult::Err(e)=>{ParseResult::Err(e)}
     }
 }
 
 
 fn
-read_or(&mut self, l: &Expression, r: &Expression)-> ParseSyntaxResult
+read_or(&mut self, l: &Expression, r: &Expression)-> ParseResult
 {
   let  old_pos = self.position;
 
     match self.read_by_expression(l)
     {
-  Some(l_vals)=>{Some(l_vals)}
-  None=>
+  ParseResult::Some(l_vals)=>{ParseResult::Some(l_vals)}
+  ParseResult::None=>
     {
       self.position = old_pos;
 
         match self.read_by_expression(r)
         {
-      Some(r_vals)=>{Some(r_vals)}
-      None=>
+      ParseResult::Some(r_vals)=>{ParseResult::Some(r_vals)}
+      ParseResult::None=>
         {
           self.position = old_pos;
 
-          None
+          ParseResult::None
         }
-      Err(e)=>{Err(e)}
+      ParseResult::Err(e)=>{ParseResult::Err(e)}
         }
     }
-  Err(e)=>{Err(e)}
+  ParseResult::Err(e)=>{ParseResult::Err(e)}
     }
 }
 
 
 fn
-read_arrow(&mut self, l: &Expression, r: &Expression)-> ParseSyntaxResult
+read_arrow(&mut self, l: &Expression, r: &Expression)-> ParseResult
 {
   let  old_pos = self.position;
 
     match self.read_by_expression(l)
     {
-  Some(mut l_vals)=>
+  ParseResult::Some(mut l_vals)=>
     {
         match self.read_by_expression(r)
         {
-      Some(mut r_vals)=>
+      ParseResult::Some(mut r_vals)=>
         {
           l_vals.append(&mut r_vals);
 
-          Some(l_vals)
+          ParseResult::Some(l_vals)
         }
-      None=>{Err(Error::new(format!("解析失敗を確定")))}
-      Err(e)=>{Err(e)}
+      ParseResult::None=>{ParseResult::Err(Error::new(format!("解析失敗を確定")))}
+      ParseResult::Err(e)=>{ParseResult::Err(e)}
         }
     }
-  None=>{None}
-  Err(e)=>{Err(e)}
+  ParseResult::None=>{ParseResult::None}
+  ParseResult::Err(e)=>{ParseResult::Err(e)}
     }
 }
 
 
 fn
-read_by_binary_operation(&mut self, l: &Expression, r: &Expression, op: &str)-> ParseSyntaxResult
+read_by_binary_operation(&mut self, l: &Expression, r: &Expression, op: &str)-> ParseResult
 {
     match op
     {
   (s) if s == "&" =>{self.read_and(  l,r)}
   (s) if s == "|" =>{self.read_or(   l,r)}
   (s) if s == "->"=>{self.read_arrow(l,r)}
-  _=>{Err(Error::new(format!("不明な演算子 {}",op)))}
+  _=>{ParseResult::Err(Error::new(format!("不明な演算子 {}",op)))}
     }
 }
 
 
 pub fn
-read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
+read_by_expression(&mut self, e: &Expression)-> ParseResult
 {
     match e
     {
@@ -354,9 +343,9 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
     {
         match self.read_by_expression(op_e)
         {
-      Some(vals)=>{Some(vals)}
-      None      =>{Some(vec![])}
-      Err(e)    =>{Err(e)}
+      ParseResult::Some(vals)=>{ParseResult::Some(vals)}
+      ParseResult::None      =>{ParseResult::Some(vec![])}
+      ParseResult::Err(e)    =>{ParseResult::Err(e)}
         }
     }
   Expression::Repetition(rep_e)=>{self.read_repetition(rep_e)}
@@ -367,7 +356,7 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
     {
         match get_token(&self.token_string,self.position)
         {
-      StdSome(tok)=>
+      Some(tok)=>
         {
             if let TokenKind::Identifier(s) = tok.get_kind()
             {
@@ -376,13 +365,13 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
 
               self.advance();
 
-              Some(vec![Value::new(info,kind)])
+              ParseResult::Some(vec![Value::new(info,kind)])
             }
 
           else
-            {None}
+            {ParseResult::None}
         }
-      StdNone=>{None}
+      None=>{ParseResult::None}
         }
     }
   Expression::NumberLiteral=>{self.read_number_literal()}
@@ -390,7 +379,7 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
     {
         match get_token(&self.token_string,self.position)
         {
-      StdSome(tok)=>
+      Some(tok)=>
         {
             if let TokenKind::Character(c) = tok.get_kind()
             {
@@ -399,20 +388,20 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
 
               self.advance();
 
-              Some(vec![Value::new(info,kind)])
+              ParseResult::Some(vec![Value::new(info,kind)])
             }
 
           else
-            {None}
+            {ParseResult::None}
         }
-      StdNone=>{None}
+      None=>{ParseResult::None}
         }
     }
   Expression::StringLiteral=>
     {
         match get_token(&self.token_string,self.position)
         {
-      StdSome(tok)=>
+      Some(tok)=>
         {
             if let TokenKind::String(s) = tok.get_kind()
             {
@@ -421,13 +410,13 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
 
               self.advance();
 
-              Some(vec![Value::new(info,kind)])
+              ParseResult::Some(vec![Value::new(info,kind)])
             }
 
           else
-            {None}
+            {ParseResult::None}
         }
-      StdNone=>{None}
+      None=>{ParseResult::None}
         }
     }
   Expression::BinaryOperation(l,r,op)=>{self.read_by_binary_operation(&*l,&*r,op)}
@@ -436,9 +425,9 @@ read_by_expression(&mut self, e: &Expression)-> ParseSyntaxResult
 
 
 fn
-read_by_definition(&mut self, def: &Definition)-> ParseSyntaxResult
+read_by_definition(&mut self, def: &Definition)-> ParseResult
 {
-    if let StdSome(tok) = get_token(&self.token_string,self.position)
+    if let Some(tok) = get_token(&self.token_string,self.position)
     {
       let  old_pos = self.position;
 
@@ -446,7 +435,7 @@ read_by_definition(&mut self, def: &Definition)-> ParseSyntaxResult
 
         match self.read_by_expression(def.get_expression())
         {
-      Some(vals)=>
+      ParseResult::Some(vals)=>
         {
           self.depth -= 1;
 
@@ -458,22 +447,22 @@ read_by_definition(&mut self, def: &Definition)-> ParseSyntaxResult
 
           let  kind = ValueKind::Node(Box::new(nd));
 
-          Some(vec![Value::new(info,kind)])
+          ParseResult::Some(vec![Value::new(info,kind)])
         }
-      None=>
+      ParseResult::None=>
         {
           self.depth -= 1;
 
           self.position = old_pos;
 
-          None
+          ParseResult::None
         }
-      Err(e)=>{Err(e)}
+      ParseResult::Err(e)=>{ParseResult::Err(e)}
         }
     }
 
   else
-    {None}
+    {ParseResult::None}
 }
 
 
@@ -483,7 +472,7 @@ read_by_definition(&mut self, def: &Definition)-> ParseSyntaxResult
 
 
 pub fn
-parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResult<Node,Error>
+parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<Node,Error>
 {
   let  mut nd = Node::new(SourceInfo::new(),"");
 
@@ -501,7 +490,7 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResu
     {
         match st.read_by_identifier(main_def_name)
         {
-      Some(vals)=>
+      ParseResult::Some(vals)=>
         {
             if st.position == prev_pos
             {
@@ -511,8 +500,8 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResu
 
           nd.add_value_list(vals);
         }
-      None=>{break;}
-      Err(e)=>{return StdErr(e);}
+      ParseResult::None=>{break;}
+      ParseResult::Err(e)=>{return Err(e);}
         }
 
 
@@ -522,7 +511,7 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResu
 
     if st.position >= toks.len()
     {
-      StdOk(nd)
+      Ok(nd)
     }
 
   else
@@ -533,28 +522,32 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> StdResu
 
       buf.push_str("解析途中で停止");
 
-      StdErr(tok.get_source_info().to_error(buf))
+      Err(tok.get_source_info().to_error(buf))
     }
 }
 
 
 pub fn
-parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str)-> StdResult<Node,Error>
+parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str)-> Result<Node,Error>
 {
-    match tokenize_from_string(s)
+  let  file = std::rc::Rc::new(SourceFile::from_string(s));
+
+  let  mut r = SourceReader::new(&file);
+
+    match r.read_token_string()
     {
-  StdOk(toks)=>
+  Ok(toks)=>
     {
 //crate::token::print_token_string(&toks);
       let  stripped = strip_spaces(toks);
 
       parse(&stripped,dic,main_def_name)
     }
-  StdErr(e)=>
+  Err(e)=>
     {
       let  message = format!("字句解析エラー: {}",&e.to_string());
 
-      StdErr(Error::new(message))
+      Err(Error::new(message))
     }
     }
 }

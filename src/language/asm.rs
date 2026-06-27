@@ -1,6 +1,11 @@
 
 
 use super::*;
+use crate::source_file::{
+  SourceInfo,
+  Error,
+
+};
 
 
 #[derive(Clone)]
@@ -895,7 +900,7 @@ push_brnz(&mut self, s: &str)
 
 
 pub fn
-push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
+try_push_assign(&mut self, srcinf: &SourceInfo, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)-> Result<(),Error>
 {
   let  k = l.kind.clone();
 
@@ -936,14 +941,7 @@ push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
   AsmEvalKind::DerefU32=>{Opcode::St_i32}
   _=>
     {
-        for ln in &l.lines
-        {
-          ln.print();
-          println!("");
-        }
-
-
-      panic!("push_assign error: assign to non deref");
+      return Err(srcinf.to_error(format!("push_assign error: assign to non deref")));
     }
     };
 
@@ -951,6 +949,8 @@ push_assign(&mut self, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)
   self.push_eval_text(l);
 
   self.push_opcode(op);
+
+  Ok(())
 }
 
 

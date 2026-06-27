@@ -1,6 +1,8 @@
 
 
+use std::rc::Rc;
 use crate::token::print_string;
+use crate::source_file::Error;
 
 
 #[derive(Clone)]
@@ -211,11 +213,11 @@ new()-> Self
 
 
 pub fn
-make_from_string(s: &str)-> Result<Self,String>
+make_from_string(s: &str)-> Result<Self,Error>
 {
-  let  src = crate::source_file::SourceFile::from_string(s);
+  let  file = Rc::new(crate::source_file::SourceFile::from_string(s));
 
-  super::read_dictionary::read_dictionary(&src)
+  super::read_dictionary::read_dictionary(&file)
 }
 
 

@@ -4,56 +4,9 @@ use std::rc::Rc;
 use std::fs::File;
 use std::io::prelude::*;
 
-
-#[derive(Clone,Copy)]
-pub struct
-Cursor
-{
-  x: usize,
-  y: usize,
-
-}
-
-
-impl
-Cursor
-{
-
-
-pub fn
-new()-> Cursor
-{
-  Cursor{ x:0, y:0}
-}
-
-
-pub fn  get_x(&self)-> usize{self.x}
-pub fn  get_y(&self)-> usize{self.y}
-
-
-pub fn
-advance(&mut self)
-{
-  self.x += 1;
-}
-
-
-pub fn
-newline(&mut self)
-{
-  self.x  = 0;
-  self.y += 1;
-}
-
-
-pub fn
-print(&self)
-{
-  print!("[X:{:04}, Y:{:04}]",1+self.x,1+self.y);
-}
-
-
-}
+mod read_string;
+mod read_number;
+mod read_token;
 
 
 
@@ -74,9 +27,16 @@ SourceFile
 
 
 pub fn
-from_string(s: &str)-> SourceFile
+new()-> Self
 {
-  let  mut srcf = SourceFile{ path: String::new(), lines: Vec::new()};
+  Self{path: String::new(), lines: Vec::new()}
+}
+
+
+pub fn
+from_string(s: &str)-> Self
+{
+  let  mut srcf = Self::new();
 
   let  mut buf: Vec<char> = Vec::new();
 
@@ -104,7 +64,7 @@ from_string(s: &str)-> SourceFile
 
 
 pub fn
-from_file(path: &str)-> Result<SourceFile,()>
+from_file(path: &str)-> Result<Self,()>
 {
     if let Ok(mut f) = File::open(path)
     {
@@ -132,15 +92,15 @@ get_path(&self)-> &String
 
 
 pub fn
-get_character(&self, cur: Cursor)-> Option<char>
+get_character(&self, x: usize, y: usize)-> Option<char>
 {
-    if cur.y < self.lines.len()
+    if y < self.lines.len()
     {
-      let  ln = &self.lines[cur.y];
+      let  ln = &self.lines[y];
 
-        if cur.x < ln.len()
+        if x < ln.len()
         {
-          return Some(ln[cur.x]);
+          return Some(ln[x]);
         }
     }
 
@@ -166,6 +126,38 @@ print(&self)
 }
 
 
+pub fn
+print_line_to(&self, y: usize, x_opt: Option<usize>, buf: &mut String)
+{
+    if let Some(ln) = self.lines.get(y)
+    {
+        if let Some(x) = x_opt
+        {
+          buf.push_str("   ");
+
+            if x != 0
+            {
+                for i in 0..(x-1)
+                {
+                  buf.push(if ln[i] >= '　'{'　'} else{' '});
+                }
+            }
+
+
+          buf.push_str("↓\n");
+        }
+
+
+      buf.push_str(">> ");
+
+        for c in ln
+        {
+          buf.push(*c);
+        }
+    }
+}
+
+
 }
 
 
@@ -175,9 +167,10 @@ print(&self)
 pub struct
 SourceInfo
 {
-  filepath: Rc<String>,
+  file: Rc<SourceFile>,
 
-  cursor: Cursor,
+  x: usize,
+  y: usize,
 
 }
 
@@ -190,28 +183,22 @@ SourceInfo
 pub fn
 new()-> Self
 {
-  Self{ filepath: Rc::new(String::new()), cursor: Cursor::new()}
+  Self{file: Rc::new(SourceFile::new()), x: 0, y: 0}
 }
 
 
 pub fn
-set_filepath(&mut self, filepath: &str)
+from_file(file: &Rc<SourceFile>)-> Self
 {
-  self.filepath = Rc::new(String::from(filepath));
+  Self{file: Rc::clone(file), x: 0, y: 0}
 }
 
 
 pub fn
-set_cursor(&mut self, cur: &Cursor)
+get_file(&self)-> &Rc<SourceFile>
 {
-  self.cursor.x = cur.x;
-  self.cursor.y = cur.y;
+  &self.file
 }
-
-
-pub fn  get_filepath(&self)-> &String{&*self.filepath}
-pub fn  get_x(&self)-> usize{self.cursor.get_x()}
-pub fn  get_y(&self)-> usize{self.cursor.get_y()}
 
 
 pub fn
@@ -224,7 +211,15 @@ to_error(&self, msg: String)-> Error
 pub fn
 to_string(&self)-> String
 {
-  format!("[file: {} X: {:05} Y: {:05}]",self.get_filepath(),1+self.get_x(),1+self.get_y())
+  let  mut s = format!("[file: \"{}\" x: {} y: {}]\n",self.file.get_path(),1+self.x,1+self.y);
+
+  self.file.print_line_to(self.y-2,None        ,&mut s);
+  self.file.print_line_to(self.y-1,None        ,&mut s);
+  self.file.print_line_to(self.y  ,Some(self.x),&mut s);
+  self.file.print_line_to(self.y+1,None        ,&mut s);
+  self.file.print_line_to(self.y+2,None        ,&mut s);
+
+  s
 }
 
 
@@ -234,6 +229,155 @@ print(&self)
   let  s = self.to_string();
 
   print!("{}",&s);
+}
+
+
+}
+
+
+
+
+#[derive(Clone)]
+pub struct
+SourceReader
+{
+  info: SourceInfo,
+
+}
+
+
+impl
+SourceReader
+{
+
+
+pub fn
+new(file: &Rc<SourceFile>)-> Self
+{
+  Self{info: SourceInfo::from_file(file)}
+}
+
+
+pub fn  get_x(&self)-> usize{self.info.x}
+pub fn  get_y(&self)-> usize{self.info.y}
+
+pub fn  as_info(&self)-> &SourceInfo{&self.info}
+
+
+pub fn
+get_character(&self)-> Option<char>
+{
+  self.info.file.get_character(self.get_x(),self.get_y())
+}
+
+
+pub fn
+advance(&mut self)
+{
+  self.info.x += 1;
+}
+
+
+pub fn
+newline(&mut self)
+{
+  self.info.x  = 0;
+  self.info.y += 1;
+}
+
+
+pub fn
+is_space(c: char)-> bool
+{
+  (c ==  ' ') ||
+  (c == '\n') ||
+  (c == '\t') ||
+  (c == '\r')
+}
+
+
+pub fn
+skip_until_appears_newline(&mut self)-> Result<(),String>
+{
+    while let Some(c) = self.get_character()
+    {
+      self.advance();
+
+        if c == '\n'
+        {
+          self.newline();
+
+          return Ok(());
+        }
+    }
+
+
+  Err(format!("コメントラインが正しく終了していない"))
+}
+
+
+pub fn
+skip_until_appears_end_of_comment_block(&mut self)-> Result<(),String>
+{
+    while let Some(first) = self.get_character()
+    {
+      self.advance();
+
+        if first == '\n'
+        {
+          self.newline();
+        }
+
+      else
+        if first == '*'
+        {
+            if let Some(second) = self.get_character()
+            {
+              self.advance();
+
+                if second == '/'
+                {
+                  return Ok(());
+                }
+            }
+        }
+    }
+
+
+  Err(format!("コメントブロックが正しく終了していない"))
+}
+
+
+pub fn
+skip_spaces(&mut self)
+{
+    while let Some(c) = self.get_character()
+    {
+        if Self::is_space(c)
+        {
+            if c == '\n'
+            {
+              self.newline();
+            }
+
+          else
+            {
+              self.advance();
+            }
+        }
+
+      else
+        {
+          break;
+        }
+    }
+}
+
+
+pub fn
+to_error(&self, msg: String)-> Error
+{
+  self.info.to_error(msg)
 }
 
 

@@ -51,7 +51,7 @@ compile_and_run(s: &str)
     //}
               println!("machine is finished");
 
-              exec.print_memory();
+//              exec.print_memory();
     //          exec.print_text();
             }
           Err(e)=>{e.print();}
@@ -75,39 +75,6 @@ compile_and_run(s: &str)
 }
 
 
-
-
-fn
-open_and_print_tokens()
-{
-  let  args: Vec<String> = env::args().collect();
-
-    for i in 1..args.len()
-    {
-      let  arg = &args[i];
-
-        if let Ok(src) = crate::source_file::SourceFile::from_file(&arg)
-        {
-          println!("{} is opened",&arg);
-
-            if let Ok(toks) = crate::token::tokenize::tokenize(&src)
-            {
-              crate::token::print_token_string(&toks);
-
-              println!("\n--");
-
-              crate::token::restore_token_string(&toks);
-            }
-
-          else
-            {
-              println!("tokenize is failed");
-
-              return;
-            }
-        }
-    }
-}
 
 
 fn
@@ -333,11 +300,10 @@ main()
   video = video_field;
 
   var  x = 80;
-  var  y = 80;
 
   loop
   {
-    fill(0,0,VIDEO_W,VIDEO_H,0);
+    ill(0,0,VIDEO_W,VIDEO_H,0);
 
          if (input&UP_KEY   )&&(y >=                8){y -= 8;}
     else if (input&DOWN_KEY )&&((y+24) <= (VIDEO_H-8)){y += 8;}

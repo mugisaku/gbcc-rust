@@ -58,25 +58,20 @@ make_err(e: &Expr, msg: String)-> Self
 
 
 pub fn
-to_text(self)-> AsmEvalText
+try_to_text(self)-> Result<AsmEvalText,Error>
 {
     match self
     {
-  Self::Value(txt)=>{txt}
+  Self::Value(txt)=>{Ok(txt)}
   Self::Const(i)=>
     {
       let  mut text = AsmEvalText::new();
 
       text.push_i64(i);
 
-      text
+      Ok(text)
     }
-  Self::Err(e)=>
-    {
-      e.print();
-
-      panic!();
-    }
+  Self::Err(e)=>{Err(e)}
     }
 }
 
@@ -102,54 +97,61 @@ print(&self)
 pub fn
 evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  res = evaluate(f,tbl,scp_opt);
-
-  let  mut txt = res.to_text();
-
-  let  mut buf = Vec::<AsmEvalText>::new();
-
-    for a in args
+    match evaluate(f,tbl,scp_opt).try_to_text()
     {
-      let  mut a_txt = evaluate(a,tbl,scp_opt).to_text();
+  Ok(mut txt)=>
+    {
+      let  mut buf = Vec::<AsmEvalText>::new();
 
-        if a_txt.is_deref()
+        for a in args
         {
-          a_txt.push_load();
+            match evaluate(a,tbl,scp_opt).try_to_text()
+            {
+          Ok(mut a_txt)=>
+            {
+              a_txt.push_load();
+
+              buf.push(a_txt);
+            }
+          Err(e)=>{return EvalResult::Err(e);}
+            }
         }
 
 
-      buf.push(a_txt);
+      txt.push_call(buf);
+
+      EvalResult::Value(txt)
     }
-
-
-  txt.push_call(buf);
-
-  EvalResult::Value(txt)
+  Err(e)=>{EvalResult::Err(e)}
+    }
 }
 
 
 pub fn
 evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  res = evaluate(ins,tbl,scp_opt);
-
-  let  mut txt = res.to_text();
-
-       if s == "ptr"{txt.push_to_ptr();}
-  else if s ==  "i8"{txt.change_kind(AsmEvalKind::DerefI8 );}
-  else if s == "i16"{txt.change_kind(AsmEvalKind::DerefI16);}
-  else if s == "i32"{txt.change_kind(AsmEvalKind::DerefI32);}
-  else if s == "i64"{txt.change_kind(AsmEvalKind::DerefI64);}
-  else if s ==  "u8"{txt.change_kind(AsmEvalKind::DerefU8 );}
-  else if s == "u16"{txt.change_kind(AsmEvalKind::DerefU16);}
-  else if s == "u32"{txt.change_kind(AsmEvalKind::DerefU32);}
-  else
+    match evaluate(ins,tbl,scp_opt).try_to_text()
     {
-      return EvalResult::make_err(ins,format!("evalute_access error: unknown field {}",s));
+  Ok(mut txt)=>
+    {
+           if s == "ptr"{txt.push_to_ptr();}
+      else if s ==  "i8"{txt.change_kind(AsmEvalKind::DerefI8 );}
+      else if s == "i16"{txt.change_kind(AsmEvalKind::DerefI16);}
+      else if s == "i32"{txt.change_kind(AsmEvalKind::DerefI32);}
+      else if s == "i64"{txt.change_kind(AsmEvalKind::DerefI64);}
+      else if s ==  "u8"{txt.change_kind(AsmEvalKind::DerefU8 );}
+      else if s == "u16"{txt.change_kind(AsmEvalKind::DerefU16);}
+      else if s == "u32"{txt.change_kind(AsmEvalKind::DerefU32);}
+      else
+        {
+          return EvalResult::make_err(ins,format!("evalute_access error: unknown field {}",s));
+        }
+
+
+      EvalResult::Value(txt)
     }
-
-
-  EvalResult::Value(txt)
+  Err(e)=>{EvalResult::Err(e)}
+    }
 }
 
 
@@ -248,13 +250,16 @@ evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)->
     }
 
 
-  let  res = evaluate(o,tbl,scp_opt);
+    match evaluate(o,tbl,scp_opt).try_to_text()
+    {
+  Ok(mut txt)=>
+    {
+      txt.push_unary(op);
 
-  let  mut txt = res.to_text();
-
-  txt.push_unary(op);
-
-  EvalResult::Value(txt)
+      EvalResult::Value(txt)
+    }
+  Err(e)=>{EvalResult::Err(e)}
+    }
 }
 
 
@@ -271,13 +276,7 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
     {
         if let Ok(r) = rcres
         {
-            if let Ok(i) = evaluate_binary_const(l,r,op)
-            {
-              return EvalResult::Const(i);
-            }
-
-          else
-            {panic!();}
+          return EvalResult::Const(evaluate_binary_const(l,r,op).unwrap());
         }
 
       else
@@ -301,12 +300,23 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
     }
 
 
-  let  mut l_txt = lres.to_text();
-  let      r_txt = rres.to_text();
+    match lres.try_to_text()
+    {
+  Ok(mut l_txt)=>
+    {
+        match rres.try_to_text()
+        {
+      Ok(r_txt)=>
+        {
+          l_txt.push_binary(r_txt,op);
 
-  l_txt.push_binary(r_txt,op);
-
-  EvalResult::Value(l_txt)
+          EvalResult::Value(l_txt)
+        }
+      Err(e)=>{EvalResult::Err(e)}
+        }
+    }
+  Err(e)=>{EvalResult::Err(e)}
+    }
 }
 
 
