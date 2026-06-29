@@ -9,30 +9,29 @@ const  HALT_FLAG: usize = 1;
 
 
 pub struct
-Machine
+Core
 {
-  memory_ptr: *mut u8,
-
   id: usize,
 
-  frequency: usize,
+  memory_ptr: *mut u8,
 
+  fp_base: usize,
+ 
   pc: usize,
   fp: usize,
   sp: usize,
-  cp: usize,
 
   status: usize,
 
   call_depth: usize,
 
-  verbose: bool,
+  error_counter: usize,
 
 }
 
 
 impl
-Machine
+Core
 {
 
 
@@ -40,24 +39,44 @@ pub const fn
 new()-> Self
 {
   Self{
-    memory_ptr: std::ptr::null_mut(),
-
     id: 0,
-
-    frequency: 0,
-
+    memory_ptr: std::ptr::null_mut(),
+    fp_base: 0,
     pc: 0,
     fp: 0,
     sp: 0,
-    cp: 0,
-
     status: 0,
-
     call_depth: 0,
-
-    verbose: false,
-
+    error_counter: 0,
   }
+}
+
+
+pub fn
+initialize(&mut self, id: usize, memory_ptr: *mut u8, fp_base: usize)
+{
+  self.id         = id;
+  self.memory_ptr = memory_ptr;
+  self.fp_base    = fp_base;
+  self.call_depth = 0;
+}
+
+
+pub fn
+reset(&mut self, pc: usize)
+{
+  self.pc = pc;
+  self.fp = self.fp_base;
+  self.sp = self.fp_base;
+  self.status = 0;
+  self.call_depth = 1;
+  self.error_counter = 0;
+}
+
+
+pub fn
+spawn(&mut self, n: usize)
+{
 }
 
 
@@ -65,33 +84,6 @@ pub fn
 get_pc(&self)-> usize
 {
   self.pc
-}
-
-
-pub fn
-set_verbose(&mut self)
-{
-  self.verbose = true;
-}
-
-
-pub fn
-reset(&mut self, id: usize, freq: usize, exec: &mut Exec, entry_fn_name: &str, offset: usize)
-{
-  self.memory_ptr = exec.get_memory_mut().as_mut_ptr();
-
-  self.frequency = freq;
-
-  let      stack_start = exec.find_const("STACK_START").unwrap() as usize;
-  let  callstack_start = exec.find_const("CALLSTACK_START").unwrap() as usize;
-
-  self.id = id;
-  self.pc = exec.find_entry_point(entry_fn_name).unwrap();
-  self.fp = stack_start+offset;
-  self.sp = stack_start+offset;
-  self.cp = callstack_start+offset;
-  self.status = 0;
-  self.call_depth = 0;
 }
 
 
@@ -333,11 +325,11 @@ branch_if_non_zero(&mut self, offset: isize)
 
 
 pub fn
-step(&mut self)
+step(&mut self, verbose: bool)
 {
-    if self.verbose
+    if verbose
     {
-      println!("PC: {}, FP: {}, SP: {}, CP: {}",self.pc,self.fp,self.sp,self.cp);
+      print!("ID: {}, PC: {}, FP: {}, SP: {}",self.id,self.pc,self.fp,self.sp);
     }
 
 
@@ -345,7 +337,18 @@ step(&mut self)
 
   let  b = self.get_next_byte();
 
-//  println!("OP: {}",b);
+    if verbose
+    {
+      let  s = match Opcode::try_from(b)
+        {
+      Ok(op)=>{op.to_str().to_string()}
+      Err(())=>{format!("invalid: {}",b)}
+        };
+
+
+      println!(" OP: {}",&s);
+    }
+
 
     match b
     {
@@ -576,65 +579,51 @@ step(&mut self)
 
   (op) if op == Opcode::Prcal as u8=>
     {
-      let  f_addr = self.pop();
-
-      self.put_u64(self.cp+(WORD_SIZE*0),f_addr);
-      self.put_u64(self.cp+(WORD_SIZE*1),self.fp as u64);
-      self.put_u64(self.cp+(WORD_SIZE*2),self.sp as u64);
-
-      self.cp += WORD_SIZE*3;
     }
   (op) if op == Opcode::Cal as u8=>
     {
-      let  pc_addr = self.cp-(WORD_SIZE*3);
-      let  sp_addr = self.cp-(WORD_SIZE*1);
+      let  arg_n = self.pop();
 
-      let  old_pc = self.pc                                 ;
-                    self.pc = self.get_u64(pc_addr) as usize;
+      let  new_pc_addr = self.sp-(WORD_SIZE*((arg_n+1) as usize));
 
-      self.put_u64(pc_addr,old_pc as u64);
+      self.push(new_pc_addr as u64);
+      self.push(self.pc as u64);
+      self.push(self.fp as u64);
 
-      self.fp = self.get_u64(sp_addr) as usize;
+      self.fp = self.sp;
+      self.pc = self.get_u64(new_pc_addr) as usize;
 
-      let  mut arg_addr = self.fp;
-
-//      print!("called with args(");
-
-        while arg_addr < self.sp
+        if verbose
         {
-//          print!("{},",self.get_u64(arg_addr));
-
-          arg_addr += WORD_SIZE;
+          println!("arg_n {}, jumped to {}",arg_n,self.pc);
         }
 
-
-//      print!(")\n");
 
       self.call_depth += 1;
     }
   (op) if op == Opcode::Ret as u8=>
     {
-      let  v = self.pop();
+      let  retval = self.pop();
+
+      self.sp = self.fp;
+
+      self.fp = self.pop() as usize;
+      self.pc = self.pop() as usize;
+      self.sp = self.pop() as usize;
+
+      self.call_depth -= 1;
 
         if self.call_depth == 0
         {
           self.halt();
 
-          println!("execution is completed: value is {}",v);
+          println!("execution is completed: value is {}",retval);
 
           return;
         }
 
 
-      self.pc = self.get_u64(self.cp-(WORD_SIZE*3)) as usize;
-      self.fp = self.get_u64(self.cp-(WORD_SIZE*2)) as usize;
-      self.sp = self.get_u64(self.cp-(WORD_SIZE*1)) as usize;
-
-      self.cp -= WORD_SIZE*3;
-
-      self.call_depth -= 1;
-
-      self.push(v);
+      self.push(retval);
     }
   (op) if op == Opcode::Hlt as u8=>
     {
@@ -646,10 +635,124 @@ step(&mut self)
 
       println!("**PRINT** {}",v);
     }
-  _=>{println!("step error: invalid opcode {} at {}",b,cur_pc);
-//let  t: Opcode = Opcode::try_from(b).unwrap();
-}
+  _=>
+    {
+      self.error_counter += 1;
+
+        if self.error_counter >= 8
+        {
+          self.halt();
+
+          println!("stopped because it appears many errors");
+
+          return;
+        }
     }
+    }
+}
+
+
+pub fn
+run(&mut self, mut n: usize, verbose: bool)
+{
+  self.unhalt();
+
+    while n != 0
+    {
+      self.step(verbose);
+
+        if self.is_halted()
+        {
+          return;
+        }
+
+
+      n -= 1;
+    }
+}
+
+
+}
+
+
+
+
+pub const  CORE_NUMBER: usize =       4;
+pub const   STACK_SIZE: usize = 0x10000;
+
+
+pub struct
+Machine
+{
+  memory_ptr: *mut u8,
+
+  frequency: usize,
+
+  cores: [Core; CORE_NUMBER],
+
+  verbose: bool,
+
+}
+
+
+impl
+Machine
+{
+
+
+pub const fn
+new()-> Self
+{
+  Self{
+    memory_ptr: std::ptr::null_mut(),
+
+    frequency: 0,
+
+    cores: [Core::new(),
+            Core::new(),
+            Core::new(),
+            Core::new(),
+           ],
+
+    verbose: false,
+
+  }
+}
+
+
+pub fn
+set_verbose(&mut self)
+{
+  self.verbose = true;
+}
+
+
+pub fn
+reset(&mut self, freq: usize, exec: &mut Exec, entry_fn_name: &str)
+{
+  self.memory_ptr = exec.get_mut_ptr(0);
+
+  self.frequency = freq;
+
+  let  mut stack_start = exec.find_const("STACK_START").unwrap() as usize;
+
+  let  pc = exec.find_entry_point(entry_fn_name).unwrap();
+
+    for i in 0..CORE_NUMBER
+    {
+      self.cores[i].initialize(i,self.memory_ptr,stack_start);
+
+        if self.verbose
+        {
+          println!("core {} initialized. stack_start: {}",i,stack_start);
+        }
+
+
+      stack_start += STACK_SIZE;
+    }
+
+
+  self.cores[0].reset(pc);
 }
 
 
@@ -664,15 +767,11 @@ run(&mut self)
     }
 
 
-  self.unhalt();
-
-    for _ in 0..self.frequency
+    for core in &mut self.cores
     {
-      self.step();
-
-        if self.is_halted()
+        if core.call_depth != 0
         {
-          return;
+          core.run(self.frequency,self.verbose);
         }
     }
 }
@@ -688,16 +787,16 @@ keep_run(&mut self)
       return;
     }
 
+          self.cores[0].run(self.frequency,self.verbose);
 
   use std::time::{Duration,Instant};
   use std::thread::sleep;
 
-  self.unhalt();
-
-    loop
+//    loop
     {
       let  now = Instant::now();
 
+/*
         for _ in 0..self.frequency
         {
           self.step();
@@ -707,18 +806,13 @@ keep_run(&mut self)
               return;
             }
         }
+*/
 
 
       let  tm = Duration::from_secs(1)-now.elapsed();
 
       sleep(tm);
     }
-}
-
-
-pub fn
-print(&self)
-{
 }
 
 

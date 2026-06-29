@@ -213,8 +213,10 @@ to_string(&self)-> String
 {
   let  mut s = format!("[file: \"{}\" x: {} y: {}]\n",self.file.get_path(),1+self.x,1+self.y);
 
-  self.file.print_line_to(self.y-2,None        ,&mut s);
-  self.file.print_line_to(self.y-1,None        ,&mut s);
+    if self.y >= 2{self.file.print_line_to(self.y-2,None,&mut s);}
+    if self.y >= 1{self.file.print_line_to(self.y-1,None,&mut s);}
+
+
   self.file.print_line_to(self.y  ,Some(self.x),&mut s);
   self.file.print_line_to(self.y+1,None        ,&mut s);
   self.file.print_line_to(self.y+2,None        ,&mut s);

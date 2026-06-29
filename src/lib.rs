@@ -22,8 +22,7 @@ pub fn  check(s: &str);
 static mut SYMTBL: SymbolTable = SymbolTable::new();
 static mut EXEC: Exec = Exec::new();
 static mut ERR_MSG: String = String::new();
-static mut A_MACHINE: Machine = Machine::new();
-static mut B_MACHINE: Machine = Machine::new();
+static mut MACHINE: Machine = Machine::new();
 
 #[wasm_bindgen]
 pub fn
@@ -73,8 +72,7 @@ pub fn
 process()
 {
   unsafe{
-    A_MACHINE.run();
-//    B_MACHINE.run();
+    MACHINE.run();
   }
 }
 
@@ -147,7 +145,7 @@ setup(freq: u32)-> Option<String>
         {
           EXEC = exec;
 
-          A_MACHINE.reset(0,freq as usize,&mut EXEC,"main",0);
+          MACHINE.reset(freq as usize,&mut EXEC,"main");
 
           let  mut buf = String::new();
 

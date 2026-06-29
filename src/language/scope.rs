@@ -33,7 +33,7 @@ LocalSymbol
 
   value: i64,
 
-  offset: usize,
+  offset: isize,
 
 }
 
@@ -80,7 +80,7 @@ new_int_v(name: &str)-> Self
 
 
 pub fn
-new_var(name: &str, offset: usize)-> Self
+new_var(name: &str, offset: isize)-> Self
 {
   Self{
     name: name.to_string(),
@@ -113,7 +113,7 @@ get_value(&self)-> i64
 
 
 pub fn
-get_offset(&self)-> usize
+get_offset(&self)-> isize
 {
   self.offset
 }
@@ -154,9 +154,15 @@ new_root(decl: &FnDecl, tbl: &SymbolTable)-> Self
   };
 
 
+  let  arg_n = decl.get_parameter_names().len() as isize;
+
+  let  mut off = -((WORD_SIZE as isize)*(3+arg_n));
+
     for name in decl.get_parameter_names()
     {
-      scp.add_var(name);
+      scp.symbol_list.push(LocalSymbol::new_var(name,off));
+
+      off += (WORD_SIZE as isize);
     }
 
 
@@ -221,9 +227,9 @@ add_const_int(&mut self, name: &str, i: i64)
 
 
 pub fn
-add_var(&mut self, name: &str)-> usize
+add_var(&mut self, name: &str)-> isize
 {
-  let  offset = self.offset;
+  let  offset = self.offset as isize;
 
   let  sym = LocalSymbol::new_var(name,offset);
 
@@ -233,7 +239,7 @@ add_var(&mut self, name: &str)-> usize
 
   self.update_offset_max();
 
-  offset
+  offset as isize
 }
 
 

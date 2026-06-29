@@ -209,7 +209,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut
   let  mut new_scp = Scope::new(scp);
 
 
-  let  mut count_max_off = 0usize;
+  let  mut count_max_off = 0isize;
 
     match evaluate(forstmt.get_expr(),tbl,Some(scp)).try_to_text()
     {

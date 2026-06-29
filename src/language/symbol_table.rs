@@ -12,6 +12,11 @@ use super::evaluate_const::*;
 use super::tplg_sort::*;
 use super::font14::*;
 use super::font8::*;
+use super::machine::{
+  CORE_NUMBER,
+   STACK_SIZE,
+
+};
 
 use crate::source_file::{
   SourceInfo,
@@ -684,7 +689,6 @@ install_font14(dst: &mut [u8])
 {
   let  mut  iter = FONT14.iter();
 
-
     while let Some(unicode) = iter.next()
     {
       const  FULLWIDTH_FIRST: usize = 0xFF01;
@@ -732,7 +736,7 @@ find_text_offset(ls: &Vec<(String,Vec<u8>,usize)>, name: &str)-> usize
 
 
 fn
-get_const_or(&mut self, s: &str, def: usize)-> usize
+get_const_or(&mut self, s: &str, defval: usize)-> usize
 {
     if let Some(v) = self.find_const(s)
     {
@@ -741,9 +745,9 @@ get_const_or(&mut self, s: &str, def: usize)-> usize
 
   else
     {
-      self.add_const(s,def as i64);
+      self.add_const(s,defval as i64);
 
-      def
+      defval
     }
 }
 
@@ -757,26 +761,20 @@ generate_exec(&mut self)-> Result<Exec,Error>
   let    data_start = self.process_io_offset(256);
   let     str_start = self.process_data_offset(data_start);
   let   font8_start = self.process_str_offset(str_start);
-  let  combi8_start = get_word_aligned( font8_start+(2* 3*0x10000));
-  let  font14_start = get_word_aligned(combi8_start+(2*14*0x10000));
-  let   field_start = get_word_aligned(font14_start+(   8*0x10000));
+  let  combi8_start = get_word_aligned( font8_start+(   8*0x10000));
+  let  font14_start = get_word_aligned(combi8_start+(2* 3*0x10000));
+  let   field_start = get_word_aligned(font14_start+(2*14*0x10000));
   let   stack_start = self.process_field_offset(field_start);
 
+  let  stack_size = self.get_const_or("STACK_SIZE",STACK_SIZE*CORE_NUMBER);
 
-  let  stack_size = self.get_const_or("STACK_SIZE",1024*32);
-
-  let  callstack_start = get_word_aligned(stack_start+stack_size);
-
-  let  callstack_size = self.get_const_or("CALLSTACK_SIZE",1024*32);
-
-  let  text_start = get_word_aligned(callstack_start+callstack_size);
+  let  text_start = get_word_aligned(stack_start+stack_size);
 
 
-  self.add_const(    "FONT8_START",    font8_start as i64);
-  self.add_const(   "COMBI8_START",   combi8_start as i64);
-  self.add_const(   "FONT14_START",   font14_start as i64);
-  self.add_const(    "STACK_START",    stack_start as i64);
-  self.add_const("CALLSTACK_START",callstack_start as i64);
+  self.add_const( "FONT8_START", font8_start as i64);
+  self.add_const("COMBI8_START",combi8_start as i64);
+  self.add_const("FONT14_START",font14_start as i64);
+  self.add_const( "STACK_START", stack_start as i64);
 
 
   let  mut pos = text_start;
@@ -876,6 +874,7 @@ generate_exec(&mut self)-> Result<Exec,Error>
   Self::install_font8( &mut exec.memory[ font8_start..]);
   Self::install_combi8(&mut exec.memory[combi8_start..]);
   Self::install_font14(&mut exec.memory[font14_start..]);
+
 
   Ok(exec)
 }
@@ -1134,14 +1133,14 @@ get_memory_mut(&mut self)-> &mut Vec<u8>
 
 
 
-fn
+pub fn
 get_ptr(&self, off: usize)-> *const u8
 {
   unsafe{self.memory.as_ptr().add(off)}
 }
 
 
-fn
+pub fn
 get_mut_ptr(&mut self, off: usize)-> *mut u8
 {
   unsafe{self.memory.as_mut_ptr().add(off)}
@@ -1333,9 +1332,7 @@ print_text_to(&self, buf: &mut String)
 {
     for (name,start,text) in &self.texts
     {
-      buf.push_str(name);
-
-      buf.push_str("{\n");
+      buf.push_str(&format!("{}({}){{\n",name,start));
 
       text.print_to(buf,*start);
 

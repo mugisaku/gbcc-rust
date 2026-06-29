@@ -55,9 +55,7 @@ Opcode
 
   Lnot, Land, Lor,
 
-  Prcal,
-    Cal,
-
+  Cal,
   Ret,
   Hlt,
 
@@ -146,7 +144,6 @@ to_str(&self)-> &'static str
   Self::Gt  =>{"gt"}
   Self::Gteq=>{"gteq"}
 
-  Self::Prcal=>{"prcal"}
   Self::Cal=>{"cal"}
 
   Self::Ret=>{"ret"}
@@ -235,7 +232,6 @@ try_from(b: u8)-> Result<Self,Self::Error>
   (op) if op == Self::Lteq as u8=>{Ok(Self::Lteq)}
   (op) if op == Self::Gt   as u8=>{Ok(Self::Gt)}
   (op) if op == Self::Gteq as u8=>{Ok(Self::Gteq)}
-  (op) if op == Self::Prcal as u8=>{Ok(Self::Prcal)}
   (op) if op == Self::Cal as u8=>{Ok(Self::Cal)}
   (op) if op == Self::Ret as u8=>{Ok(Self::Ret)}
   (op) if op == Self::Hlt as u8=>{Ok(Self::Hlt)}
@@ -666,7 +662,7 @@ push_fn(&mut self, off: usize)
 
 
 pub fn
-push_local_var(&mut self, off: usize)
+push_local_var(&mut self, off: isize)
 {
   self.push_opcode(Opcode::Pushfp);
   self.push_i64(off as i64);
@@ -680,13 +676,16 @@ pub fn
 push_call(&mut self, args: Vec<Self>)
 {
   self.push_load();
-  self.push_opcode(Opcode::Prcal);
+
+  let  arg_n = args.len();
 
     for a in args
     {
       self.lines.extend(a.lines);
     }
 
+
+  self.push_i64(arg_n as i64);
 
   self.push_opcode(Opcode::Cal);
 
