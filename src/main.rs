@@ -80,16 +80,15 @@ main()
   let  codes =
 r#"
 fn
-test(a,b,c)
+test(a,b)
 {
-  return a+b-c;
+  return a+b;
 }
 
 
 fn
 main()
 {
-  return test(4,60,100);
 }
 "#;
 

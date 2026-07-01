@@ -576,10 +576,6 @@ step(&mut self, verbose: bool)
   (op) if op == Opcode::Lteq as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l <= r);}
   (op) if op == Opcode::Gt   as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l >  r);}
   (op) if op == Opcode::Gteq as u8=>{let  (l,r) = self.pop2_i();  self.push_b(l >= r);}
-
-  (op) if op == Opcode::Prcal as u8=>
-    {
-    }
   (op) if op == Opcode::Cal as u8=>
     {
       let  arg_n = self.pop();
@@ -757,23 +753,30 @@ reset(&mut self, freq: usize, exec: &mut Exec, entry_fn_name: &str)
 
 
 pub fn
-run(&mut self)
+run(&mut self)-> usize
 {
     if self.frequency == 0
     {
       println!("machine is set zero frequency");
 
-      return;
+      return 0;
     }
 
+
+  let  mut living_n = 0;
 
     for core in &mut self.cores
     {
         if core.call_depth != 0
         {
+          living_n += 1;
+
           core.run(self.frequency,self.verbose);
         }
     }
+
+
+  living_n
 }
 
 
@@ -787,26 +790,17 @@ keep_run(&mut self)
       return;
     }
 
-          self.cores[0].run(self.frequency,self.verbose);
-
   use std::time::{Duration,Instant};
   use std::thread::sleep;
 
-//    loop
+    loop
     {
       let  now = Instant::now();
 
-/*
-        for _ in 0..self.frequency
+        if self.run() == 0
         {
-          self.step();
-
-            if self.is_halted()
-            {
-              return;
-            }
+          break;
         }
-*/
 
 
       let  tm = Duration::from_secs(1)-now.elapsed();

@@ -106,8 +106,8 @@ make_str_bytes(srcinf: &SourceInfo, dk: &str, ik: &StrInitKind, symtbl: &SymbolT
         {
             match evaluate_const(e,symtbl,None)
             {
-          Ok(v)=>{tmp.push(v);}
-          Err(())=>{return Err(e.get_source_info().to_error(format!("make_str_bytes error")));}
+          EvalResult::Const(v)=>{tmp.push(v);}
+          _=>{return Err(e.get_source_info().to_error(format!("make_str_bytes error")));}
             }
         }
     }
@@ -215,7 +215,7 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
     {
         match evaluate_const(&e,symtbl,None)
         {
-      Ok(v)=>
+      EvalResult::Const(v)=>
         {
           Ok(Self{
             name,
@@ -225,14 +225,14 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
             deps_child_list,
           })
         }
-      Err(())=>{Err(srcinf.to_error(format!("constの初期化に失敗")))}
+      _=>{Err(srcinf.to_error(format!("constの初期化に失敗")))}
         }
     }
   DeclKind::Var(e)=>
     {
         match evaluate_const(&e,symtbl,None)
         {
-      Ok(v)=>
+      EvalResult::Const(v)=>
         {
           Ok(Self{
             name,
@@ -242,7 +242,7 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
             deps_child_list,
           })
         }
-      Err(())=>{Err(srcinf.to_error(format!("varの初期化に失敗")))}
+      _=>{Err(srcinf.to_error(format!("varの初期化に失敗")))}
         }
     }
   DeclKind::Io=>
@@ -276,7 +276,7 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
     {
         match evaluate_const(&e,symtbl,None)
         {
-      Ok(v)=>
+      EvalResult::Const(v)=>
         {
           Ok(Self{
             name,
@@ -286,7 +286,7 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
             deps_child_list,
           })
         }
-      Err(())=>{Err(srcinf.to_error(format!("fieldの大きさの算出に失敗")))}
+      _=>{Err(srcinf.to_error(format!("fieldの大きさの算出に失敗")))}
         }
     }
   DeclKind::Fn(fd)=>

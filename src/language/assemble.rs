@@ -322,13 +322,13 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
         {
             match evaluate_const(e,tbl,Some(scp))
             {
-          Ok(i)=>
+          EvalResult::Const(i)=>
             {
               scp.add_const_int(decl.get_name(),i);
 
               Ok(())
             }
-          Err(())=>{Err(srcinf.to_error(format!("constの算出に失敗")))}
+          _=>{Err(srcinf.to_error(format!("constの算出に失敗")))}
             }
         }
       DeclKind::Var(e)=>

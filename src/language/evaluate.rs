@@ -25,6 +25,12 @@ EvalResult
 {
   Value(AsmEvalText),
   Const(i64),
+  String(String),
+  System,
+  Spawn,
+  Print,
+
+  Undef,
 
   Err(Error),
 
@@ -51,9 +57,13 @@ is_err(&self)-> bool
 
 
 pub fn
-make_err(e: &Expr, msg: String)-> Self
+to_text_from_const(i: i64)-> AsmEvalText
 {
-  Self::Err(e.get_source_info().to_error(msg))
+  let  mut text = AsmEvalText::new();
+
+  text.push_i64(i);
+
+  text
 }
 
 
@@ -63,14 +73,8 @@ try_to_text(self)-> Result<AsmEvalText,Error>
     match self
     {
   Self::Value(txt)=>{Ok(txt)}
-  Self::Const(i)=>
-    {
-      let  mut text = AsmEvalText::new();
-
-      text.push_i64(i);
-
-      Ok(text)
-    }
+  Self::Const(i)=>{Ok(Self::to_text_from_const(i))}
+  _=>{Err(Error::new(format!("to_text is failed")))}
   Self::Err(e)=>{Err(e)}
     }
 }
@@ -83,7 +87,11 @@ print(&self)
     {
   Self::Value(_)=>{print!("value");}
   Self::Const(i)=>{print!("const {}",*i);}
-
+  Self::String(s)=>{print!("\"{}\"",s);}
+  Self::System=>{print!("SYS");}
+  Self::Spawn =>{print!("SPW");}
+  Self::Print =>{print!("PRI");}
+  Self::Undef =>{print!("UNDEF");}
   Self::Err(e)=>{print!("ERR");}
     }
 }
@@ -130,6 +138,8 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Sc
 pub fn
 evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
+  let  srcinf = ins.get_source_info();
+
     match evaluate(ins,tbl,scp_opt).try_to_text()
     {
   Ok(mut txt)=>
@@ -144,13 +154,14 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
       else if s == "u32"{txt.change_kind(AsmEvalKind::DerefU32);}
       else
         {
-          return EvalResult::make_err(ins,format!("evalute_access error: unknown field {}",s));
+          return EvalResult::Err(srcinf.to_error(format!("evalute_access error: unknown field {}",s)));
         }
 
 
       EvalResult::Value(txt)
     }
   Err(e)=>{EvalResult::Err(e)}
+  _=>{EvalResult::Undef}
     }
 }
 
@@ -242,80 +253,86 @@ evaluate_identifier(srcinf: &SourceInfo, s: &str, tbl: &SymbolTable, scp_opt: Op
 pub fn
 evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  cres = evaluate_const(o,tbl,scp_opt);
+  let  srcinf = o.get_source_info();
 
-    if let Ok(i) = cres
+    match evaluate(o,tbl,scp_opt)
     {
-      return EvalResult::Const(i);
-    }
-
-
-    match evaluate(o,tbl,scp_opt).try_to_text()
-    {
-  Ok(mut txt)=>
+  EvalResult::Value(mut txt)=>
     {
       txt.push_unary(op);
 
       EvalResult::Value(txt)
     }
-  Err(e)=>{EvalResult::Err(e)}
+  EvalResult::Const(i)=>
+    {
+        match evaluate_unary_int(i,op)
+        {
+      Ok(val)=>{EvalResult::Const(val)}
+      Err(msg)=>{EvalResult::Err(srcinf.to_error(msg))}
+        }
+    }
+  EvalResult::Err(e)=>{EvalResult::Err(e)}
+  _=>{EvalResult::Undef}
     }
 }
 
 
 pub fn
-evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_binary(l: &Expr, r: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  lcres = evaluate_const(le,tbl,scp_opt);
-  let  rcres = evaluate_const(re,tbl,scp_opt);
+  let  l_srcinf = l.get_source_info();
+  let  r_srcinf = r.get_source_info();
 
-  let  mut lres = EvalResult::Const(0);
-  let  mut rres = EvalResult::Const(0);
-
-    if let Ok(l) = lcres
+    match evaluate(l,tbl,scp_opt)
     {
-        if let Ok(r) = rcres
+  EvalResult::Value(mut l_txt)=>
+    {
+        match evaluate(r,tbl,scp_opt)
         {
-          return EvalResult::Const(evaluate_binary_const(l,r,op).unwrap());
-        }
-
-      else
-        {
-          lres = EvalResult::Const(l);
-          rres = evaluate(re,tbl,scp_opt);
-        }
-    }
-
-  else
-    if let Ok(r) = rcres
-    {
-      lres = evaluate(le,tbl,scp_opt);
-      rres = EvalResult::Const(r);
-    }
-
-  else
-    {
-      lres = evaluate(le,tbl,scp_opt);
-      rres = evaluate(re,tbl,scp_opt);
-    }
-
-
-    match lres.try_to_text()
-    {
-  Ok(mut l_txt)=>
-    {
-        match rres.try_to_text()
-        {
-      Ok(r_txt)=>
+      EvalResult::Value(r_txt)=>
         {
           l_txt.push_binary(r_txt,op);
 
           EvalResult::Value(l_txt)
         }
-      Err(e)=>{EvalResult::Err(e)}
+      EvalResult::Const(r_val)=>
+        {
+          let  r_txt = EvalResult::to_text_from_const(r_val);
+
+          l_txt.push_binary(r_txt,op);
+
+          EvalResult::Value(l_txt)
+        }
+      EvalResult::Err(e)=>{EvalResult::Err(e)}
+      _=>{EvalResult::Undef}
         }
     }
-  Err(e)=>{EvalResult::Err(e)}
+  EvalResult::Const(l_val)=>
+    {
+        match evaluate(r,tbl,scp_opt)
+        {
+      EvalResult::Value(r_txt)=>
+        {
+          let  mut l_txt = EvalResult::to_text_from_const(l_val);
+
+          l_txt.push_binary(r_txt,op);
+
+          EvalResult::Value(l_txt)
+        }
+      EvalResult::Const(r_val)=>
+        {
+            match evaluate_binary_int(l_val,r_val,op)
+            {
+          Ok(val)=>{EvalResult::Const(val)}
+          Err(msg)=>{EvalResult::Err(l_srcinf.to_error(msg))}
+            }
+        }
+      EvalResult::Err(e)=>{EvalResult::Err(e)}
+      _=>{EvalResult::Undef}
+        }
+    }
+  EvalResult::Err(e)=>{EvalResult::Err(e)}
+  _=>{EvalResult::Undef}
     }
 }
 
@@ -323,54 +340,56 @@ evaluate_binary(le: &Expr, re: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Opti
 pub fn
 evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  cres = evaluate_const(e,tbl,scp_opt);
+  let  res = evaluate_const(e,tbl,scp_opt);
 
-    if let Ok(i) = cres
+    match res
     {
-      return EvalResult::Const(i);
-    }
+  EvalResult::Undef=>
+    {
+        match e.get_kind()
+        {
+      ExprKind::Identifier(s)=>
+        {
+          evaluate_identifier(e.get_source_info(),s,tbl,scp_opt)
+        }
+      ExprKind::Int(i)=>
+        {
+          EvalResult::Const(*i)
+        }
+      ExprKind::String(s)=>
+        {
+          let  sym = tbl.find_string_symbol(s).unwrap();
 
+          let  mut txt = AsmEvalText::new();
 
-    match e.get_kind()
-    {
-  ExprKind::Identifier(s)=>
-    {
-      evaluate_identifier(e.get_source_info(),s,tbl,scp_opt)
-    }
-  ExprKind::Int(i)=>
-    {
-      EvalResult::Const(*i)
-    }
-  ExprKind::String(s)=>
-    {
-      let  sym = tbl.find_string_symbol(s).unwrap();
+          txt.push_i64(sym.get_offset() as i64);
 
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_i64(sym.get_offset() as i64);
-
-      EvalResult::Value(txt)
+          EvalResult::Value(txt)
+        }
+      ExprKind::CallOp(f,args)=>
+        {
+          evaluate_call(f,args,tbl,scp_opt)
+        }
+      ExprKind::AccessOp(ins,s)=>
+        {
+          evaluate_access(ins,s,tbl,scp_opt)
+        }
+      ExprKind::Expr(e)=>
+        {
+          evaluate(e,tbl,scp_opt)
+        }
+      ExprKind::UnaryOp(o,op)=>
+        {
+          evaluate_unary(o,op,tbl,scp_opt)
+        }
+      ExprKind::BinaryOp(l,r,op)=>
+        {
+          evaluate_binary(l,r,op,tbl,scp_opt)
+        }
+        }
     }
-  ExprKind::CallOp(f,args)=>
-    {
-      evaluate_call(f,args,tbl,scp_opt)
-    }
-  ExprKind::AccessOp(ins,s)=>
-    {
-      evaluate_access(ins,s,tbl,scp_opt)
-    }
-  ExprKind::Expr(e)=>
-    {
-      evaluate(e,tbl,scp_opt)
-    }
-  ExprKind::UnaryOp(o,op)=>
-    {
-      evaluate_unary(o,op,tbl,scp_opt)
-    }
-  ExprKind::BinaryOp(l,r,op)=>
-    {
-      evaluate_binary(l,r,op,tbl,scp_opt)
-    }
+  EvalResult::Err(e)=>{EvalResult::Err(e)}
+  _=>{res}
     }
 }
 
