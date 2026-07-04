@@ -712,30 +712,30 @@ main()
         document.getElementById("v").addEventListener(  "mouseup",function(){g_key_state &= ~g_v_key;});
 
         document.addEventListener("keydown",function(evt){
-            switch(evt.key)
+            switch(evt.code)
             {
           case    "ArrowUp": g_key_state |=    g_up_key;break;
           case  "ArrowLeft": g_key_state |=  g_left_key;break;
           case "ArrowRight": g_key_state |= g_right_key;break;
           case  "ArrowDown": g_key_state |=  g_down_key;break;
-          case  "Z": g_key_state |= g_z_key;break;
-          case  "X": g_key_state |= g_x_key;break;
-          case  "C": g_key_state |= g_c_key;break;
-          case  "V": g_key_state |= g_v_key;break;
+          case  "KeyZ": g_key_state |= g_z_key;break;
+          case  "KeyX": g_key_state |= g_x_key;break;
+          case  "KeyC": g_key_state |= g_c_key;break;
+          case  "KeyV": g_key_state |= g_v_key;break;
             }
         });
 
         document.addEventListener("keyup",function(evt){
-            switch(evt.key)
+            switch(evt.code)
             {
           case    "ArrowUp": g_key_state &=    ~g_up_key;break;
           case  "ArrowLeft": g_key_state &=  ~g_left_key;break;
           case "ArrowRight": g_key_state &= ~g_right_key;break;
           case  "ArrowDown": g_key_state &=  ~g_down_key;break;
-          case  "Z": g_key_state &= ~g_z_key;break;
-          case  "X": g_key_state &= ~g_x_key;break;
-          case  "C": g_key_state &= ~g_c_key;break;
-          case  "V": g_key_state &= ~g_v_key;break;
+          case  "KeyZ": g_key_state &= ~g_z_key;break;
+          case  "KeyX": g_key_state &= ~g_x_key;break;
+          case  "KeyC": g_key_state &= ~g_c_key;break;
+          case  "KeyV": g_key_state &= ~g_v_key;break;
             }
         });
 
