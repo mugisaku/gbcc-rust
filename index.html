@@ -306,6 +306,20 @@ fill(x,y,w,h,pixel)
 
 
 fn
+test(x,y)
+{
+    while x < (VIDEO_W-32)
+    {
+      draw_rect(x,y,32,32,0xFFFFFFFF);
+
+      x += 8;
+
+      halt;
+    }
+}
+
+
+fn
 main()
 {
   video = video_field;
@@ -322,6 +336,12 @@ main()
   loop
   {
     fill(0,0,VIDEO_W,VIDEO_H,0);
+
+      if input&Z_KEY
+      {
+        sys.spawn(test,x,y);
+      }
+
 
       if (x_move_value == 0) && (y_move_value == 0)
       {
@@ -558,6 +578,7 @@ main()
         put_word(g_time_addr,new_time);
 
         process();
+
 
         const  base = get_word(g_video_addr);
 

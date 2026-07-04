@@ -45,7 +45,7 @@ evaluate_unary_const(e: &Expr, op: &str, symtbl: &SymbolTable, scp_opt: Option<&
         }
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef}
+  _=>{EvalResult::Undef("")}
     }
 }
 
@@ -98,11 +98,11 @@ evaluate_binary_const(le: &Expr, re: &Expr, op: &str, symtbl: &SymbolTable, scp_
             }
         }
       EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _=>{EvalResult::Undef}
+      _=>{EvalResult::Undef("")}
         }
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef}
+  _=>{EvalResult::Undef("")}
     }
 }
 
@@ -128,7 +128,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
                 match lsym.get_kind()
                 {
               LocalSymbolKind::Const=>{return EvalResult::Const(lsym.get_value());}
-              _                     =>{return EvalResult::Undef;}
+              _                     =>{return EvalResult::Undef("");}
                 }
             }
         }
@@ -139,7 +139,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
           return match sym.get_kind()
             {
           SymbolKind::Const(v)=>{return EvalResult::Const(*v);}
-          _                   =>{return EvalResult::Undef;}
+          _                   =>{return EvalResult::Undef("");}
             };
         }
 
@@ -158,7 +158,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
 
             match res
             {
-          EvalResult::Undef =>{return EvalResult::Undef;}
+          EvalResult::Undef(_)=>{return EvalResult::Undef("");}
           EvalResult::Err(e)=>{return EvalResult::Err(e);}
           _=>{buf.push(res);}
             }
@@ -167,9 +167,9 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
 
         match evaluate_const(f,symtbl,scp_opt)
         {
-      EvalResult::Undef =>{EvalResult::Undef}
+      EvalResult::Undef(_)=>{EvalResult::Undef("")}
       EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _                 =>{EvalResult::Undef}
+      _                 =>{EvalResult::Undef("")}
         }
     }
   ExprKind::AccessOp(ins,s)=>
@@ -182,7 +182,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
           else if s == "print"{EvalResult::Print}
           else                {EvalResult::Err(srcinf.to_error(format!("{} is not found in sys",s)))}
         }
-      _=>{EvalResult::Undef}
+      _=>{EvalResult::Undef("")}
         }
     }
   ExprKind::Expr(e)         =>{evaluate_const(e,symtbl,scp_opt)}

@@ -30,7 +30,7 @@ EvalResult
   Spawn,
   Print,
 
-  Undef,
+  Undef(&'static str),
 
   Err(Error),
 
@@ -68,13 +68,17 @@ to_text_from_const(i: i64)-> AsmEvalText
 
 
 pub fn
-try_to_text(self)-> Result<AsmEvalText,Error>
+try_to_text(self, srcinf: &SourceInfo)-> Result<AsmEvalText,Error>
 {
     match self
     {
   Self::Value(txt)=>{Ok(txt)}
   Self::Const(i)=>{Ok(Self::to_text_from_const(i))}
-  _=>{Err(Error::new(format!("to_text is failed")))}
+  Self::Spawn=>{Ok(AsmEvalText::new())}
+  Self::System=>{Err(srcinf.to_error(format!("to_text is failed. from sys")))}
+  Self::String(s)=>{Err(srcinf.to_error(format!("to_text is failed. from string {}",s)))}
+  Self::Print=>{Err(srcinf.to_error(format!("to_text is failed. from print")))}
+  Self::Undef(s)=>{Err(srcinf.to_error(format!("to_text is failed. from undef: {}",s)))}
   Self::Err(e)=>{Err(e)}
     }
 }
@@ -91,7 +95,7 @@ print(&self)
   Self::System=>{print!("SYS");}
   Self::Spawn =>{print!("SPW");}
   Self::Print =>{print!("PRI");}
-  Self::Undef =>{print!("UNDEF");}
+  Self::Undef(s)=>{print!("UNDEF {}",s);}
   Self::Err(e)=>{print!("ERR");}
     }
 }
@@ -105,23 +109,30 @@ print(&self)
 pub fn
 evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 {
-    match evaluate(f,tbl,scp_opt).try_to_text()
+  let  srcinf = f.get_source_info();
+
+    match evaluate(f,tbl,scp_opt)
     {
-  Ok(mut txt)=>
+  EvalResult::Value(mut txt)=>
     {
       let  mut buf = Vec::<AsmEvalText>::new();
 
         for a in args
         {
-            match evaluate(a,tbl,scp_opt).try_to_text()
+            match evaluate(a,tbl,scp_opt)
             {
-          Ok(mut a_txt)=>
+          EvalResult::Value(mut a_txt)=>
             {
               a_txt.push_load();
 
               buf.push(a_txt);
             }
-          Err(e)=>{return EvalResult::Err(e);}
+          EvalResult::Const(a_val)=>
+            {
+              buf.push(EvalResult::to_text_from_const(a_val));
+            }
+          EvalResult::Err(e)=>{return EvalResult::Err(e);}
+          _=>{return EvalResult::Undef("call value default");}
             }
         }
 
@@ -130,7 +141,36 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Sc
 
       EvalResult::Value(txt)
     }
-  Err(e)=>{EvalResult::Err(e)}
+  EvalResult::Err(e)=>{EvalResult::Err(e)}
+  EvalResult::Spawn=>
+    {
+      let  mut buf = Vec::<AsmEvalText>::new();
+
+        for a in args
+        {
+            match evaluate(a,tbl,scp_opt)
+            {
+          EvalResult::Value(mut a_txt)=>
+            {
+              a_txt.push_load();
+
+              buf.push(a_txt);
+            }
+          EvalResult::Const(a_val)=>
+            {
+              buf.push(EvalResult::to_text_from_const(a_val));
+            }
+          EvalResult::Err(e)=>{return EvalResult::Err(e);}
+          _=>{return EvalResult::Undef("call spawn default");}
+            }
+        }
+
+
+      let  txt = AsmEvalText::to_spawn(buf);
+
+      EvalResult::Value(txt)
+    }
+  _=>{EvalResult::Undef("call defalut")}
     }
 }
 
@@ -140,9 +180,9 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
 {
   let  srcinf = ins.get_source_info();
 
-    match evaluate(ins,tbl,scp_opt).try_to_text()
+    match evaluate(ins,tbl,scp_opt)
     {
-  Ok(mut txt)=>
+  EvalResult::Value(mut txt)=>
     {
            if s == "ptr"{txt.push_to_ptr();}
       else if s ==  "i8"{txt.change_kind(AsmEvalKind::DerefI8 );}
@@ -160,8 +200,14 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
 
       EvalResult::Value(txt)
     }
-  Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef}
+  EvalResult::Err(e)=>{EvalResult::Err(e)}
+  EvalResult::System=>
+    {
+           if s == "spawn"{EvalResult::Spawn}
+      else if s == "print"{EvalResult::Print}
+      else                {EvalResult::Err(srcinf.to_error(format!("{} is not found in sys",s)))}
+    }
+  _=>{EvalResult::Undef("access default")}
     }
 }
 
@@ -272,7 +318,7 @@ evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)->
         }
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef}
+  _=>{EvalResult::Undef("unary default")}
     }
 }
 
@@ -304,7 +350,7 @@ evaluate_binary(l: &Expr, r: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option
           EvalResult::Value(l_txt)
         }
       EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _=>{EvalResult::Undef}
+      _=>{EvalResult::Undef("binary value default")}
         }
     }
   EvalResult::Const(l_val)=>
@@ -328,11 +374,11 @@ evaluate_binary(l: &Expr, r: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option
             }
         }
       EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _=>{EvalResult::Undef}
+      _=>{EvalResult::Undef("binary const default")}
         }
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef}
+  _=>{EvalResult::Undef("binary default")}
     }
 }
 
@@ -344,7 +390,7 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
 
     match res
     {
-  EvalResult::Undef=>
+  EvalResult::Undef(_)=>
     {
         match e.get_kind()
         {

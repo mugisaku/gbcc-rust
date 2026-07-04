@@ -266,6 +266,7 @@ StmtKind
   Break,
   Continue,
   Halt,
+  Die,
 
   Return(Option<Expr>),
 
@@ -408,6 +409,7 @@ print(&self)
   StmtKind::Break=>{print!("break");}
   StmtKind::Continue=>{print!("continue");}
   StmtKind::Halt=>{print!("halt");}
+  StmtKind::Die=>{print!("die");}
 
   StmtKind::Return(e_opt)=>
     {
@@ -762,6 +764,12 @@ read_stmt(start_nd: &Node)-> Stmt
         if d_name == "halt"
         {
           return Stmt{source_info, kind: StmtKind::Halt}
+        }
+
+      else
+        if d_name == "die"
+        {
+          return Stmt{source_info, kind: StmtKind::Die}
         }
 
       else

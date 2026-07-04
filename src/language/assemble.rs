@@ -148,7 +148,7 @@ new(id: usize)-> Self
 
 
 fn
-process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
+process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
 {
   let  mut blh = lid.make_br_label_holder();
 
@@ -156,7 +156,7 @@ process_if(ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Optio
 
     for (cond,blk) in ifstmt.get_cond_block_list()
     {
-        match evaluate(cond,tbl,Some(scp)).try_to_text()
+        match evaluate(cond,tbl,Some(scp)).try_to_text(srcinf)
         {
       Ok(mut txt)=>
         {
@@ -211,7 +211,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut
 
   let  mut count_max_off = 0isize;
 
-    match evaluate(forstmt.get_expr(),tbl,Some(scp)).try_to_text()
+    match evaluate(forstmt.get_expr(),tbl,Some(scp)).try_to_text(srcinf)
     {
   Ok(mut count_max_txt)=>
     {
@@ -333,7 +333,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
         }
       DeclKind::Var(e)=>
         {
-            match evaluate(e,tbl,Some(scp)).try_to_text()
+            match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
             {
           Ok(r_txt)=>
             {
@@ -353,7 +353,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     }
   StmtKind::Expr(e)=>
     {
-        match evaluate(e,tbl,Some(scp)).try_to_text()
+        match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
         {
       Ok(txt)=>
         {
@@ -366,7 +366,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       Err(e)=>{Err(e)}
         }
     }
-  StmtKind::If(i)=>{process_if(i,tbl,lid,clh_opt,scp,output)}
+  StmtKind::If(i)=>{process_if(srcinf,i,tbl,lid,clh_opt,scp,output)}
   StmtKind::Loop(blk)=>
     {
       let  clh = lid.make_ctrl_label_holder();
@@ -393,7 +393,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       output.push_label(&clh.on_continue);
 
 
-        match evaluate(e,tbl,Some(scp)).try_to_text()
+        match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
         {
       Ok(mut txt)=>
         {
@@ -424,7 +424,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     {
         if let Some(e) = e_opt
         {
-            match evaluate(e,tbl,Some(scp)).try_to_text()
+            match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
             {
           Ok(mut txt)=>
             {
@@ -448,11 +448,11 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     }
   StmtKind::Assign(l,r,op)=>
     {
-        match evaluate(l,tbl,Some(scp)).try_to_text()
+        match evaluate(l,tbl,Some(scp)).try_to_text(srcinf)
         {
       Ok(l_asm)=>
         {
-            match evaluate(r,tbl,Some(scp)).try_to_text()
+            match evaluate(r,tbl,Some(scp)).try_to_text(srcinf)
             {
           Ok(r_asm)=>{output.try_push_assign(srcinf,l_asm,r_asm,op)}
           Err(e)=>{Err(e)}
@@ -493,9 +493,15 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
       Ok(())
     }
+  StmtKind::Die=>
+    {
+      output.push_opcode(Opcode::Die);
+
+      Ok(())
+    }
   StmtKind::Print(e)=>
     {
-        match evaluate(e,tbl,Some(scp)).try_to_text()
+        match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
         {
       Ok(mut txt)=>
         {

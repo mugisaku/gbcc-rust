@@ -58,6 +58,8 @@ Opcode
   Cal,
   Ret,
   Hlt,
+  Spw,
+  Die,
 
   Pri,
 
@@ -148,6 +150,8 @@ to_str(&self)-> &'static str
 
   Self::Ret=>{"ret"}
   Self::Hlt=>{"hlt"}
+  Self::Spw=>{"spw"}
+  Self::Die=>{"die"}
 
   Self::Pri=>{"pri"}
     }
@@ -235,6 +239,8 @@ try_from(b: u8)-> Result<Self,Self::Error>
   (op) if op == Self::Cal as u8=>{Ok(Self::Cal)}
   (op) if op == Self::Ret as u8=>{Ok(Self::Ret)}
   (op) if op == Self::Hlt as u8=>{Ok(Self::Hlt)}
+  (op) if op == Self::Spw as u8=>{Ok(Self::Spw)}
+  (op) if op == Self::Die as u8=>{Ok(Self::Die)}
   (op) if op == Self::Pri as u8=>{Ok(Self::Pri)}
   _=>{Err(())}
     }
@@ -690,6 +696,29 @@ push_call(&mut self, args: Vec<Self>)
   self.push_opcode(Opcode::Cal);
 
   self.kind = AsmEvalKind::Value;
+}
+
+
+pub fn
+to_spawn(args: Vec<Self>)-> Self
+{
+  let  mut txt = Self::new();
+
+  let  arg_n = args.len();
+
+    for a in args
+    {
+      txt.lines.extend(a.lines);
+    }
+
+
+  txt.push_i64(arg_n as i64);
+
+  txt.push_opcode(Opcode::Spw);
+
+  txt.kind = AsmEvalKind::Value;
+
+  txt
 }
 
 

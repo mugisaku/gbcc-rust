@@ -45,10 +45,12 @@ exec.print_text();
 
 
 m.set_verbose();
-              m.reset(1024*1024*16,&mut exec,"main");
+              m.reset(1024,&mut exec,"main");
 
               println!("machine runs");
-              m.run();
+
+              m.keep_run();
+
               println!("machine is finished");
             }
           Err(e)=>{e.print();}
@@ -82,13 +84,18 @@ r#"
 fn
 test(a,b)
 {
-  return a+b;
+  halt;
+
+  return a-b;
 }
 
 
 fn
 main()
 {
+  loop{
+    if sys.spawn(test,900,800) == 0{halt;}
+  }
 }
 "#;
 

@@ -5,7 +5,17 @@ use super::asm::*;
 use super::symbol_table::*;
 
 
-const  HALT_FLAG: usize = 1;
+
+
+pub enum
+StepResult
+{
+  Ok,
+  Halted,
+  Spawned,
+  Died,
+
+}
 
 
 pub struct
@@ -21,11 +31,14 @@ Core
   fp: usize,
   sp: usize,
 
-  status: usize,
-
   call_depth: usize,
 
   error_counter: usize,
+
+  previous_ptr: *mut Self,
+      next_ptr: *mut Self,
+
+  free_pp: *const *mut Core,
 
 }
 
@@ -45,20 +58,24 @@ new()-> Self
     pc: 0,
     fp: 0,
     sp: 0,
-    status: 0,
     call_depth: 0,
     error_counter: 0,
+    previous_ptr: std::ptr::null_mut(),
+        next_ptr: std::ptr::null_mut(),
+
+    free_pp: std::ptr::null(),
   }
 }
 
 
 pub fn
-initialize(&mut self, id: usize, memory_ptr: *mut u8, fp_base: usize)
+initialize(&mut self, id: usize, memory_ptr: *mut u8, fp_base: usize, free_pp: *const *mut Self)
 {
   self.id         = id;
   self.memory_ptr = memory_ptr;
   self.fp_base    = fp_base;
   self.call_depth = 0;
+  self.free_pp    = free_pp;
 }
 
 
@@ -68,15 +85,54 @@ reset(&mut self, pc: usize)
   self.pc = pc;
   self.fp = self.fp_base;
   self.sp = self.fp_base;
-  self.status = 0;
   self.call_depth = 1;
   self.error_counter = 0;
+
+  self.previous_ptr = std::ptr::null_mut();
+  self.next_ptr     = std::ptr::null_mut();
 }
 
 
-pub fn
-spawn(&mut self, n: usize)
+pub unsafe fn
+join(&mut self, prev_ptr: *mut Self, next_ptr: *mut Self)
 {
+  self.previous_ptr = prev_ptr;
+  self.next_ptr     = next_ptr;
+
+    if prev_ptr != std::ptr::null_mut()
+    {
+      let  prev = &mut *prev_ptr;
+
+      prev.next_ptr = self as *mut Self;
+    }
+
+
+    if next_ptr != std::ptr::null_mut()
+    {
+      let  next = &mut *next_ptr;
+
+      next.previous_ptr = self as *mut Self;
+    }
+}
+
+
+pub unsafe fn
+unjoin(&mut self)
+{
+    if self.previous_ptr != std::ptr::null_mut()
+    {
+      let  prev = &mut *self.previous_ptr;
+
+      prev.next_ptr = self.next_ptr;
+    }
+
+
+    if self.next_ptr != std::ptr::null_mut()
+    {
+      let  next = &mut *self.next_ptr;
+
+      next.previous_ptr = self.previous_ptr;
+    }
 }
 
 
@@ -205,27 +261,6 @@ pop_pc(&mut self)-> usize
 
 
 pub fn
-halt(&mut self)
-{
-  self.status |= HALT_FLAG;
-}
-
-
-pub fn
-unhalt(&mut self)
-{
-  self.status &= !HALT_FLAG;
-}
-
-
-pub fn
-is_halted(&self)-> bool
-{
-  (self.status&HALT_FLAG) != 0
-}
-
-
-pub fn
 get_next_byte(&mut self)-> u8
 {
   let  pc = self.pop_pc();
@@ -325,7 +360,62 @@ branch_if_non_zero(&mut self, offset: isize)
 
 
 pub fn
-step(&mut self, verbose: bool)
+spawn(&mut self, mut arg_n: u64)-> StepResult
+{
+  let  mut addr = self.sp-(WORD_SIZE*(arg_n as usize));
+
+  self.sp = addr;
+
+
+  let  ptr = unsafe{&*self.free_pp};
+
+    if *ptr == std::ptr::null_mut()
+    {
+      self.push(0);
+
+      return StepResult::Ok;
+    }
+
+
+  let  baby = unsafe{&mut **ptr};
+
+  baby.reset(self.get_u64(addr) as usize);
+
+  arg_n -= 1;
+
+    while arg_n != 0
+    {
+      arg_n -= 1;
+
+      addr += WORD_SIZE;
+
+      let  a_val = self.get_u64(addr);
+
+      baby.push(a_val);
+    }
+
+
+  baby.sp += WORD_SIZE*3;
+
+  baby.fp = baby.sp;
+
+  self.push(1);
+
+  StepResult::Spawned
+}
+
+
+pub fn
+die(&mut self)-> StepResult
+{
+  self.call_depth = 0;
+
+  StepResult::Died
+}
+
+
+pub fn
+step(&mut self, verbose: bool)-> StepResult
 {
     if verbose
     {
@@ -601,29 +691,48 @@ step(&mut self, verbose: bool)
     {
       let  retval = self.pop();
 
+      self.call_depth -= 1;
+
+        if self.call_depth == 0
+        {
+            if verbose
+            {
+              println!("execution is completed: value is {}",retval);
+            }
+
+
+          return self.die();
+        }
+
+
       self.sp = self.fp;
 
       self.fp = self.pop() as usize;
       self.pc = self.pop() as usize;
       self.sp = self.pop() as usize;
 
-      self.call_depth -= 1;
-
-        if self.call_depth == 0
-        {
-          self.halt();
-
-          println!("execution is completed: value is {}",retval);
-
-          return;
-        }
-
 
       self.push(retval);
     }
   (op) if op == Opcode::Hlt as u8=>
     {
-      self.halt();
+      return StepResult::Halted;
+    }
+  (op) if op == Opcode::Spw as u8=>
+    {
+      let  mut arg_n = self.pop()&31;
+
+        if arg_n > 0
+        {
+          return self.spawn(arg_n);
+        }
+
+
+      self.push(0);
+    }
+  (op) if op == Opcode::Die as u8=>
+    {
+      return self.die();
     }
   (op) if op == Opcode::Pri as u8=>
     {
@@ -637,34 +746,15 @@ step(&mut self, verbose: bool)
 
         if self.error_counter >= 8
         {
-          self.halt();
-
           println!("stopped because it appears many errors");
 
-          return;
+          return self.die();
         }
     }
     }
-}
 
 
-pub fn
-run(&mut self, mut n: usize, verbose: bool)
-{
-  self.unhalt();
-
-    while n != 0
-    {
-      self.step(verbose);
-
-        if self.is_halted()
-        {
-          return;
-        }
-
-
-      n -= 1;
-    }
+  StepResult::Ok
 }
 
 
@@ -673,7 +763,7 @@ run(&mut self, mut n: usize, verbose: bool)
 
 
 
-pub const  CORE_NUMBER: usize =       4;
+pub const  CORE_NUMBER: usize =       6;
 pub const   STACK_SIZE: usize = 0x10000;
 
 
@@ -685,6 +775,13 @@ Machine
   frequency: usize,
 
   cores: [Core; CORE_NUMBER],
+
+  first_ptr: *mut Core,
+   last_ptr: *mut Core,
+
+  free_core_stack: Vec<*mut Core>,
+
+  free_ptr: *mut Core,
 
   verbose: bool,
 
@@ -708,7 +805,17 @@ new()-> Self
             Core::new(),
             Core::new(),
             Core::new(),
+            Core::new(),
+            Core::new(),
            ],
+
+
+    first_ptr: std::ptr::null_mut(),
+     last_ptr: std::ptr::null_mut(),
+
+    free_core_stack: Vec::new(),
+
+    free_ptr: std::ptr::null_mut(),
 
     verbose: false,
 
@@ -734,9 +841,11 @@ reset(&mut self, freq: usize, exec: &mut Exec, entry_fn_name: &str)
 
   let  pc = exec.find_entry_point(entry_fn_name).unwrap();
 
+  let  free_pp  = (&self.free_ptr) as *const *mut Core;
+
     for i in 0..CORE_NUMBER
     {
-      self.cores[i].initialize(i,self.memory_ptr,stack_start);
+      self.cores[i].initialize(i,self.memory_ptr,stack_start,free_pp);
 
         if self.verbose
         {
@@ -749,34 +858,152 @@ reset(&mut self, freq: usize, exec: &mut Exec, entry_fn_name: &str)
 
 
   self.cores[0].reset(pc);
+
+                  self.first_ptr = (&mut self.cores[0]) as *mut Core;
+  self.last_ptr = self.first_ptr                                    ;
+
+  self.free_core_stack.clear();
+
+    for i in 1..CORE_NUMBER
+    {
+      self.free_core_stack.push((&mut self.cores[i]) as *mut Core);
+    }
+
+
+  self.update_free_ptr();
+}
+
+
+fn
+update_free_ptr(&mut self)
+{
+    if let Some(ptr) = self.free_core_stack.last()
+    {
+      self.free_ptr = *ptr;
+    }
+
+  else
+    {
+      self.free_ptr = std::ptr::null_mut();
+    }
+
+}
+
+
+unsafe fn
+append(&mut self)
+{
+  let  new_ptr = self.free_core_stack.pop().unwrap();
+
+  self.update_free_ptr();
+
+    if self.verbose
+    {
+      println!("ID {} spawned",(&*new_ptr).id);
+    }
+
+
+    if self.last_ptr != std::ptr::null_mut()
+    {
+      (&mut *self.last_ptr).next_ptr =       new_ptr;
+      (&mut *new_ptr).previous_ptr   = self.last_ptr;
+    }
+
+  else
+    {
+      self.first_ptr = new_ptr;
+    }
+
+
+  self.last_ptr = new_ptr;
+}
+
+
+unsafe fn
+remove(&mut self, ptr: *mut Core)
+{
+    if self.verbose
+    {
+      println!("ID {} died",(&*ptr).id);
+    }
+
+
+  self.free_core_stack.push(ptr);
+
+  self.update_free_ptr();
+
+  (&mut *ptr).unjoin();
+
+    if ptr == self.first_ptr
+    {
+      self.first_ptr = (&*ptr).next_ptr;
+
+        if self.first_ptr == std::ptr::null_mut()
+        {
+          self.last_ptr = std::ptr::null_mut();
+        }
+    }
+
+  else
+    if ptr == self.last_ptr
+    {
+      self.last_ptr = (&*ptr).previous_ptr;
+
+        if self.last_ptr == std::ptr::null_mut()
+        {
+          self.first_ptr = std::ptr::null_mut();
+        }
+    }
 }
 
 
 pub fn
-run(&mut self)-> usize
+run(&mut self)-> bool
 {
     if self.frequency == 0
     {
       println!("machine is set zero frequency");
 
-      return 0;
+      return false;
     }
 
 
-  let  mut living_n = 0;
+  let  mut ptr = self.first_ptr;
 
-    for core in &mut self.cores
+    while ptr != std::ptr::null_mut()
     {
-        if core.call_depth != 0
-        {
-          living_n += 1;
+      let  core = unsafe{&mut *ptr};
 
-          core.run(self.frequency,self.verbose);
+      let  mut n = self.frequency;
+
+        while n != 0
+        {
+            match core.step(self.verbose)
+            {
+          StepResult::Ok=>{}
+          StepResult::Halted=>{break;}
+          StepResult::Spawned=>
+            {
+              unsafe{self.append();}
+            }
+          StepResult::Died=>
+            {
+              unsafe{self.remove(ptr);}
+
+              break;
+            }
+            }
+
+
+          n -= 1;
         }
+
+
+      ptr = core.next_ptr;
     }
 
 
-  living_n
+  self.first_ptr != std::ptr::null_mut()
 }
 
 
@@ -797,7 +1024,7 @@ keep_run(&mut self)
     {
       let  now = Instant::now();
 
-        if self.run() == 0
+        if !self.run()
         {
           break;
         }

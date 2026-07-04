@@ -59,6 +59,7 @@ assign: expression & assign_operator & expression;
 
 
 statement: ";"
+  | die
   | halt
   | break
   | continue
@@ -75,6 +76,7 @@ statement: ";"
   ;
 
 
+die     : 'die;
 halt    : 'halt;
 break   : 'break;
 continue: 'continue;
