@@ -871,6 +871,8 @@ generate_exec(&mut self)-> Result<Exec,Error>
     }
 
 
+  exec.mini_symbols.push(MiniSymbol{offset: 0, name: "HEAP_START".to_string(), kind: MiniSymbolKind::Const(pos as i64)});
+
   Self::install_font8( &mut exec.memory[ font8_start..]);
   Self::install_combi8(&mut exec.memory[combi8_start..]);
   Self::install_font14(&mut exec.memory[font14_start..]);

@@ -27,8 +27,7 @@ EvalResult
   Const(i64),
   String(String),
   System,
-  Spawn,
-  Print,
+  SystemMember(String),
 
   Undef(&'static str),
 
@@ -74,10 +73,9 @@ try_to_text(self, srcinf: &SourceInfo)-> Result<AsmEvalText,Error>
     {
   Self::Value(txt)=>{Ok(txt)}
   Self::Const(i)=>{Ok(Self::to_text_from_const(i))}
-  Self::Spawn=>{Ok(AsmEvalText::new())}
+  Self::String(_)=>{Err(srcinf.to_error(format!("to_text is failed. from str")))}
   Self::System=>{Err(srcinf.to_error(format!("to_text is failed. from sys")))}
-  Self::String(s)=>{Err(srcinf.to_error(format!("to_text is failed. from string {}",s)))}
-  Self::Print=>{Err(srcinf.to_error(format!("to_text is failed. from print")))}
+  Self::SystemMember(_)=>{Err(srcinf.to_error(format!("to_text is failed. from sysmemb")))}
   Self::Undef(s)=>{Err(srcinf.to_error(format!("to_text is failed. from undef: {}",s)))}
   Self::Err(e)=>{Err(e)}
     }
@@ -93,8 +91,7 @@ print(&self)
   Self::Const(i)=>{print!("const {}",*i);}
   Self::String(s)=>{print!("\"{}\"",s);}
   Self::System=>{print!("SYS");}
-  Self::Spawn =>{print!("SPW");}
-  Self::Print =>{print!("PRI");}
+  Self::SystemMember(s)=>{print!("SYS({})",s);}
   Self::Undef(s)=>{print!("UNDEF {}",s);}
   Self::Err(e)=>{print!("ERR");}
     }
@@ -104,6 +101,111 @@ print(&self)
 }
 
 
+
+
+pub fn
+evaluate_system_member(s: &str, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+{
+    if s == "spawn"
+    {
+      let  mut buf = Vec::<AsmEvalText>::new();
+
+        for a in args
+        {
+            match evaluate(a,tbl,scp_opt)
+            {
+          EvalResult::Value(mut a_txt)=>
+            {
+              a_txt.push_load();
+
+              buf.push(a_txt);
+            }
+          EvalResult::Const(a_val)=>
+            {
+              buf.push(EvalResult::to_text_from_const(a_val));
+            }
+          EvalResult::Err(e)=>{return EvalResult::Err(e);}
+          _=>{return EvalResult::Undef("call spawn default");}
+            }
+        }
+
+
+      let  txt = AsmEvalText::to_spawn(buf);
+
+      EvalResult::Value(txt)
+    }
+
+  else
+    if s == "id"
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_opcode(Opcode::Pushid);
+      txt.set_kind(AsmEvalKind::Value);
+
+      EvalResult::Value(txt)
+    }
+
+  else
+    if s == "pc"
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_opcode(Opcode::Pushpc);
+      txt.set_kind(AsmEvalKind::Value);
+
+      EvalResult::Value(txt)
+    }
+
+  else
+    if s == "fp"
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_opcode(Opcode::Pushfp);
+      txt.set_kind(AsmEvalKind::Value);
+
+      EvalResult::Value(txt)
+    }
+
+  else
+    if s == "sp"
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_opcode(Opcode::Pushsp);
+      txt.set_kind(AsmEvalKind::Value);
+
+      EvalResult::Value(txt)
+    }
+
+  else
+    if s == "input"
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_opcode(Opcode::Pushinput);
+      txt.set_kind(AsmEvalKind::Value);
+
+      EvalResult::Value(txt)
+    }
+
+  else
+    if s == "timer"
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_opcode(Opcode::Pushtimer);
+      txt.set_kind(AsmEvalKind::Value);
+
+      EvalResult::Value(txt)
+    }
+
+  else
+    {
+      EvalResult::Undef("SystemMember")
+    }
+}
 
 
 pub fn
@@ -142,34 +244,7 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Sc
       EvalResult::Value(txt)
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
-  EvalResult::Spawn=>
-    {
-      let  mut buf = Vec::<AsmEvalText>::new();
-
-        for a in args
-        {
-            match evaluate(a,tbl,scp_opt)
-            {
-          EvalResult::Value(mut a_txt)=>
-            {
-              a_txt.push_load();
-
-              buf.push(a_txt);
-            }
-          EvalResult::Const(a_val)=>
-            {
-              buf.push(EvalResult::to_text_from_const(a_val));
-            }
-          EvalResult::Err(e)=>{return EvalResult::Err(e);}
-          _=>{return EvalResult::Undef("call spawn default");}
-            }
-        }
-
-
-      let  txt = AsmEvalText::to_spawn(buf);
-
-      EvalResult::Value(txt)
-    }
+  EvalResult::SystemMember(s)=>{evaluate_system_member(&s,args,tbl,scp_opt)}
   _=>{EvalResult::Undef("call defalut")}
     }
 }
@@ -201,12 +276,6 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
       EvalResult::Value(txt)
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
-  EvalResult::System=>
-    {
-           if s == "spawn"{EvalResult::Spawn}
-      else if s == "print"{EvalResult::Print}
-      else                {EvalResult::Err(srcinf.to_error(format!("{} is not found in sys",s)))}
-    }
   _=>{EvalResult::Undef("access default")}
     }
 }

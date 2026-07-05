@@ -178,8 +178,11 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
         {
       EvalResult::System=>
         {
-               if s == "spawn"{EvalResult::Spawn}
-          else if s == "print"{EvalResult::Print}
+               if s == "spawn"{EvalResult::SystemMember(s.clone())}
+          else if s == "print"{EvalResult::SystemMember(s.clone())}
+          else if s ==    "id"{EvalResult::SystemMember(s.clone())}
+          else if s == "input"{EvalResult::SystemMember(s.clone())}
+          else if s == "timer"{EvalResult::SystemMember(s.clone())}
           else                {EvalResult::Err(srcinf.to_error(format!("{} is not found in sys",s)))}
         }
       _=>{EvalResult::Undef("")}

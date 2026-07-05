@@ -52,6 +52,8 @@ m.set_verbose();
               m.keep_run();
 
               println!("machine is finished");
+exec.print_memory();
+              println!("");
             }
           Err(e)=>{e.print();}
             }
@@ -93,9 +95,8 @@ test(a,b)
 fn
 main()
 {
-  loop{
-    if sys.spawn(test,900,800) == 0{halt;}
-  }
+  sys.spawn(test,123,9);
+  sys.input();
 }
 "#;
 

@@ -57,9 +57,7 @@
     </span>
   <span>
     <textarea id="text" cols="48" rows="12">
-io input;
 io video;
-io time;
 
 io sin_freq;
 io sin_vol ;
@@ -101,11 +99,11 @@ const  CHR_H = 40;
 fn
 sleep(tm)
 {
-  var  base = time;
+  var  base = sys.timer();
 
     loop
     {
-        if (time-base) >= tm
+        if (sys.timer()-base) >= tm
         {
           break;
         }
@@ -335,6 +333,8 @@ main()
 
   loop
   {
+    var  input = sys.input();
+
     fill(0,0,VIDEO_W,VIDEO_H,0);
 
       if input&Z_KEY
@@ -385,6 +385,7 @@ main()
         put_byte,
         get_word,
         put_word,
+        set_input,
         get_io,
         get_const,
         process,
@@ -431,9 +432,7 @@ main()
 
       const  g_millisec = 1000/20;
 
-      let  g_input_addr;
       let  g_video_addr;
-      let   g_time_addr;
 
       let  g_sin_freq_addr;
       let  g_sin_vol_addr ;
@@ -571,11 +570,7 @@ main()
           }
 
 
-        put_byte(g_input_addr,g_key_state);
-
-        const  new_time = get_word(g_time_addr)+g_millisec;
-
-        put_word(g_time_addr,new_time);
+        set_input(g_key_state|0);
 
         process();
 
@@ -638,9 +633,7 @@ main()
 
         g_asmtext.value = g_ready;
 
-        g_input_addr = get_io("input");
         g_video_addr = get_io("video");
-        g_time_addr  = get_io("time");
         g_sin_freq_addr = get_io("sin_freq");
         g_sin_vol_addr  = get_io("sin_vol");
         g_squ_freq_addr = get_io("squ_freq");

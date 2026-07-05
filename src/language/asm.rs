@@ -19,6 +19,9 @@ Opcode
   Pushfp,
   Pushsp,
 
+  Pushinput,
+  Pushtimer,
+
   Push8,
   Push16,
   Push32,
@@ -82,6 +85,9 @@ to_str(&self)-> &'static str
   Self::Pushpc=>{"pushpc"}
   Self::Pushfp=>{"pushfp"}
   Self::Pushsp=>{"pushsp"}
+
+  Self::Pushinput=>{"pushinput"}
+  Self::Pushtimer=>{"pushtimer"}
 
   Self::Push8 =>{"push8"}
   Self::Push16=>{"push16"}
@@ -186,6 +192,8 @@ try_from(b: u8)-> Result<Self,Self::Error>
   (op) if op == Self::Pushpc as u8=>{Ok(Self::Pushpc)}
   (op) if op == Self::Pushfp as u8=>{Ok(Self::Pushfp)}
   (op) if op == Self::Pushsp as u8=>{Ok(Self::Pushsp)}
+  (op) if op == Self::Pushinput as u8=>{Ok(Self::Pushinput)}
+  (op) if op == Self::Pushtimer as u8=>{Ok(Self::Pushtimer)}
   (op) if op == Self::Push8 as u8=>{Ok(Self::Push8)}
   (op) if op == Self::Push16 as u8=>{Ok(Self::Push16)}
   (op) if op == Self::Push32 as u8=>{Ok(Self::Push32)}
@@ -597,6 +605,13 @@ pub fn
 get_kind(&self)-> &AsmEvalKind
 {
   &self.kind
+}
+
+
+pub fn
+set_kind(&mut self, k: AsmEvalKind)
+{
+  self.kind = k;
 }
 
 

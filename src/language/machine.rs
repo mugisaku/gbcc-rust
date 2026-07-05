@@ -18,6 +18,7 @@ StepResult
 }
 
 
+#[derive(Clone,Copy)]
 pub struct
 Core
 {
@@ -38,7 +39,7 @@ Core
   previous_ptr: *mut Self,
       next_ptr: *mut Self,
 
-  free_pp: *const *mut Core,
+  common_data_ptr: *const CommonData,
 
 }
 
@@ -63,19 +64,20 @@ new()-> Self
     previous_ptr: std::ptr::null_mut(),
         next_ptr: std::ptr::null_mut(),
 
-    free_pp: std::ptr::null(),
+    common_data_ptr: std::ptr::null(),
+
   }
 }
 
 
 pub fn
-initialize(&mut self, id: usize, memory_ptr: *mut u8, fp_base: usize, free_pp: *const *mut Self)
+initialize(&mut self, id: usize, memory_ptr: *mut u8, fp_base: usize, common_data_ptr: *const CommonData)
 {
   self.id         = id;
   self.memory_ptr = memory_ptr;
   self.fp_base    = fp_base;
   self.call_depth = 0;
-  self.free_pp    = free_pp;
+  self.common_data_ptr = common_data_ptr;
 }
 
 
@@ -367,9 +369,9 @@ spawn(&mut self, mut arg_n: u64)-> StepResult
   self.sp = addr;
 
 
-  let  ptr = unsafe{&*self.free_pp};
+  let  ptr = unsafe{&*self.common_data_ptr}.free_ptr;
 
-    if *ptr == std::ptr::null_mut()
+    if ptr == std::ptr::null_mut()
     {
       self.push(0);
 
@@ -377,7 +379,7 @@ spawn(&mut self, mut arg_n: u64)-> StepResult
     }
 
 
-  let  baby = unsafe{&mut **ptr};
+  let  baby = unsafe{&mut *ptr};
 
   baby.reset(self.get_u64(addr) as usize);
 
@@ -415,9 +417,16 @@ die(&mut self)-> StepResult
 
 
 pub fn
-step(&mut self, verbose: bool)-> StepResult
+is_verbose(&self)-> bool
 {
-    if verbose
+  unsafe{&*self.common_data_ptr}.verbose
+}
+
+
+pub fn
+step(&mut self)-> StepResult
+{
+    if self.is_verbose()
     {
       print!("ID: {}, PC: {}, FP: {}, SP: {}",self.id,self.pc,self.fp,self.sp);
     }
@@ -427,7 +436,7 @@ step(&mut self, verbose: bool)-> StepResult
 
   let  b = self.get_next_byte();
 
-    if verbose
+    if self.is_verbose()
     {
       let  s = match Opcode::try_from(b)
         {
@@ -459,6 +468,14 @@ step(&mut self, verbose: bool)-> StepResult
   (op) if op == Opcode::Pushsp as u8=>
     {
       self.push(self.sp as u64);
+    }
+  (op) if op == Opcode::Pushinput as u8=>
+    {
+      self.push(unsafe{&*self.common_data_ptr}.input as u64);
+    }
+  (op) if op == Opcode::Pushtimer as u8=>
+    {
+      self.push(unsafe{&*self.common_data_ptr}.timer as u64);
     }
   (op) if op == Opcode::Push8 as u8=>
     {
@@ -679,7 +696,7 @@ step(&mut self, verbose: bool)-> StepResult
       self.fp = self.sp;
       self.pc = self.get_u64(new_pc_addr) as usize;
 
-        if verbose
+        if self.is_verbose()
         {
           println!("arg_n {}, jumped to {}",arg_n,self.pc);
         }
@@ -695,7 +712,7 @@ step(&mut self, verbose: bool)-> StepResult
 
         if self.call_depth == 0
         {
-            if verbose
+            if self.is_verbose()
             {
               println!("execution is completed: value is {}",retval);
             }
@@ -763,16 +780,55 @@ step(&mut self, verbose: bool)-> StepResult
 
 
 
-pub const  CORE_NUMBER: usize =       6;
-pub const   STACK_SIZE: usize = 0x10000;
+pub const  CORE_NUMBER: usize =    128;
+pub const   STACK_SIZE: usize = 0x2000;
+
+
+pub struct
+CommonData
+{
+  frequency: usize,
+
+  free_ptr: *mut Core,
+
+  timer: u64,
+  input: u64,
+
+  verbose: bool,
+
+}
+
+
+impl
+CommonData
+{
+
+
+pub const fn
+new()-> Self
+{
+  Self{
+    frequency: 0,
+
+    free_ptr: std::ptr::null_mut(),
+
+    timer: 0,
+    input: 0,
+
+    verbose: false,
+  }
+}
+
+
+}
+
+
 
 
 pub struct
 Machine
 {
   memory_ptr: *mut u8,
-
-  frequency: usize,
 
   cores: [Core; CORE_NUMBER],
 
@@ -781,9 +837,7 @@ Machine
 
   free_core_stack: Vec<*mut Core>,
 
-  free_ptr: *mut Core,
-
-  verbose: bool,
+  common_data: CommonData,
 
 }
 
@@ -799,25 +853,14 @@ new()-> Self
   Self{
     memory_ptr: std::ptr::null_mut(),
 
-    frequency: 0,
-
-    cores: [Core::new(),
-            Core::new(),
-            Core::new(),
-            Core::new(),
-            Core::new(),
-            Core::new(),
-           ],
-
+    cores: [const{Core::new()}; CORE_NUMBER],
 
     first_ptr: std::ptr::null_mut(),
      last_ptr: std::ptr::null_mut(),
 
     free_core_stack: Vec::new(),
 
-    free_ptr: std::ptr::null_mut(),
-
-    verbose: false,
+    common_data: CommonData::new(),
 
   }
 }
@@ -826,7 +869,7 @@ new()-> Self
 pub fn
 set_verbose(&mut self)
 {
-  self.verbose = true;
+  self.common_data.verbose = true;
 }
 
 
@@ -835,19 +878,19 @@ reset(&mut self, freq: usize, exec: &mut Exec, entry_fn_name: &str)
 {
   self.memory_ptr = exec.get_mut_ptr(0);
 
-  self.frequency = freq;
+  self.common_data.frequency = freq;
 
   let  mut stack_start = exec.find_const("STACK_START").unwrap() as usize;
 
   let  pc = exec.find_entry_point(entry_fn_name).unwrap();
 
-  let  free_pp  = (&self.free_ptr) as *const *mut Core;
+  let  common_data_ptr = (&self.common_data) as *const CommonData;
 
     for i in 0..CORE_NUMBER
     {
-      self.cores[i].initialize(i,self.memory_ptr,stack_start,free_pp);
+      self.cores[i].initialize(i,self.memory_ptr,stack_start,common_data_ptr);
 
-        if self.verbose
+        if self.common_data.verbose
         {
           println!("core {} initialized. stack_start: {}",i,stack_start);
         }
@@ -874,17 +917,24 @@ reset(&mut self, freq: usize, exec: &mut Exec, entry_fn_name: &str)
 }
 
 
+pub fn
+set_input(&mut self, v: u64)
+{
+  self.common_data.input = v;
+}
+
+
 fn
 update_free_ptr(&mut self)
 {
     if let Some(ptr) = self.free_core_stack.last()
     {
-      self.free_ptr = *ptr;
+      self.common_data.free_ptr = *ptr;
     }
 
   else
     {
-      self.free_ptr = std::ptr::null_mut();
+      self.common_data.free_ptr = std::ptr::null_mut();
     }
 
 }
@@ -897,7 +947,7 @@ append(&mut self)
 
   self.update_free_ptr();
 
-    if self.verbose
+    if self.common_data.verbose
     {
       println!("ID {} spawned",(&*new_ptr).id);
     }
@@ -922,7 +972,7 @@ append(&mut self)
 unsafe fn
 remove(&mut self, ptr: *mut Core)
 {
-    if self.verbose
+    if self.common_data.verbose
     {
       println!("ID {} died",(&*ptr).id);
     }
@@ -960,7 +1010,7 @@ remove(&mut self, ptr: *mut Core)
 pub fn
 run(&mut self)-> bool
 {
-    if self.frequency == 0
+    if self.common_data.frequency == 0
     {
       println!("machine is set zero frequency");
 
@@ -974,11 +1024,11 @@ run(&mut self)-> bool
     {
       let  core = unsafe{&mut *ptr};
 
-      let  mut n = self.frequency;
+      let  mut n = self.common_data.frequency;
 
         while n != 0
         {
-            match core.step(self.verbose)
+            match core.step()
             {
           StepResult::Ok=>{}
           StepResult::Halted=>{break;}
@@ -1003,6 +1053,8 @@ run(&mut self)-> bool
     }
 
 
+  self.common_data.timer += 1;
+
   self.first_ptr != std::ptr::null_mut()
 }
 
@@ -1010,7 +1062,7 @@ run(&mut self)-> bool
 pub fn
 keep_run(&mut self)
 {
-    if self.frequency == 0
+    if self.common_data.frequency == 0
     {
       println!("machine is set zero frequency");
 

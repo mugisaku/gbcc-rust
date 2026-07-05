@@ -44,6 +44,11 @@ pub fn
 put_word(off: usize, v: u32)
 {unsafe{EXEC.put_u32(off,v);}}
 
+#[wasm_bindgen]
+pub fn
+set_input(v: u32)
+{unsafe{MACHINE.set_input(v as u64);}}
+
 
 
 
