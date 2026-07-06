@@ -201,7 +201,7 @@ build_from_string(srcinf: SourceInfo, s: String, symtbl: &SymbolTable)-> Result<
 
 
 pub fn
-build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
+build(src: Source, symtbl: &SymbolTable)-> Result<Vec<Self>,Error>
 {
   let  (srcinf,name,kind) = src.decl.expire();
 
@@ -217,13 +217,13 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
         {
       EvalResult::Const(v)=>
         {
-          Ok(Self{
+          Ok(vec![Self{
             name,
             kind: SymbolKind::Const(v),
             offset: 0,
             deps_parent_list,
             deps_child_list,
-          })
+          }])
         }
       _=>{Err(srcinf.to_error(format!("constの初期化に失敗")))}
         }
@@ -234,26 +234,26 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
         {
       EvalResult::Const(v)=>
         {
-          Ok(Self{
+          Ok(vec![Self{
             name,
             kind: SymbolKind::GlobalVar(v),
             offset: 0,
             deps_parent_list,
             deps_child_list,
-          })
+          }])
         }
       _=>{Err(srcinf.to_error(format!("varの初期化に失敗")))}
         }
     }
   DeclKind::Io=>
     {
-      Ok(Self{
+      Ok(vec![Self{
         name,
         kind: SymbolKind::Io,
         offset: 0,
         deps_parent_list,
         deps_child_list,
-      })
+      }])
     }
   DeclKind::Str(dk,sik)=>
     {
@@ -261,13 +261,13 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
         {
       Ok(bytes)=>
         {
-          Ok(Self{
+          Ok(vec![Self{
             name,
             kind: SymbolKind::Str(dk,bytes),
             offset: 0,
             deps_parent_list,
             deps_child_list,
-          })
+          }])
         }
       Err(e)=>{Err(srcinf.to_error(format!("styrの初期化に失敗")).wrap(e))}
         }
@@ -278,26 +278,47 @@ build(src: Source, symtbl: &SymbolTable)-> Result<Self,Error>
         {
       EvalResult::Const(v)=>
         {
-          Ok(Self{
+          Ok(vec![Self{
             name,
             kind: SymbolKind::Field(v as usize),
             offset: 0,
             deps_parent_list,
             deps_child_list,
-          })
+          }])
         }
       _=>{Err(srcinf.to_error(format!("fieldの大きさの算出に失敗")))}
         }
     }
+  DeclKind::Enum(ls)=>
+    {
+      let  mut buf = Vec::<Symbol>::new();
+
+        for (i,s) in ls.iter().enumerate()
+        {
+          let  sym = Self{
+            name: s.clone(),
+            kind: SymbolKind::Const(i as i64),
+            offset: 0,
+            deps_parent_list: Vec::new(),
+            deps_child_list: Vec::new(),
+          };
+
+
+          buf.push(sym);
+        }
+
+
+      Ok(buf)
+    }
   DeclKind::Fn(fd)=>
     {
-      Ok(Self{
+      Ok(vec![Self{
         name,
         kind: SymbolKind::Fn(srcinf,fd),
         offset: 0,
         deps_parent_list,
         deps_child_list,
-      })
+      }])
     }
   _=>{panic!();}
     }
@@ -477,7 +498,13 @@ generate_symbols(mut self, mut srcs: Vec<Source>, mut strs: Vec<(SourceInfo,Stri
 
             match Symbol::build(src,&self)
             {
-          Ok(sym)=>{self.symbols.push(sym);}
+          Ok(syms)=>
+            {
+                for sym in syms
+                {
+                  self.symbols.push(sym);
+                }
+            }
           Err(e)=>{return Err(e);}
             }
         }

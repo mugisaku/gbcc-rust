@@ -113,11 +113,13 @@ field: 'field -> .Identifier & expression;
 io   : 'io    -> .Identifier;
 var  : 'var   -> .Identifier & initialize;
 const: 'const -> .Identifier & initialize;
+enum: 'enum -> "{" & {.Identifier & [","]} & "}";
 
 declaration: fn
            | io
            | var
            | const
+           | enum
            | str
            | field
            | ";";

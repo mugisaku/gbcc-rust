@@ -780,7 +780,7 @@ step(&mut self)-> StepResult
 
 
 
-pub const  CORE_NUMBER: usize =    128;
+pub const  CORE_NUMBER: usize =    32;
 pub const   STACK_SIZE: usize = 0x2000;
 
 

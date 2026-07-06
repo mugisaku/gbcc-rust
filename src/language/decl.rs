@@ -82,6 +82,8 @@ DeclKind
   Str(String,StrInitKind),
   Field(Expr),
 
+  Enum(Vec<String>),
+
   Fn(FnDecl),
 
 }
@@ -147,6 +149,18 @@ print(&self, name: &str)
   DeclKind::Io=>
     {
       print!("io {}",name);
+    }
+  DeclKind::Enum(ls)=>
+    {
+      print!("enum{{");
+
+        for s in ls
+        {
+          print!("{}, ",s);
+        }
+
+
+      print!("}}");
     }
   DeclKind::Fn(f)=>
     {
@@ -236,6 +250,7 @@ collect(&self, buf: &mut Vec<Collectible>)
         }
     }
   DeclKind::Field(e)=>{e.collect(buf);}
+  DeclKind::Enum(_)=>{}
   DeclKind::Fn(fd)=>{fd.get_block().collect(buf);}
   _=>{panic!();}
     }
@@ -509,6 +524,32 @@ read_io_decl(start_nd: &Node)-> String
 
 
 pub fn
+read_enum(start_nd: &Node)-> Vec<String>
+{
+  let  mut cur = start_nd.cursor();
+
+  let  mut ls = Vec::<String>::new();
+
+  cur.advance(2);
+
+    while let Some(s) = cur.get_identifier()
+    {
+      ls.push(s.clone());
+
+      cur.advance(1);
+
+        if let Some(_) = cur.get_semi_string()
+        {
+          cur.advance(1);
+        }
+    }
+
+
+  ls
+}
+
+
+pub fn
 read_fn_decl(start_nd: &Node)-> (String,FnDecl)
 {
   let  mut cur = start_nd.cursor();
@@ -585,6 +626,14 @@ read_decl(start_nd: &Node)-> Decl
           let  name = read_io_decl(nd);
 
           return Decl{source_info, name, kind: DeclKind::Io};
+        }
+
+      else
+        if name == "enum"
+        {
+          let  ls = read_enum(nd);
+
+          return Decl{source_info, name: "".to_string(), kind: DeclKind::Enum(ls)};
         }
 
       else

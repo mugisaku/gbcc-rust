@@ -25,13 +25,7 @@ compile_and_run(s: &str)
         {
        Ok(mut symtbl)=>
         {
-          let  mut tmp = Vec::<u8>::new();
-
-          tmp.resize(4*384*384,0);
-
-          symtbl.add_img("image",384,384,tmp);
-
-//          symtbl.print();
+//symtbl.print();
 
             match symtbl.generate_exec()
             {
@@ -90,6 +84,12 @@ test(a,b)
 
   return a-b;
 }
+
+enum{
+  Apple, Grape, Orange
+
+}
+
 
 
 fn
