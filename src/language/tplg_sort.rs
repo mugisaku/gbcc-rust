@@ -12,7 +12,9 @@ TplgNode
 {
   name: String,
 
-  deps_child_list: Vec<String>,
+  value: usize,
+
+  child_names: Vec<String>,
 
   parent_count: usize,
 
@@ -25,13 +27,21 @@ TplgNode
 
 
 pub fn
-new(name: String, deps_child_list: Vec<String>, parent_count: usize)-> Self
+new(name: &str, value: usize, child_names: &Vec<String>, parent_count: usize)-> Self
 {
   Self{
-    name,
-    deps_child_list,
+    name: name.to_string(),
+    value,
+    child_names: child_names.clone(),
     parent_count,
   }
+}
+
+
+pub fn
+get_value(&self)-> usize
+{
+  self.value
 }
 
 
@@ -61,7 +71,7 @@ step(nodes: &mut Vec<TplgNode>, remains: &mut Vec<TplgNode>)-> Vec<TplgNode>
 
     for removed_nd in &buf
     {
-        for name in &removed_nd.deps_child_list
+        for name in &removed_nd.child_names
         {
             for remained_nd in remains.iter_mut()
             {
@@ -81,10 +91,10 @@ step(nodes: &mut Vec<TplgNode>, remains: &mut Vec<TplgNode>)-> Vec<TplgNode>
 
 
 pub fn
-tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<String>,Error>
+tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<usize>,Error>
 {
   let  mut remains = Vec::<TplgNode>::new();
-  let  mut  output = Vec::<String>::new();
+  let  mut  output = Vec::<usize>::new();
 
 //  println!("トポロジカルソートを開始");
 
@@ -113,7 +123,7 @@ tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<String>,Error>
         {
 //          println!("{}をプッシュ",nd.key.to_number());
 
-          output.push(nd.name);
+          output.push(nd.value);
         }
 
 

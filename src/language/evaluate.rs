@@ -10,7 +10,6 @@ use crate::source_file::{
 
 use super::*;
 use super::scope::*;
-use super::symbol_table::*;
 use super::expr::*;
 use super::decl::*;
 use super::asm::*;
@@ -104,7 +103,7 @@ print(&self)
 
 
 pub fn
-evaluate_system_member(s: &str, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_system_member(s: &str, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
     if s == "spawn"
     {
@@ -112,7 +111,7 @@ evaluate_system_member(s: &str, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Op
 
         for a in args
         {
-            match evaluate(a,tbl,scp_opt)
+            match evaluate(a,set,scp_opt)
             {
           EvalResult::Value(mut a_txt)=>
             {
@@ -209,11 +208,11 @@ evaluate_system_member(s: &str, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Op
 
 
 pub fn
-evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_call(f: &Expr, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  srcinf = f.get_source_info();
 
-    match evaluate(f,tbl,scp_opt)
+    match evaluate(f,set,scp_opt)
     {
   EvalResult::Value(mut txt)=>
     {
@@ -221,7 +220,7 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Sc
 
         for a in args
         {
-            match evaluate(a,tbl,scp_opt)
+            match evaluate(a,set,scp_opt)
             {
           EvalResult::Value(mut a_txt)=>
             {
@@ -244,18 +243,18 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, tbl: &SymbolTable, scp_opt: Option<&Sc
       EvalResult::Value(txt)
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
-  EvalResult::SystemMember(s)=>{evaluate_system_member(&s,args,tbl,scp_opt)}
+  EvalResult::SystemMember(s)=>{evaluate_system_member(&s,args,set,scp_opt)}
   _=>{EvalResult::Undef("call defalut")}
     }
 }
 
 
 pub fn
-evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_access(ins: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  srcinf = ins.get_source_info();
 
-    match evaluate(ins,tbl,scp_opt)
+    match evaluate(ins,set,scp_opt)
     {
   EvalResult::Value(mut txt)=>
     {
@@ -282,7 +281,7 @@ evaluate_access(ins: &Expr, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)
 
 
 pub fn
-evaluate_identifier(srcinf: &SourceInfo, s: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_identifier(srcinf: &SourceInfo, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
     if let Some(scp) = scp_opt
     {
@@ -308,51 +307,51 @@ evaluate_identifier(srcinf: &SourceInfo, s: &str, tbl: &SymbolTable, scp_opt: Op
     }
 
 
-    if let Some(sym) = tbl.find_symbol(s)
+    if let Some(decl) = set.find(s)
     {
-      return match sym.get_kind()
+      return match decl.get_kind()
         {
-      SymbolKind::Const(i)=>
+      DeclKind::Const(_,i)=>
         {
           EvalResult::Const(*i)
         }
-      SymbolKind::GlobalVar(_)=>
+      DeclKind::Var(_,_)=>
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_global_var(sym.get_offset());
+          txt.push_global_var(decl.get_offset());
 
           EvalResult::Value(txt)
         }
-      SymbolKind::Io=>
+      DeclKind::Io=>
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_global_var(sym.get_offset());
+          txt.push_global_var(decl.get_offset());
 
           EvalResult::Value(txt)
         }
-      SymbolKind::Str(_,_)=>
+      DeclKind::Str(_,_,_)=>
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_i64(sym.get_offset() as i64);
+          txt.push_i64(decl.get_offset() as i64);
 
           EvalResult::Value(txt)
         }
-      SymbolKind::Field(_)=>
+      DeclKind::Field(_,_)=>
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_i64(sym.get_offset() as i64);
+          txt.push_i64(decl.get_offset() as i64);
 
           EvalResult::Value(txt)
         }
-      SymbolKind::Fn(_,_)=>
+      DeclKind::Fn(_)=>
         {
           let  mut txt = AsmEvalText::new();
 
-          txt.push_fn(sym.get_offset());
+          txt.push_fn(decl.get_offset());
 
           EvalResult::Value(txt)
         }
@@ -366,11 +365,11 @@ evaluate_identifier(srcinf: &SourceInfo, s: &str, tbl: &SymbolTable, scp_opt: Op
 
 
 pub fn
-evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_unary(o: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  srcinf = o.get_source_info();
 
-    match evaluate(o,tbl,scp_opt)
+    match evaluate(o,set,scp_opt)
     {
   EvalResult::Value(mut txt)=>
     {
@@ -393,16 +392,16 @@ evaluate_unary(o: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)->
 
 
 pub fn
-evaluate_binary(l: &Expr, r: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_binary(l: &Expr, r: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  l_srcinf = l.get_source_info();
   let  r_srcinf = r.get_source_info();
 
-    match evaluate(l,tbl,scp_opt)
+    match evaluate(l,set,scp_opt)
     {
   EvalResult::Value(mut l_txt)=>
     {
-        match evaluate(r,tbl,scp_opt)
+        match evaluate(r,set,scp_opt)
         {
       EvalResult::Value(r_txt)=>
         {
@@ -424,7 +423,7 @@ evaluate_binary(l: &Expr, r: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option
     }
   EvalResult::Const(l_val)=>
     {
-        match evaluate(r,tbl,scp_opt)
+        match evaluate(r,set,scp_opt)
         {
       EvalResult::Value(r_txt)=>
         {
@@ -453,9 +452,9 @@ evaluate_binary(l: &Expr, r: &Expr, op: &str, tbl: &SymbolTable, scp_opt: Option
 
 
 pub fn
-evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
-  let  res = evaluate_const(e,tbl,scp_opt);
+  let  res = evaluate_const(e,set,scp_opt);
 
     match res
     {
@@ -465,7 +464,7 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
         {
       ExprKind::Identifier(s)=>
         {
-          evaluate_identifier(e.get_source_info(),s,tbl,scp_opt)
+          evaluate_identifier(e.get_source_info(),s,set,scp_opt)
         }
       ExprKind::Int(i)=>
         {
@@ -473,33 +472,33 @@ evaluate(e: &Expr, tbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
         }
       ExprKind::String(s)=>
         {
-          let  sym = tbl.find_string_symbol(s).unwrap();
+          let  decl = set.find_string(s).unwrap();
 
           let  mut txt = AsmEvalText::new();
 
-          txt.push_i64(sym.get_offset() as i64);
+          txt.push_i64(decl.get_offset() as i64);
 
           EvalResult::Value(txt)
         }
       ExprKind::CallOp(f,args)=>
         {
-          evaluate_call(f,args,tbl,scp_opt)
+          evaluate_call(f,args,set,scp_opt)
         }
       ExprKind::AccessOp(ins,s)=>
         {
-          evaluate_access(ins,s,tbl,scp_opt)
+          evaluate_access(ins,s,set,scp_opt)
         }
       ExprKind::Expr(e)=>
         {
-          evaluate(e,tbl,scp_opt)
+          evaluate(e,set,scp_opt)
         }
       ExprKind::UnaryOp(o,op)=>
         {
-          evaluate_unary(o,op,tbl,scp_opt)
+          evaluate_unary(o,op,set,scp_opt)
         }
       ExprKind::BinaryOp(l,r,op)=>
         {
-          evaluate_binary(l,r,op,tbl,scp_opt)
+          evaluate_binary(l,r,op,set,scp_opt)
         }
         }
     }

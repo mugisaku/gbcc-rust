@@ -8,63 +8,7 @@ use crate::source_file::{
 };
 
 use super::asm::*;
-
-
-
-
-pub enum
-CollectibleKind
-{
-  Identifier,
-      String,
-
-}
-
-
-pub struct
-Collectible
-{
-  source_info: SourceInfo,
-  content: String,
-  kind: CollectibleKind,
-  
-}
-
-
-impl
-Collectible
-{
-
-
-pub fn
-destruct(self)-> (SourceInfo,String,CollectibleKind)
-{
-  (self.source_info,self.content,self.kind)
-}
-
-
-pub fn
-get_source_info(&self)-> &SourceInfo
-{
-  &self.source_info
-}
-
-
-pub fn
-get_content(&self)-> &String
-{
-  &self.content
-}
-
-
-pub fn
-get_kind(&self)-> &CollectibleKind
-{
-  &self.kind
-}
-
-
-}
+use super::decl::*;
 
 
 
@@ -107,6 +51,16 @@ Expr
 
 
 pub fn
+from_int(i: i64)-> Self
+{
+  Self{
+    source_info: SourceInfo::new(),
+    kind: ExprKind::Int(i),
+  }
+}
+
+
+pub fn
 get_source_info(&self)-> &SourceInfo
 {
   &self.source_info
@@ -138,49 +92,42 @@ read(s: &str)-> Result<Self,()>
 
 
 pub fn
-collect(&self, buf: &mut Vec<Collectible>)
+collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
 {
     match &self.kind
     {
   ExprKind::Identifier(s)=>
     {
-      let  source_info = self.source_info.clone();
+        if let Some(cano_name) = set.find_canonical_name(s)
+        {
+          ss.insert(cano_name.clone());
+        }
 
-      let  content = s.clone();
-
-      let  kind = CollectibleKind::Identifier;
-
-      buf.push(Collectible{source_info, content, kind});
+      else
+        {
+          ss.record_fail(&self.source_info,s.clone());
+        }
     }
-  ExprKind::String(s)=>
-    {
-      let  source_info = self.source_info.clone();
-
-      let  content = s.clone();
-
-      let  kind = CollectibleKind::String;
-
-      buf.push(Collectible{source_info, content, kind});
-    }
+  ExprKind::String(s)=>{}
   ExprKind::CallOp(f,args)=>
     {
-      f.collect(buf);
+      f.collect_identifier(set,ss);
 
         for e in args
         {
-          e.collect(buf);
+          e.collect_identifier(set,ss);
         }
     }
   ExprKind::AccessOp(ins,_)=>
     {
-      ins.collect(buf);
+      ins.collect_identifier(set,ss);
     }
-  ExprKind::Expr(e)=>{e.collect(buf);}
-  ExprKind::UnaryOp(o,op)=>{o.collect(buf);}
+  ExprKind::Expr(e)=>{e.collect_identifier(set,ss);}
+  ExprKind::UnaryOp(o,op)=>{o.collect_identifier(set,ss);}
   ExprKind::BinaryOp(l,r,op)=>
     {
-      l.collect(buf);
-      r.collect(buf);
+      l.collect_identifier(set,ss);
+      r.collect_identifier(set,ss);
     }
   _=>{}
     }
@@ -188,39 +135,33 @@ collect(&self, buf: &mut Vec<Collectible>)
 
 
 pub fn
-collect_string(&self, buf: &mut Vec<Collectible>)
+collect_string(&self, ss: &mut StringSet)
 {
     match &self.kind
     {
   ExprKind::String(s)=>
     {
-      let  source_info = self.source_info.clone();
-
-      let  content = s.clone();
-
-      let  kind = CollectibleKind::String;
-
-      buf.push(Collectible{source_info, content, kind});
+      ss.insert(s.clone());
     }
   ExprKind::CallOp(f,args)=>
     {
-      f.collect_string(buf);
+      f.collect_string(ss);
 
         for e in args
         {
-          e.collect_string(buf);
+          e.collect_string(ss);
         }
     }
   ExprKind::AccessOp(ins,_)=>
     {
-      ins.collect_string(buf);
+      ins.collect_string(ss);
     }
-  ExprKind::Expr(e)=>{e.collect_string(buf);}
-  ExprKind::UnaryOp(o,op)=>{o.collect_string(buf);}
+  ExprKind::Expr(e)=>{e.collect_string(ss);}
+  ExprKind::UnaryOp(o,op)=>{o.collect_string(ss);}
   ExprKind::BinaryOp(l,r,op)=>
     {
-      l.collect_string(buf);
-      r.collect_string(buf);
+      l.collect_string(ss);
+      r.collect_string(ss);
     }
   _=>{}
     }

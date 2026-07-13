@@ -9,7 +9,7 @@ pub mod evaluate;
 pub mod decl;
 pub mod assemble;
 pub mod scope;
-pub mod symbol_table;
+pub mod exec;
 pub mod tplg_sort;
 pub mod dictionary;
 pub mod font14;

@@ -10,7 +10,7 @@ mod debug;
 use wasm_bindgen::prelude::*;
 use crate::language::machine::*;
 use crate::language::decl::*;
-use crate::language::symbol_table::*;
+use crate::language::exec::*;
 
 
 #[wasm_bindgen]
@@ -19,7 +19,10 @@ pub fn  check(s: &str);
 }
 
 
-static mut SYMTBL: SymbolTable = SymbolTable::new();
+static mut EX_IMG_W: u32 = 0;
+static mut EX_IMG_H: u32 = 0;
+static mut EX_IMG_DATA: Vec<u8> = Vec::new();
+
 static mut EXEC: Exec = Exec::new();
 static mut ERR_MSG: String = String::new();
 static mut MACHINE: Machine = Machine::new();
@@ -92,21 +95,47 @@ get_error_message()-> String
 
 #[wasm_bindgen]
 pub fn
+transfer_ex_img(w: u32, h: u32, data: Vec<u8>)
+{
+  unsafe{
+    EX_IMG_W    = w;
+    EX_IMG_H    = h;
+    EX_IMG_DATA = data;
+  }
+}
+
+
+#[wasm_bindgen]
+pub fn
 compile(s: &str)-> bool
 {
     unsafe
     {
-        match Decl::read_as_root(s)
+        match DeclSet::read(s)
         {
-      Ok(root)=>
+      Ok(mut root)=>
         {
-            match SymbolTable::build(root)
+            match root.finalize()
             {
-          Ok(symtbl)=>
+          Ok(())=>
             {
-              SYMTBL = symtbl;
+              root.add_ex_img("image",EX_IMG_W,EX_IMG_H,&EX_IMG_DATA);
 
-              true
+                match root.generate_exec()
+                {
+              Ok(exec)=>
+                {
+                  EXEC = exec;
+
+                  true
+                }
+              Err(e)=>
+                {
+                  ERR_MSG = e.to_string();
+
+                  false
+                }
+                }
             }
           Err(e)=>
             {
@@ -129,42 +158,17 @@ compile(s: &str)-> bool
 
 #[wasm_bindgen]
 pub fn
-add_img(w: u32, h: u32, data: Vec<u8>)
+setup(freq: u32)-> String
 {
     unsafe
     {
-      SYMTBL.add_img("image",w,h,data);
-    }
-}
+      MACHINE.reset(freq as usize,&mut EXEC,"main");
 
+      let  mut buf = String::new();
 
-#[wasm_bindgen]
-pub fn
-setup(freq: u32)-> Option<String>
-{
-    unsafe
-    {
-        match SYMTBL.generate_exec()
-        {
-      Ok(exec)=>
-        {
-          EXEC = exec;
+      EXEC.print_text_to(&mut buf);
 
-          MACHINE.reset(freq as usize,&mut EXEC,"main");
-
-          let  mut buf = String::new();
-
-          EXEC.print_text_to(&mut buf);
-
-          Some(buf)
-        }
-      Err(e)=>
-        {
-          ERR_MSG = e.to_string();
-
-          None
-        }
-        }
+      buf
     }
 }
 

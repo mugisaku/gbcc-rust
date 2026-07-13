@@ -109,20 +109,27 @@ str: 'str
   & "=" & (.String | expression_list);
 
 
+empty: ";";
 field: 'field -> .Identifier & expression;
 io   : 'io    -> .Identifier;
 var  : 'var   -> .Identifier & initialize;
 const: 'const -> .Identifier & initialize;
 enum: 'enum -> "{" & {.Identifier & [","]} & "}";
 
+mvar: 'var -> .Identifier & ":" & .Identifier;
+
+class: 'class -> .Identifier & "{" & [{declaration}] & "}";
+
 declaration: fn
            | io
            | var
+           | mvar
            | const
            | enum
            | str
            | field
-           | ";";
+           | class
+           | empty;
 
 
 
@@ -144,13 +151,11 @@ get_dictionary()-> &'static Dictionary
             {
           Ok(mut tmp_dic)=>
             {
-                if tmp_dic.test().is_ok()
+                match tmp_dic.test()
                 {
-                  DIC_OPT = Some(tmp_dic);
+              Ok(())=>{DIC_OPT = Some(tmp_dic);}
+              Err(msg)=>{panic!("{}",msg);}
                 }
-
-              else
-                {panic!();}
             }
           Err(e)=>{e.print();}
             }

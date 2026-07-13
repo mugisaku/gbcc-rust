@@ -8,7 +8,6 @@ use super::decl::*;
 use super::expr::*;
 use super::stmt::*;
 use super::evaluate_const::*;
-use super::symbol_table::*;
 
 
 
@@ -144,7 +143,7 @@ Scope<'a>
 
 
 pub fn
-new_root(decl: &FnDecl, tbl: &SymbolTable)-> Self
+new_root(decl: &FnDecl)-> Self
 {
   let  mut scp = Self{
     previous_opt: None,

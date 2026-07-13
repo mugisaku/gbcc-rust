@@ -5,7 +5,6 @@ use super::decl::*;
 use super::expr::*;
 use super::stmt::*;
 use super::asm::*;
-use super::symbol_table::*;
 use super::scope::*;
 use super::evaluate::*;
 use super::evaluate_const::*;
@@ -148,7 +147,7 @@ new(id: usize)-> Self
 
 
 fn
-process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
+process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
 {
   let  mut blh = lid.make_br_label_holder();
 
@@ -156,7 +155,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut La
 
     for (cond,blk) in ifstmt.get_cond_block_list()
     {
-        match evaluate(cond,tbl,Some(scp)).try_to_text(srcinf)
+        match evaluate(cond,set,Some(scp)).try_to_text(srcinf)
         {
       Ok(mut txt)=>
         {
@@ -170,7 +169,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut La
 
           output.push_brz(blh.get_label());
 
-            match process_block(blk,tbl,lid,clh_opt,scp,output)
+            match process_block(blk,set,lid,clh_opt,scp,output)
             {
           Ok(())=>{output.push_jmp(&end_label);}
           Err(e)=>{return Err(e);}
@@ -185,7 +184,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut La
 
     if let Some(blk) = ifstmt.get_else_block_opt()
     {
-        match process_block(blk,tbl,lid,clh_opt,scp,output)
+        match process_block(blk,set,lid,clh_opt,scp,output)
         {
       Ok(())=>{}
       Err(e)=>{return Err(e);}
@@ -200,7 +199,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, tbl: &SymbolTable, lid: &mut La
 
 
 fn
-process_for(srcinf: &SourceInfo, forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
+process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
 {
   let  clh = lid.make_ctrl_label_holder();
 
@@ -211,7 +210,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut
 
   let  mut count_max_off = 0isize;
 
-    match evaluate(forstmt.get_expr(),tbl,Some(scp)).try_to_text(srcinf)
+    match evaluate(forstmt.get_expr(),set,Some(scp)).try_to_text(srcinf)
     {
   Ok(mut count_max_txt)=>
     {
@@ -271,7 +270,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut
 
   output.push_brz(&clh.on_break);
 
-    match process_block(forstmt.get_block(),tbl,lid,Some(&clh),&new_scp,output)
+    match process_block(forstmt.get_block(),set,lid,Some(&clh),&new_scp,output)
     {
   Ok(())=>
     {
@@ -287,13 +286,13 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, tbl: &SymbolTable, lid: &mut
 
 
 fn
-process_block(blk: &Block, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
+process_block(blk: &Block, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
 {
   let  mut new_scp = Scope::new(scp);
 
     for stmt in blk.get_stmt_list()
     {
-        match process_stmt(stmt,tbl,lid,clh_opt,&mut new_scp,output)
+        match process_stmt(stmt,set,lid,clh_opt,&mut new_scp,output)
         {
       Ok(())=>{}
       Err(e)=>{return Err(e);}
@@ -306,21 +305,21 @@ process_block(blk: &Block, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option
 
 
 fn
-process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)-> Result<(),Error>
+process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)-> Result<(),Error>
 {
   let  srcinf = stmt.get_source_info();
 
     match stmt.get_kind()
     {
   StmtKind::Empty=>{Ok(())}
-  StmtKind::Block(blk)=>{process_block(blk,tbl,lid,clh_opt,scp,output)}
+  StmtKind::Block(blk)=>{process_block(blk,set,lid,clh_opt,scp,output)}
   StmtKind::Decl(decl)=>
     {
         match decl.get_kind()
         {
-      DeclKind::Const(e)=>
+      DeclKind::Const(e,_)=>
         {
-            match evaluate_const(e,tbl,Some(scp))
+            match evaluate_const(e,set,Some(scp))
             {
           EvalResult::Const(i)=>
             {
@@ -331,9 +330,9 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
           _=>{Err(srcinf.to_error(format!("constの算出に失敗")))}
             }
         }
-      DeclKind::Var(e)=>
+      DeclKind::Var(e,_)=>
         {
-            match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
+            match evaluate(e,set,Some(scp)).try_to_text(srcinf)
             {
           Ok(r_txt)=>
             {
@@ -353,7 +352,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     }
   StmtKind::Expr(e)=>
     {
-        match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
+        match evaluate(e,set,Some(scp)).try_to_text(srcinf)
         {
       Ok(txt)=>
         {
@@ -366,14 +365,14 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       Err(e)=>{Err(e)}
         }
     }
-  StmtKind::If(i)=>{process_if(srcinf,i,tbl,lid,clh_opt,scp,output)}
+  StmtKind::If(i)=>{process_if(srcinf,i,set,lid,clh_opt,scp,output)}
   StmtKind::Loop(blk)=>
     {
       let  clh = lid.make_ctrl_label_holder();
 
       output.push_label(&clh.on_continue);
 
-        match process_block(blk,tbl,lid,Some(&clh),scp,output)
+        match process_block(blk,set,lid,Some(&clh),scp,output)
         {
       Ok(())=>
         {
@@ -393,7 +392,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       output.push_label(&clh.on_continue);
 
 
-        match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
+        match evaluate(e,set,Some(scp)).try_to_text(srcinf)
         {
       Ok(mut txt)=>
         {
@@ -403,7 +402,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
           output.push_brz(&clh.on_break);
 
-            match process_block(blk,tbl,lid,Some(&clh),scp,output)
+            match process_block(blk,set,lid,Some(&clh),scp,output)
             {
           Ok(())=>
             {
@@ -419,12 +418,12 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
       Err(e)=>{Err(e)}
         }
     }
-  StmtKind::For(f)=>{process_for(srcinf,f,tbl,lid,clh_opt,scp,output)}
+  StmtKind::For(f)=>{process_for(srcinf,f,set,lid,clh_opt,scp,output)}
   StmtKind::Return(e_opt)=>
     {
         if let Some(e) = e_opt
         {
-            match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
+            match evaluate(e,set,Some(scp)).try_to_text(srcinf)
             {
           Ok(mut txt)=>
             {
@@ -448,11 +447,11 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     }
   StmtKind::Assign(l,r,op)=>
     {
-        match evaluate(l,tbl,Some(scp)).try_to_text(srcinf)
+        match evaluate(l,set,Some(scp)).try_to_text(srcinf)
         {
       Ok(l_asm)=>
         {
-            match evaluate(r,tbl,Some(scp)).try_to_text(srcinf)
+            match evaluate(r,set,Some(scp)).try_to_text(srcinf)
             {
           Ok(r_asm)=>{output.try_push_assign(srcinf,l_asm,r_asm,op)}
           Err(e)=>{Err(e)}
@@ -501,7 +500,7 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
     }
   StmtKind::Print(e)=>
     {
-        match evaluate(e,tbl,Some(scp)).try_to_text(srcinf)
+        match evaluate(e,set,Some(scp)).try_to_text(srcinf)
         {
       Ok(mut txt)=>
         {
@@ -523,14 +522,14 @@ process_stmt(stmt: &Stmt, tbl: &SymbolTable, lid: &mut LabelID, clh_opt: Option<
 
 
 pub fn
-assemble(srcinf: &SourceInfo, decl: &FnDecl, tbl: &SymbolTable)-> Result<AsmText,Error>
+assemble(srcinf: &SourceInfo, decl: &FnDecl, set: &DeclSet)-> Result<AsmText,Error>
 {
   let  mut text = AsmText::new();
   let   mut lid = LabelID::new();
 
-  let  scp = Scope::new_root(decl,tbl);
+  let  scp = Scope::new_root(decl);
 
-    match process_block(decl.get_block(),tbl,&mut lid,None,&scp,&mut text)
+    match process_block(decl.get_block(),set,&mut lid,None,&scp,&mut text)
     {
   Ok(())=>
     {

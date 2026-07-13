@@ -3,7 +3,7 @@
 use super::*;
 use super::expr::*;
 use super::scope::*;
-use super::symbol_table::*;
+use super::decl::*;
 use super::asm::*;
 use crate::source_file::{
   SourceInfo,
@@ -30,11 +30,11 @@ evaluate_unary_int(v: i64, op: &str)-> Result<i64,String>
 
 
 pub fn
-evaluate_unary_const(e: &Expr, op: &str, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_unary_const(e: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  srcinf = e.get_source_info();
 
-    match evaluate_const(e,symtbl,scp_opt)
+    match evaluate_const(e,set,scp_opt)
     {
   EvalResult::Const(v)=>
     {
@@ -79,15 +79,15 @@ evaluate_binary_int(l: i64, r: i64, op: &str)-> Result<i64,String>
 
 
 pub fn
-evaluate_binary_const(le: &Expr, re: &Expr, op: &str, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_binary_const(le: &Expr, re: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  srcinf = le.get_source_info();
 
-    match evaluate_const(le,symtbl,scp_opt)
+    match evaluate_const(le,set,scp_opt)
     {
   EvalResult::Const(lv)=>
     {
-        match evaluate_const(re,symtbl,scp_opt)
+        match evaluate_const(re,set,scp_opt)
         {
       EvalResult::Const(rv)=>
         {
@@ -108,7 +108,7 @@ evaluate_binary_const(le: &Expr, re: &Expr, op: &str, symtbl: &SymbolTable, scp_
 
 
 pub fn
-evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  srcinf = e.get_source_info();
 
@@ -134,11 +134,11 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
         }
 
 
-        if let Some(sym) = symtbl.find_symbol(s)
+        if let Some(decl) = set.find(s)
         {
-          return match sym.get_kind()
+          return match decl.get_kind()
             {
-          SymbolKind::Const(v)=>{return EvalResult::Const(*v);}
+          DeclKind::Const(_,i)=>{return EvalResult::Const(*i);}
           _                   =>{return EvalResult::Undef("");}
             };
         }
@@ -154,7 +154,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
 
         for arg_e in args
         {
-          let  res = evaluate_const(arg_e,symtbl,scp_opt);
+          let  res = evaluate_const(arg_e,set,scp_opt);
 
             match res
             {
@@ -165,7 +165,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
         }
 
 
-        match evaluate_const(f,symtbl,scp_opt)
+        match evaluate_const(f,set,scp_opt)
         {
       EvalResult::Undef(_)=>{EvalResult::Undef("")}
       EvalResult::Err(e)=>{EvalResult::Err(e)}
@@ -174,7 +174,7 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
     }
   ExprKind::AccessOp(ins,s)=>
     {
-        match evaluate_const(ins,symtbl,scp_opt)
+        match evaluate_const(ins,set,scp_opt)
         {
       EvalResult::System=>
         {
@@ -188,9 +188,9 @@ evaluate_const(e: &Expr, symtbl: &SymbolTable, scp_opt: Option<&Scope>)-> EvalRe
       _=>{EvalResult::Undef("")}
         }
     }
-  ExprKind::Expr(e)         =>{evaluate_const(e,symtbl,scp_opt)}
-  ExprKind::UnaryOp(o,op)   =>{evaluate_unary_const(o,op,symtbl,scp_opt)}
-  ExprKind::BinaryOp(l,r,op)=>{evaluate_binary_const(l,r,op,symtbl,scp_opt)}
+  ExprKind::Expr(e)         =>{evaluate_const(e,set,scp_opt)}
+  ExprKind::UnaryOp(o,op)   =>{evaluate_unary_const(o,op,set,scp_opt)}
+  ExprKind::BinaryOp(l,r,op)=>{evaluate_binary_const(l,r,op,set,scp_opt)}
     }
 }
 

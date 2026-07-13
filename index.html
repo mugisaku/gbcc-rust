@@ -409,8 +409,8 @@ main()
         get_const,
         process,
         get_error_message,
+        transfer_ex_img,
         compile,
-        add_img,
         setup } from "./pkg/gblib.js";
 
       let  g_text;
@@ -421,7 +421,6 @@ main()
       let  g_cv;
       let  g_cvctx;
       let  g_imgdat;
-      let  g_ex_img;
 
       let  g_actx;
       let  g_sin_osc;
@@ -616,20 +615,13 @@ main()
       }
 
 
+      function  get_ex_img_w(){return g_ex_img_w;}
+      function  get_ex_img_h(){return g_ex_img_h;}
+      function  get_ex_img_data(){return g_ex_img_data;}
+
       function
       run()
       {
-        const  ex_img_cv = document.createElement("canvas");
-
-        ex_img_cv.width  = g_ex_img.width;
-        ex_img_cv.height = g_ex_img.height;
-
-        const  ctx = ex_img_cv.getContext("2d");
-
-        ctx.drawImage(g_ex_img,0,0);
-
-        const  ex_imgdat = ctx.getImageData(0,0,ex_img_cv.width,ex_img_cv.height);
-
           if(!compile(g_text.value))
           {
             g_asmtext.value = get_error_message();
@@ -638,19 +630,7 @@ main()
           }
 
 
-        add_img(ex_imgdat.width,ex_imgdat.height,ex_imgdat.data);
-
-        g_ready = setup(1024*1024*32);
-
-          if(!g_ready)
-          {
-            g_asmtext.value = get_error_message();
-
-            return;
-          }
-
-
-        g_asmtext.value = g_ready;
+        g_asmtext.value = setup(1024*1024*32);
 
         g_video_addr = get_io("video");
         g_sin_freq_addr = get_io("sin_freq");
@@ -692,11 +672,6 @@ main()
         g_cvctx.fillStyle = "rgb(0,0,0)";
 
         g_cvctx.fillRect(0,0,g_cv.width,g_cv.height);
-
-
-        g_ex_img = new Image();
-
-        g_ex_img.src = "chr.png";
 
 
         g_report = document.getElementById("report");
@@ -751,6 +726,26 @@ main()
             }
         });
 
+
+        const  ex_img = new Image();
+
+        ex_img.onload = function(){
+          const  ex_img_cv = document.createElement("canvas");
+
+          ex_img_cv.width  = ex_img.width;
+          ex_img_cv.height = ex_img.height;
+
+          const  ctx = ex_img_cv.getContext("2d");
+
+          ctx.drawImage(ex_img,0,0);
+
+          const  ex_img_data = ctx.getImageData(0,0,ex_img_cv.width,ex_img_cv.height);
+
+          transfer_ex_img(ex_img.width,ex_img.height,ex_img_data);
+
+        };
+
+        ex_img.src = "chr.png";
 
         setInterval(refresh,g_millisec);
       });

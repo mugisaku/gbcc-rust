@@ -14,20 +14,33 @@ compile_and_run(s: &str)
 {
   use crate::language::*;
   use crate::language::decl::*;
-  use crate::language::symbol_table::*;
+  use crate::language::exec::*;
   use crate::language::machine::*;
 
-    match decl::Decl::read_as_root(s)
+    match decl::DeclSet::read(s)
     {
-   Ok(root)=>
+   Ok(mut root)=>
     {
-        match SymbolTable::build(root)
+        match root.finalize()
         {
-       Ok(mut symtbl)=>
+      Ok(())=>{root.print();}
+      Err(e)=>
+        {
+          e.print();
+
+          return;
+        }
+        }
+
+
+/*
+        match Class::build(root)
+        {
+       Ok(mut cla)=>
         {
 //symtbl.print();
 
-            match symtbl.generate_exec()
+            match cla.generate_exec()
             {
           Ok(mut exec)=> 
             {
@@ -59,6 +72,7 @@ exec.print_memory();
           e.print();
         }
         }
+*/
     }
   Err(e)=>
     {
@@ -85,12 +99,18 @@ test(a,b)
   return a-b;
 }
 
+class Test{
+
 enum{
   Apple, Grape, Orange
 
 }
 
+}
 
+
+const  c1 = 24;
+const  c2 = c1+60;
 
 fn
 main()
