@@ -108,43 +108,62 @@ evaluate_binary_const(le: &Expr, re: &Expr, op: &str, set: &DeclSet, scp_opt: Op
 
 
 pub fn
+evaluate_decl(decl: &Decl)-> EvalResult
+{
+    match decl.get_kind()
+    {
+  DeclKind::Const(_,i)=>{return EvalResult::Const(*i);}
+  DeclKind::Class(set)=>{return EvalResult::Class(std::ptr::NonNull::from_ref(set));}
+                     _=>{return EvalResult::Undef("");}
+    }
+}
+
+
+pub fn
 evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  srcinf = e.get_source_info();
 
     match e.get_kind()
     {
-  ExprKind::Identifier(s)=>
+  ExprKind::Identifier(names)=>
     {
-           if s == "false"{return EvalResult::Const(0);}
-      else if s ==  "true"{return EvalResult::Const(1);}
-      else if s ==   "sys"{return EvalResult::System;}
-
-
-        if let Some(scp) = scp_opt
+        if names.len() == 1
         {
-            if let Some(lsym) = scp.find(s)
+          let  s = names.first().unwrap();
+
+               if s == "false"{return EvalResult::Const(0);}
+          else if s ==  "true"{return EvalResult::Const(1);}
+          else if s ==   "sys"{return EvalResult::System;}
+
+
+            if let Some(scp) = scp_opt
             {
-                match lsym.get_kind()
+                if let Some(lsym) = scp.find(s)
                 {
-              LocalSymbolKind::Const=>{return EvalResult::Const(lsym.get_value());}
-              _                     =>{return EvalResult::Undef("");}
+                    match lsym.get_kind()
+                    {
+                  LocalSymbolKind::Const=>{return EvalResult::Const(lsym.get_value());}
+                  _                     =>{return EvalResult::Undef("");}
+                    }
                 }
             }
         }
 
 
-        if let Some(decl) = set.find(s)
+        if let Some(decl) = set.search(names)
         {
-          return match decl.get_kind()
-            {
-          DeclKind::Const(_,i)=>{return EvalResult::Const(*i);}
-          _                   =>{return EvalResult::Undef("");}
-            };
+          evaluate_decl(decl)
         }
 
+      else
+        {
+          let  mut buf = String::new();
 
-      EvalResult::Err(srcinf.to_error(format!("{} is not found",s)))
+          Expr::unqualify(names,&mut buf);
+
+          EvalResult::Err(srcinf.to_error(format!("{} is not found",&buf)))
+        }
     }
   ExprKind::String(s)=>{EvalResult::String(s.clone())}
   ExprKind::Int(i)   =>{EvalResult::Const(*i)}

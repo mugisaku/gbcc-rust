@@ -1,5 +1,8 @@
 
 
+use std::rc::Rc;
+use std::collections::HashMap;
+
 use crate::node::*;
 
 use crate::source_file::{
@@ -990,8 +993,11 @@ pub struct
 DeclSet
 {
   parent_ptr: *const Self,
+    decl_ptr: *const Decl,
 
-  decls: Vec<Decl>,
+  map: Rc<HashMap<String,*const Decl>>,
+
+  decls: Vec<Box<Decl>>,
 
 }
 
@@ -1001,10 +1007,37 @@ DeclSet
 {
 
 
-pub const fn
+pub fn
 new()-> Self
 {
-  Self{parent_ptr: std::ptr::null(), decls: Vec::new()}
+  Self{
+    parent_ptr: std::ptr::null(),
+      decl_ptr: std::ptr::null(),
+    map: Rc::new(HashMap::new()),
+    decls: Vec::new(),
+  }
+}
+
+
+pub fn
+get_parent(&self)-> Option<&Self>
+{
+    if self.parent_ptr != std::ptr::null()
+    {
+      Some(unsafe{&*self.parent_ptr})
+    }
+
+  else
+    {
+      None
+    }
+}
+
+
+pub fn
+as_decl(&self)-> &Decl
+{
+  unsafe{&*self.decl_ptr}
 }
 
 
@@ -1065,6 +1098,75 @@ find(&self, name: &str)-> Option<&Decl>
         {
           return Some(decl);
         }
+    }
+
+
+  None
+}
+
+
+pub fn
+find_class(&self, name: &str)-> Option<&DeclSet>
+{
+    for decl in &self.decls
+    {
+        if &decl.name == name
+        {
+            if let DeclKind::Class(set) = &decl.kind
+            {
+              return Some(set);
+            }
+        }
+    }
+
+
+  None
+}
+
+
+pub fn
+find_by_qualified(&self, names: &Vec<String>)-> Option<&Decl>
+{
+    if names.len() == 0
+    {
+      None
+    }
+
+  else
+    {
+      let  mut next = self;
+
+        for i in 0..(names.len()-1)
+        {
+            if let Some(set) = next.find_class(&names[i])
+            {
+              next = set;
+            }
+
+          else
+            {
+              return None;
+            }
+        }
+
+
+      next.find(names.last().unwrap())
+    }
+}
+
+
+pub fn
+search(&self, names: &Vec<String>)-> Option<&Decl>
+{
+    if let Some(decl) = self.find_by_qualified(names)
+    {
+      return Some(decl);
+    }
+
+
+    if let Some(parent) = self.get_parent()
+    {
+      return parent.search(names);
     }
 
 
@@ -1161,7 +1263,7 @@ insert(&mut self, mut decl: Decl)-> Result<(),Error>
          }
 
 
-      self.decls.push(decl);
+      self.decls.push(Box::new(decl));
 
       Ok(())
     }
@@ -1174,7 +1276,7 @@ insert(&mut self, mut decl: Decl)-> Result<(),Error>
 
   else
     {
-      self.decls.push(decl);
+      self.decls.push(Box::new(decl));
 
       Ok(())
     }
@@ -1206,7 +1308,7 @@ collect_as_tplg_nodes(&mut self, buf: &mut Vec<TplgNode>)
 {
     for decl in &mut self.decls
     {
-      let  value = decl as *mut Decl as usize;
+      let  value = decl.as_mut() as *mut Decl as usize;
 
       let  nd = TplgNode::new(&decl.canonical_name,
                               value,
@@ -1230,7 +1332,7 @@ get_mut_ptr_by_canonical_name(&mut self, canonical_name: &str)-> *mut Decl
     {
         if &decl.canonical_name == canonical_name
         {
-          return decl as *mut Decl;
+          return decl.as_mut() as *mut Decl;
         }
     }
 
@@ -1257,11 +1359,12 @@ get_mut_ptr_by_canonical_name(&mut self, canonical_name: &str)-> *mut Decl
 
 
 fn
-canonicalize(&mut self, parent_ptr: *const Self, parent_canon_name: &str)
+canonicalize(&mut self, parent_ptr: *const Self, decl_ptr: *const Decl, parent_canon_name: &str)
 {
   let  self_ptr = self as *const Self;
 
   self.parent_ptr = parent_ptr;
+  self.decl_ptr   =   decl_ptr;
 
   let  mut canonical_name_base = String::new();
 
@@ -1277,9 +1380,11 @@ canonicalize(&mut self, parent_ptr: *const Self, parent_canon_name: &str)
 
       decl.canonical_name = format!("{}{}",&canonical_name_base,&decl.name);
 
+      let  sub_decl_ptr = decl.as_ref() as *const Decl;
+
         if let DeclKind::Class(set) = &mut decl.kind
         {
-          set.canonicalize(self_ptr,&decl.canonical_name);
+          set.canonicalize(self_ptr,sub_decl_ptr,&decl.canonical_name);
         }
     }
 }
@@ -1544,7 +1649,7 @@ finalize(&mut self)-> Result<(),Error>
 
   self.collect_string(&mut ss);
 
-  self.canonicalize(std::ptr::null(),"");
+  self.canonicalize(std::ptr::null(),std::ptr::null(),"");
 
     match self.process_deps_relationship()
     {

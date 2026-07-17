@@ -25,6 +25,7 @@ EvalResult
   Value(AsmEvalText),
   Const(i64),
   String(String),
+  Class(std::ptr::NonNull<DeclSet>),
   System,
   SystemMember(String),
 
@@ -73,7 +74,8 @@ try_to_text(self, srcinf: &SourceInfo)-> Result<AsmEvalText,Error>
   Self::Value(txt)=>{Ok(txt)}
   Self::Const(i)=>{Ok(Self::to_text_from_const(i))}
   Self::String(_)=>{Err(srcinf.to_error(format!("to_text is failed. from str")))}
-  Self::System=>{Err(srcinf.to_error(format!("to_text is failed. from sys")))}
+  Self::Class(_) =>{Err(srcinf.to_error(format!("to_text is failed. from class")))}
+  Self::System   =>{Err(srcinf.to_error(format!("to_text is failed. from sys")))}
   Self::SystemMember(_)=>{Err(srcinf.to_error(format!("to_text is failed. from sysmemb")))}
   Self::Undef(s)=>{Err(srcinf.to_error(format!("to_text is failed. from undef: {}",s)))}
   Self::Err(e)=>{Err(e)}
@@ -89,6 +91,7 @@ print(&self)
   Self::Value(_)=>{print!("value");}
   Self::Const(i)=>{print!("const {}",*i);}
   Self::String(s)=>{print!("\"{}\"",s);}
+  Self::Class(ptr)=>{print!("CLASS {}",unsafe{ptr.as_ref()}.as_decl().get_canonical_name());}
   Self::System=>{print!("SYS");}
   Self::SystemMember(s)=>{print!("SYS({})",s);}
   Self::Undef(s)=>{print!("UNDEF {}",s);}
@@ -281,86 +284,105 @@ evaluate_access(ins: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> E
 
 
 pub fn
-evaluate_identifier(srcinf: &SourceInfo, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_decl(decl: &Decl)-> EvalResult
 {
-    if let Some(scp) = scp_opt
+    match decl.get_kind()
     {
-        if let Some(lsym) = scp.find(s)
+  DeclKind::Const(_,i)=>
+    {
+      EvalResult::Const(*i)
+    }
+  DeclKind::Var(_,_)=>
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_global_var(decl.get_offset());
+
+      EvalResult::Value(txt)
+    }
+  DeclKind::Io=>
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_global_var(decl.get_offset());
+
+      EvalResult::Value(txt)
+    }
+  DeclKind::Str(_,_,_)=>
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_i64(decl.get_offset() as i64);
+
+      EvalResult::Value(txt)
+    }
+  DeclKind::Field(_,_)=>
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_i64(decl.get_offset() as i64);
+
+      EvalResult::Value(txt)
+    }
+  DeclKind::Fn(_)=>
+    {
+      let  mut txt = AsmEvalText::new();
+
+      txt.push_fn(decl.get_offset());
+
+      EvalResult::Value(txt)
+    }
+  DeclKind::Class(set)=>{EvalResult::Class(std::ptr::NonNull::from_ref(set))}
+  _=>{EvalResult::Err(decl.get_source_info().to_error(format!("evaluate_identifier error: {} is invalid symbol kind",decl.get_canonical_name())))}
+    }
+}
+
+
+pub fn
+evaluate_identifier(srcinf: &SourceInfo, names: &Vec<String>, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
+{
+    if names.len() == 1
+    {
+      let  s = names.first().unwrap();
+
+        if let Some(scp) = scp_opt
         {
-          return match lsym.get_kind()
+            if let Some(lsym) = scp.find(s)
             {
-          LocalSymbolKind::Const=>
-            {
-              EvalResult::Const(lsym.get_value())
-            }
-          LocalSymbolKind::Var=>
-            {
-              let  mut txt = AsmEvalText::new();
+              return match lsym.get_kind()
+                {
+              LocalSymbolKind::Const=>
+                {
+                  EvalResult::Const(lsym.get_value())
+                }
+              LocalSymbolKind::Var=>
+                {
+                  let  mut txt = AsmEvalText::new();
 
-              txt.push_local_var(lsym.get_offset());
+                  txt.push_local_var(lsym.get_offset());
 
-              EvalResult::Value(txt)
+                  EvalResult::Value(txt)
+                }
+              _=>{EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} is invalid local symbol kind",s)))}
+                };
             }
-          _=>{EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} is invalid local symbol kind",s)))}
-            };
         }
     }
 
 
-    if let Some(decl) = set.find(s)
+    if let Some(decl) = set.search(names)
     {
-      return match decl.get_kind()
-        {
-      DeclKind::Const(_,i)=>
-        {
-          EvalResult::Const(*i)
-        }
-      DeclKind::Var(_,_)=>
-        {
-          let  mut txt = AsmEvalText::new();
-
-          txt.push_global_var(decl.get_offset());
-
-          EvalResult::Value(txt)
-        }
-      DeclKind::Io=>
-        {
-          let  mut txt = AsmEvalText::new();
-
-          txt.push_global_var(decl.get_offset());
-
-          EvalResult::Value(txt)
-        }
-      DeclKind::Str(_,_,_)=>
-        {
-          let  mut txt = AsmEvalText::new();
-
-          txt.push_i64(decl.get_offset() as i64);
-
-          EvalResult::Value(txt)
-        }
-      DeclKind::Field(_,_)=>
-        {
-          let  mut txt = AsmEvalText::new();
-
-          txt.push_i64(decl.get_offset() as i64);
-
-          EvalResult::Value(txt)
-        }
-      DeclKind::Fn(_)=>
-        {
-          let  mut txt = AsmEvalText::new();
-
-          txt.push_fn(decl.get_offset());
-
-          EvalResult::Value(txt)
-        }
-      _=>{EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} is invalid symbol kind",s)))}
-        };
+      evaluate_decl(decl)
     }
 
+  else
+    {
+      let  mut buf = String::new();
 
-  EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} not found",s)))
+      Expr::unqualify(names,&mut buf);
+
+      EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} not found",&buf)))
+    }
 }
 
 
@@ -462,9 +484,9 @@ evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
     {
         match e.get_kind()
         {
-      ExprKind::Identifier(s)=>
+      ExprKind::Identifier(ss)=>
         {
-          evaluate_identifier(e.get_source_info(),s,set,scp_opt)
+          evaluate_identifier(e.get_source_info(),ss,set,scp_opt)
         }
       ExprKind::Int(i)=>
         {

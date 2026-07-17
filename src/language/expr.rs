@@ -17,8 +17,9 @@ use super::decl::*;
 pub enum
 ExprKind
 {
-  Identifier(String),
-      String(String),
+  Identifier(Vec<String>),
+
+  String(String),
 
   Int(i64),
 
@@ -96,16 +97,16 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
 {
     match &self.kind
     {
-  ExprKind::Identifier(s)=>
+  ExprKind::Identifier(ls)=>
     {
-        if let Some(cano_name) = set.find_canonical_name(s)
+        if let Some(decl) = set.search(ls)
         {
-          ss.insert(cano_name.clone());
+          ss.insert(decl.get_canonical_name().clone());
         }
 
       else
         {
-          ss.record_fail(&self.source_info,s.clone());
+          ss.record_fail(&self.source_info,self.to_string());
         }
     }
   ExprKind::String(s)=>{}
@@ -169,11 +170,40 @@ collect_string(&self, ss: &mut StringSet)
 
 
 pub fn
+to_string(&self)-> String
+{
+  let  mut buf = String::new();
+
+  self.print_to(&mut buf);
+
+  buf
+}
+
+
+pub fn
+unqualify(names: &Vec<String>, buf: &mut String)
+{
+  let  mut  iter = names.iter();
+
+    if let Some(first_s) = iter.next()
+    {
+      buf.push_str(first_s);
+
+        while let Some(s) = iter.next()
+        {
+          buf.push_str("::");
+          buf.push_str(s);
+        }
+    }
+}
+
+
+pub fn
 print_to(&self, buf: &mut String)
 {
     match &self.kind
     {
-  ExprKind::Identifier(s)=>{buf.push_str(s);}
+  ExprKind::Identifier(names)=>{Self::unqualify(names,buf)}
   ExprKind::String(s)=>
     {
       buf.push('\"');
@@ -227,11 +257,9 @@ print_to(&self, buf: &mut String)
 pub fn
 print(&self)
 {
-  let  mut buf = String::new();
+  let  s = self.to_string();
 
-  self.print_to(&mut buf);
-
-  print!("{}",&buf);
+  print!("{}",&s);
 }
 
 
@@ -414,7 +442,22 @@ read_operand_core(start_nd: &Node)-> Expr
     {
         match v.get_kind()
         {
-      ValueKind::Identifier(s)=>{return Expr{source_info, kind: ExprKind::Identifier(s.clone())};}
+      ValueKind::Identifier(first_s)=>
+        {
+          let  mut buf = vec![first_s.clone()];
+
+          cur.advance(2);
+
+            while let Some(s) = cur.get_identifier()
+            {
+              buf.push(s.clone());
+
+              cur.advance(2);
+            }
+
+
+          return Expr{source_info, kind: ExprKind::Identifier(buf)};
+        }
       ValueKind::String(s)=>{return Expr{source_info, kind: ExprKind::String(s.clone())};}
       ValueKind::Uint(u) =>{return Expr{source_info, kind: ExprKind::Int(*u as i64)};}
       ValueKind::Char(c) =>{return Expr{source_info, kind: ExprKind::Int(*c as i64)};}

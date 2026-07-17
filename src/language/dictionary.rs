@@ -7,7 +7,7 @@ static DIC_S: &'static str =
 r##"
 
 
-operand_core: .Identifier | .Number | .Character | .String | ("(" & expression & ")");
+operand_core: (.Identifier & [{"::" & .Identifier}]) | .Number | .Character | .String | ("(" & expression & ")");
 
 unary_operator: "!" | "-" | "~";
 

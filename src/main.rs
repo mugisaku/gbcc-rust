@@ -23,63 +23,47 @@ compile_and_run(s: &str)
     {
         match root.finalize()
         {
-      Ok(())=>{root.print();}
-      Err(e)=>
+      Ok(())=>
         {
-          e.print();
+          root.print();
 
-          return;
-        }
-        }
-
-
-/*
-        match Class::build(root)
-        {
-       Ok(mut cla)=>
-        {
-//symtbl.print();
-
-            match cla.generate_exec()
+            match root.generate_exec()
             {
           Ok(mut exec)=> 
             {
               println!("");
-exec.print_text();
+
+              exec.print_text();
+
               println!("");
 
               let  mut m = Machine::new();
 
+              m.set_verbose();
 
-m.set_verbose();
               m.reset(1024,&mut exec,"main");
+
+              println!("\n  ****");
 
               println!("machine runs");
 
               m.keep_run();
 
               println!("machine is finished");
-exec.print_memory();
+
+              println!("\n  ****");
+
+              exec.print_memory();
+
               println!("");
             }
           Err(e)=>{e.print();}
             }
         }
-      Err(e)=>
-        {
-          println!("build is failed");
-
-          e.print();
+      Err(e)=>{e.print();}
         }
-        }
-*/
     }
-  Err(e)=>
-    {
-      e.print();
-
-      println!("");
-    }
+  Err(e)=>{e.print();}
     }
 }
 
@@ -117,6 +101,8 @@ main()
 {
   sys.spawn(test,123,9);
   sys.input();
+
+  return Test::Apple;
 }
 "#;
 
