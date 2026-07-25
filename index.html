@@ -417,10 +417,14 @@ main()
       let  g_asmtext;
 
       let  g_ready;
+      let  g_timer_id;
 
       let  g_cv;
       let  g_cvctx;
       let  g_imgdat;
+      let  g_ex_img;
+      let  g_ex_img_cv;
+      let  g_ex_img_ctx;
 
       let  g_actx;
       let  g_sin_osc;
@@ -582,12 +586,6 @@ main()
       function
       refresh()
       {
-          if(!g_ready)
-          {
-            return;
-          }
-
-
         set_input(g_key_state|0);
 
         process();
@@ -622,6 +620,18 @@ main()
       function
       run()
       {
+        clearInterval(g_timer_id);
+
+          if(!g_ready)
+          {
+            return;
+          }
+
+
+        const  ex_img_data = g_ex_img_ctx.getImageData(0,0,g_ex_img_cv.width,g_ex_img_cv.height);
+
+        transfer_ex_img(g_ex_img.width,g_ex_img.height,ex_img_data.data);
+
           if(!compile(g_text.value))
           {
             g_asmtext.value = get_error_message();
@@ -631,6 +641,7 @@ main()
 
 
         g_asmtext.value = setup(1024*1024*32);
+
 
         g_video_addr = get_io("video");
         g_sin_freq_addr = get_io("sin_freq");
@@ -662,6 +673,9 @@ main()
           {
             g_imgdat.data[(4*i)+3] = 255;
           }
+
+
+        g_timer_id = setInterval(refresh,g_millisec);
       }
 
       init().then(() => {
@@ -727,27 +741,23 @@ main()
         });
 
 
-        const  ex_img = new Image();
+        g_ex_img = new Image();
 
-        ex_img.onload = function(){
-          const  ex_img_cv = document.createElement("canvas");
+        g_ex_img.onload = function(){
+          g_ex_img_cv = document.createElement("canvas");
 
-          ex_img_cv.width  = ex_img.width;
-          ex_img_cv.height = ex_img.height;
+          g_ex_img_cv.width  = g_ex_img.width;
+          g_ex_img_cv.height = g_ex_img.height;
 
-          const  ctx = ex_img_cv.getContext("2d");
+          g_ex_img_ctx = g_ex_img_cv.getContext("2d");
 
-          ctx.drawImage(ex_img,0,0);
+          g_ex_img_ctx.drawImage(g_ex_img,0,0);
 
-          const  ex_img_data = ctx.getImageData(0,0,ex_img_cv.width,ex_img_cv.height);
-
-          transfer_ex_img(ex_img.width,ex_img.height,ex_img_data);
+          g_ready |= 1;
 
         };
 
-        ex_img.src = "chr.png";
-
-        setInterval(refresh,g_millisec);
+        g_ex_img.src = "chr.png";
       });
     </script>
   </body>

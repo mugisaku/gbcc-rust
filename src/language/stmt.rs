@@ -35,22 +35,6 @@ IfStmt
 pub fn  get_cond_block_list(&self)-> &Vec<(Expr,Block)>{&self.cond_block_list}
 pub fn  get_else_block_opt(&self)-> &Option<Block>{&self.else_block_opt}
 
-pub fn
-collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
-{
-    for (e,blk) in &self.cond_block_list
-    {
-      e.collect_identifier(set,ss);
-      blk.collect_identifier(set,ss);
-    }
-
-
-    if let Some(blk) = &self.else_block_opt
-    {
-      blk.collect_identifier(set,ss);
-    }
-}
-
 
 pub fn
 collect_string(&self, ss: &mut StringSet)
@@ -158,14 +142,6 @@ pub fn  get_block(&self)-> &Block{&self.block}
 
 
 pub fn
-collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
-{
-   self.expr.collect_identifier(set,ss);
-  self.block.collect_identifier(set,ss);
-}
-
-
-pub fn
 collect_string(&self, ss: &mut StringSet)
 {
    self.expr.collect_string(ss);
@@ -222,16 +198,6 @@ pub fn
 get_stmt_list(&self)-> &Vec<Stmt>
 {
   &self.stmt_list
-}
-
-
-pub fn
-collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
-{
-    for stmt in &self.stmt_list
-    {
-      stmt.collect_identifier(set,ss);
-    }
 }
 
 
@@ -355,41 +321,6 @@ pub fn
 get_kind(&self)-> &StmtKind
 {
   &self.kind
-}
-
-
-pub fn
-collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
-{
-    match &self.kind
-    {
-  StmtKind::Empty=>{}
-  StmtKind::Block(blk)=>{blk.collect_identifier(set,ss);}
-  StmtKind::Decl(decl)=>{decl.collect_identifier(set,ss);}
-  StmtKind::Expr(e)=>{e.collect_identifier(set,ss);}
-  StmtKind::If(i)=>{i.collect_identifier(set,ss);}
-  StmtKind::Loop(blk)=>{blk.collect_identifier(set,ss);}
-  StmtKind::While(e,blk)=>
-    {
-        e.collect_identifier(set,ss);
-      blk.collect_identifier(set,ss);
-    }
-  StmtKind::For(f)=>{f.collect_identifier(set,ss);}
-  StmtKind::Return(e_opt)=>
-    {
-        if let Some(e) = e_opt
-        {
-          e.collect_identifier(set,ss);
-        }
-    }
-  StmtKind::Assign(l,r,_)=>
-    {
-      l.collect_identifier(set,ss);
-      r.collect_identifier(set,ss);
-    }
-  StmtKind::Print(e)=>{e.collect_identifier(set,ss);}
-  _=>{}
-    }
 }
 
 

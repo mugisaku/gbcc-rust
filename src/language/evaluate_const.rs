@@ -126,43 +126,34 @@ evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 
     match e.get_kind()
     {
-  ExprKind::Identifier(names)=>
+  ExprKind::Identifier(s)=>
     {
-        if names.len() == 1
+           if s == "false"{return EvalResult::Const(0);}
+      else if s ==  "true"{return EvalResult::Const(1);}
+      else if s ==   "sys"{return EvalResult::System;}
+
+
+        if let Some(scp) = scp_opt
         {
-          let  s = names.first().unwrap();
-
-               if s == "false"{return EvalResult::Const(0);}
-          else if s ==  "true"{return EvalResult::Const(1);}
-          else if s ==   "sys"{return EvalResult::System;}
-
-
-            if let Some(scp) = scp_opt
+            if let Some(lsym) = scp.find(s)
             {
-                if let Some(lsym) = scp.find(s)
+                match lsym.get_kind()
                 {
-                    match lsym.get_kind()
-                    {
-                  LocalSymbolKind::Const=>{return EvalResult::Const(lsym.get_value());}
-                  _                     =>{return EvalResult::Undef("");}
-                    }
+              LocalSymbolKind::Const=>{return EvalResult::Const(lsym.get_value());}
+              _                     =>{return EvalResult::Undef("");}
                 }
             }
         }
 
 
-        if let Some(decl) = set.search(names)
+        if let Some(decl) = set.search(s)
         {
           evaluate_decl(decl)
         }
 
       else
         {
-          let  mut buf = String::new();
-
-          Expr::unqualify(names,&mut buf);
-
-          EvalResult::Err(srcinf.to_error(format!("{} is not found",&buf)))
+          EvalResult::Err(srcinf.to_error(format!("{} is not found",s)))
         }
     }
   ExprKind::String(s)=>{EvalResult::String(s.clone())}

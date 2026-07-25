@@ -330,8 +330,10 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
           _=>{Err(srcinf.to_error(format!("constの算出に失敗")))}
             }
         }
-      DeclKind::Var(e,_)=>
+      DeclKind::Var(k)=>
         {
+todo!();
+/*
             match evaluate(e,set,Some(scp)).try_to_text(srcinf)
             {
           Ok(r_txt)=>
@@ -346,6 +348,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
             }
           Err(e)=>{Err(e)}
             }
+*/
         }
       _=>{Err(srcinf.to_error(format!("invalid decl")))}
         }

@@ -96,6 +96,11 @@ enum{
 const  c1 = 24;
 const  c2 = c1+60;
 
+static s_obj;
+static x_obj[80];
+static y_obj = Test::Grape;
+
+
 fn
 main()
 {

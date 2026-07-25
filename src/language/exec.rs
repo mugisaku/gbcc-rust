@@ -22,7 +22,7 @@ use crate::source_file::{
 pub enum
 SymbolKind
 {
-  Data, Text, Const(i64), Str(String,usize), Field(usize), Io,
+  Data, Text, Const(i64), Field(usize),
 
 }
 
@@ -245,15 +245,15 @@ add_text(&mut self, txt: (String,usize,AsmText))
 
 
 pub fn
-find_const(&self, name: &str)-> Option<i64>
+find_data(&self, name: &str)-> Option<i64>
 {
     for sym in &self.symbols
     {
-        if let SymbolKind::Const(v) = &sym.kind
+        if let SymbolKind::Data = &sym.kind
         {
             if &sym.name == name
             {
-              return Some(*v);
+              return Some(self.get_u64(sym.offset) as i64);
             }
         }
     }
@@ -264,15 +264,15 @@ find_const(&self, name: &str)-> Option<i64>
 
 
 pub fn
-find_io(&self, name: &str)-> Option<usize>
+find_const(&self, name: &str)-> Option<i64>
 {
     for sym in &self.symbols
     {
-        if let SymbolKind::Io = &sym.kind
+        if let SymbolKind::Const(v) = &sym.kind
         {
             if &sym.name == name
             {
-              return Some(sym.offset);
+              return Some(*v);
             }
         }
     }
@@ -321,50 +321,46 @@ find_entry_point(&self, name: &str)-> Option<usize>
 
 
 pub fn
-print_memory(&self)
+print_memory_to(&self, buf: &mut String)
 {
     for sym in &self.symbols
     {
       let  off = sym.get_offset();
 
-      print!("{}",sym.get_name());
+      buf.push_str(sym.get_name());
 
         match &sym.kind
         {
-      SymbolKind::Data
-     |SymbolKind::Io=>
+      SymbolKind::Data=>
         {
-          print!("(addr: {})",off);
+          buf.push_str(&format!("(addr: {})",off));
 
           let  i64_ptr = unsafe{self.memory.as_ptr().add(off)} as *const i64;
 
-          println!(": {}",unsafe{*i64_ptr});
+          buf.push_str(&format!(": {}",unsafe{*i64_ptr}));
         }
-      SymbolKind::Const(v)=>{println!(": {}",v);}
-      SymbolKind::Str(ty,n)=>
-        {
-          let  base = off;
-
-          print!(" off: {}, ty: {} = {{",off,ty);
-/*
-               if ty ==  "i8"{for i in 0..*n{print!("{},",self.get_u8( base+i    )       );}}
-          else if ty ==  "u8"{for i in 0..*n{print!("0x{:X},",self.get_u8( base+i    ) as  i8);}}
-          else if ty == "i16"{for i in 0..*n{print!("{},",self.get_u16(base+(2*i))       );}}
-          else if ty == "u16"{for i in 0..*n{print!("0x{:X},",self.get_u16(base+(2*i)) as i16);}}
-          else if ty == "i32"{for i in 0..*n{print!("{},",self.get_u32(base+(4*i))       );}}
-          else if ty == "u32"{for i in 0..*n{print!("0x{:X},",self.get_u32(base+(4*i)) as i32);}}
-          else if ty == "i64"{for i in 0..*n{print!("{},",self.get_u64(base+(8*i)) as i64);}}
-          else{panic!("{}",ty);}
-*/
-          println!("}}");
-        }
+      SymbolKind::Const(v)=>{buf.push_str(&format!(": {}",v));}
       SymbolKind::Field(sz)=>
         {
-          println!(" off: {}, sz: {}: {{...}}",off,*sz);
+          buf.push_str(&format!(" off: {}, sz: {}: {{...}}",off,*sz));
         }
-      _=>{println!("");}
+      _=>{}
         }
+
+
+      buf.push_str("\n");
     }
+}
+
+
+pub fn
+print_memory(&self)
+{
+  let  mut buf = String::new();
+
+  self.print_memory_to(&mut buf);
+
+  print!("{}",&buf);
 }
 
 

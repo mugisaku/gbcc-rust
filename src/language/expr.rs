@@ -17,7 +17,7 @@ use super::decl::*;
 pub enum
 ExprKind
 {
-  Identifier(Vec<String>),
+  Identifier(String),
 
   String(String),
 
@@ -97,11 +97,11 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
 {
     match &self.kind
     {
-  ExprKind::Identifier(ls)=>
+  ExprKind::Identifier(s)=>
     {
-        if let Some(decl) = set.search(ls)
+        if let Some(decl) = set.search(s)
         {
-          ss.insert(decl.get_canonical_name().clone());
+          ss.insert(s.clone());
         }
 
       else
@@ -181,29 +181,11 @@ to_string(&self)-> String
 
 
 pub fn
-unqualify(names: &Vec<String>, buf: &mut String)
-{
-  let  mut  iter = names.iter();
-
-    if let Some(first_s) = iter.next()
-    {
-      buf.push_str(first_s);
-
-        while let Some(s) = iter.next()
-        {
-          buf.push_str("::");
-          buf.push_str(s);
-        }
-    }
-}
-
-
-pub fn
 print_to(&self, buf: &mut String)
 {
     match &self.kind
     {
-  ExprKind::Identifier(names)=>{Self::unqualify(names,buf)}
+  ExprKind::Identifier(s)=>{buf.push_str(s)}
   ExprKind::String(s)=>
     {
       buf.push('\"');
@@ -432,6 +414,37 @@ read_access_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
 
 pub fn
+read_qualified_identifier(start_nd: &Node)-> String
+{
+  let  mut cur = start_nd.cursor();
+
+    if let Some(first_s) = cur.get_identifier()
+    {
+      let  mut buf = String::new();
+
+      buf.push_str(first_s);
+
+      cur.advance(2);
+
+        while let Some(s) = cur.get_identifier()
+        {
+          buf.push_str("::");
+
+          buf.push_str(s);
+
+          cur.advance(2);
+        }
+
+
+      return buf;
+    }
+
+
+  panic!();
+}
+
+
+pub fn
 read_operand_core(start_nd: &Node)-> Expr
 {
   let  source_info = start_nd.get_source_info().clone();
@@ -442,21 +455,17 @@ read_operand_core(start_nd: &Node)-> Expr
     {
         match v.get_kind()
         {
-      ValueKind::Identifier(first_s)=>
+      ValueKind::Node(nd)=>
         {
-          let  mut buf = vec![first_s.clone()];
-
-          cur.advance(2);
-
-            while let Some(s) = cur.get_identifier()
+            if nd.get_name() == "qualified_identifier"
             {
-              buf.push(s.clone());
+              let  buf = read_qualified_identifier(&*nd);
 
-              cur.advance(2);
+              return Expr{source_info, kind: ExprKind::Identifier(buf)};
             }
 
 
-          return Expr{source_info, kind: ExprKind::Identifier(buf)};
+          panic!();
         }
       ValueKind::String(s)=>{return Expr{source_info, kind: ExprKind::String(s.clone())};}
       ValueKind::Uint(u) =>{return Expr{source_info, kind: ExprKind::Int(*u as i64)};}

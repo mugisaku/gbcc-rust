@@ -1,8 +1,5 @@
 
 
-use std::rc::Rc;
-use std::collections::HashMap;
-
 use crate::node::*;
 
 use crate::source_file::{
@@ -24,6 +21,7 @@ use super::expr::*;
 use super::stmt::*;
 use super::scope::*;
 use super::assemble::assemble;
+use super::asm::AsmText;
 use super::font14::*;
 use super::font8::*;
 use super::tplg_sort::*;
@@ -80,13 +78,98 @@ print(&self)
 
 
 pub enum
-StrInitKind
+StorageKind
 {
-  Null,
-  String(String),
-  ExprList(Vec<Expr>),
+  Word(Option<Expr>,i64),
+
+   EmptyField(Expr,usize),
+
+  FilledField(Vec<u8>),
+
+  String(String,Vec<u8>),
 
 }
+
+
+impl
+StorageKind
+{
+
+
+pub fn
+collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
+{
+    match self
+    {
+  Self::Word(e_opt,_)=>{if let Some(e) = e_opt{e.collect_identifier(set,ss);}}
+  Self::EmptyField(e,_)=>{e.collect_identifier(set,ss);}
+  _=>{}
+    }
+}
+
+
+pub fn
+collect_string(&self, ss: &mut StringSet)
+{
+    match self
+    {
+  Self::Word(e_opt,_)=>{if let Some(e) = e_opt{e.collect_string(ss)}}
+  Self::EmptyField(e,_)=>{e.collect_string(ss)}
+  _=>{}
+    }
+}
+
+
+pub fn
+get_size(&self)-> usize
+{
+    match self
+    {
+  Self::Word(_,_)=>{WORD_SIZE}
+  Self::EmptyField(_,i)=>{*i}
+  Self::FilledField(bytes)=>{bytes.len()}
+  Self::String(_,bytes)=>{bytes.len()}
+    }
+}
+
+
+pub fn
+print(&self)
+{
+    match self
+    {
+  Self::Word(e_opt,_)=>
+    {
+        if let Some(e) = e_opt
+        {
+          print!(" = ");
+
+          e.print();
+        }
+    }
+  Self::EmptyField(e,i)=>
+    {
+      print!("[");
+
+      e.print();
+
+      print!("]");
+    }
+  Self::FilledField(bytes)=>
+    {
+      print!("{{...}}");
+    }
+  Self::String(s,_)=>
+    {
+      print!(": \"{}\"",s);
+    }
+    }
+}
+
+
+}
+
+
 
 
 pub enum
@@ -94,17 +177,15 @@ DeclKind
 {
   Undef,
 
-   Const(Expr,i64),
-     Var(Expr,i64),
-  MemberVar(String),
-      Io,
-
-  Str(String,StrInitKind,Vec<u8>),
-  Field(Expr,usize),
+  Const(Expr,i64),
+  Static(StorageKind),
+     Var(StorageKind),
 
   Enum(Vec<String>),
 
   Fn(FnDecl),
+
+  InlineAsm(AsmText),
 
   Class(Box<DeclSet>),
 
@@ -122,39 +203,6 @@ print(&self, name: &str)
     match self
     {
   DeclKind::Undef=>{print!("undef {}",name);}
-  DeclKind::Str(dk,ik,_)=>
-    {
-      print!("str {} {}",name,dk);
-
-      print!(" = ");
-
-        match ik
-        {
-      StrInitKind::Null=>{}
-      StrInitKind::String(s)=>{print!("{}",s);}
-      StrInitKind::ExprList(ls)=>
-        {
-          print!("{{");
-
-            for e in ls
-            {
-              e.print();
-              print!(", ");
-            }
-
-
-          print!("}}");
-        }
-        }
-    }
-  DeclKind::Field(e,sz)=>
-    {
-      print!("field {} ",name);
-
-      e.print();
-
-      print!(" = {}",*sz);
-    }
   DeclKind::Const(e,i)=>
     {
       print!("const {}",name);
@@ -165,23 +213,17 @@ print(&self, name: &str)
 
       print!(" = {}",*i);
     }
-  DeclKind::Var(e,i)=>
+  DeclKind::Static(k)=>
+    {
+      print!("static {}",name);
+
+      k.print();
+    }
+  DeclKind::Var(k)=>
     {
       print!("var {}",name);
 
-      print!(" = ");
-
-      e.print();
-
-      print!(" = {}",*i);
-    }
-  DeclKind::MemberVar(type_name)=>
-    {
-      print!("(member)var {}: {}",name,type_name);
-    }
-  DeclKind::Io=>
-    {
-      print!("io {}",name);
+      k.print();
     }
   DeclKind::Enum(ls)=>
     {
@@ -200,6 +242,14 @@ print(&self, name: &str)
       print!("fn {}",name);
 
       f.print();
+    }
+  DeclKind::InlineAsm(txt)=>
+    {
+      print!("asm{{");
+
+      txt.print(0);
+
+      print!("__");
     }
   DeclKind::Class(set)=>
     {
@@ -280,10 +330,9 @@ Decl
 {
   source_info: SourceInfo,
 
-  set_ptr: *const DeclSet,
+  set_ptr: *mut DeclSet,
 
-  canonical_name: String,
-            name: String,
+  name: String,
 
   kind: DeclKind,
 
@@ -306,10 +355,9 @@ new()-> Self
   Self{
     source_info: SourceInfo::new(),
 
-    set_ptr: std::ptr::null(),
+    set_ptr: std::ptr::null_mut(),
 
-    canonical_name: String::new(),
-              name: String::new(),
+    name: String::new(),
 
     kind: DeclKind::Undef,
 
@@ -329,16 +377,18 @@ get_source_info(&self)-> &SourceInfo
 
 
 pub fn
-get_canonical_name(&self)-> &String
+get_name(&self)-> &String
 {
-  &self.canonical_name
+  &self.name
 }
 
 
 pub fn
-get_name(&self)-> &String
+get_qualified_name(&self)-> String
 {
-  &self.name
+  let  q: &str = if self.set_ptr != std::ptr::null_mut(){&unsafe{&*self.set_ptr}.qualifier} else{""};
+
+  format!("{}{}",q,&self.name)
 }
 
 
@@ -362,17 +412,8 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
     match &self.kind
     {
   DeclKind::Const(e,_)=>{e.collect_identifier(set,ss);}
-  DeclKind::Var(e,_)  =>{e.collect_identifier(set,ss);}
-  DeclKind::Str(dk,sik,_)=>
-    {
-        match sik
-        {
-      StrInitKind::Null=>{}
-      StrInitKind::String(_)=>{}
-      StrInitKind::ExprList(ls)=>{for e in ls{e.collect_identifier(set,ss);}}
-        }
-    }
-  DeclKind::Field(e,_)=>{e.collect_identifier(set,ss);}
+  DeclKind::Static(k)=>{k.collect_identifier(set,ss);}
+  DeclKind::Var(k)=>{k.collect_identifier(set,ss);}
   DeclKind::Class(set)=>{set.collect_identifier(ss);}
   _=>{}
     }
@@ -385,125 +426,11 @@ collect_string(&self, ss: &mut StringSet)
     match &self.kind
     {
   DeclKind::Const(e,_)=>{e.collect_string(ss);}
-  DeclKind::Var(e,_)  =>{e.collect_string(ss);}
-  DeclKind::Str(dk,sik,_)=>
-    {
-        match sik
-        {
-      StrInitKind::Null=>{}
-      StrInitKind::String(_)=>{}
-      StrInitKind::ExprList(ls)=>{for e in ls{e.collect_string(ss);}}
-        }
-    }
-  DeclKind::Field(e,_)=>{e.collect_string(ss);}
+  DeclKind::Static(k)=>{k.collect_string(ss);}
+  DeclKind::Var(k)=>{k.collect_string(ss);}
   DeclKind::Class(set)=>{set.collect_string(ss);}
   _=>{}
     }
-}
-
-
-fn
-make_str_bytes(srcinf: &SourceInfo, dk: &str, ik: &StrInitKind, set: &DeclSet)-> Result<Vec<u8>,Error>
-{
-    if (dk == "i8") || (dk == "u8")
-    {
-        if let StrInitKind::String(s) = ik
-        {
-          return Ok(s.as_bytes().to_vec());
-        }
-    }
-
-
-  let  mut   tmp = Vec::<i64>::new();
-  let  mut bytes = Vec::<u8>::new();
-
-    match ik
-    {
-  StrInitKind::Null=>{}
-  StrInitKind::String(s)=>
-    {
-        for c in s.chars()
-        {
-          tmp.push(c as i64);
-        }
-    }
-  StrInitKind::ExprList(ls)=>
-    {
-        for e in ls
-        {
-            match evaluate_const(e,set,None)
-            {
-          EvalResult::Const(v)=>{tmp.push(v);}
-          _=>{return Err(e.get_source_info().to_error(format!("make_str_bytes error")));}
-            }
-        }
-    }
-    }
-
-
-    if (dk == "i8") || (dk == "u8")
-    {
-        for i in tmp
-        {
-          bytes.push(i as u8);
-        }
-    }
-
-  else
-    if (dk == "i16") || (dk == "u16")
-    {
-        for i in tmp
-        {
-          let  tmp_bytes = (i as i16).to_ne_bytes();
-
-            for b in tmp_bytes
-            {
-              bytes.push(b);
-            }
-        }
-    }
-
-  else
-    if (dk == "i32") || (dk == "u32")
-    {
-        for i in tmp
-        {
-          let  tmp_bytes = (i as i32).to_ne_bytes();
-
-            for b in tmp_bytes
-            {
-              bytes.push(b);
-            }
-        }
-    }
-
-  else
-    if dk == "i64"
-    {
-        for i in tmp
-        {
-          let  tmp_bytes = i.to_ne_bytes();
-
-            for b in tmp_bytes
-            {
-              bytes.push(b);
-            }
-        }
-    }
-
-
-  Ok(bytes)
-}
-
-
-pub fn
-build_from_string(srcinf: SourceInfo, s: String, set: &DeclSet)-> Result<Vec<u8>,Error>
-{
-  let  name = DeclSet::make_name_for_string(&s);
-
-  let  ik = StrInitKind::String(s);
-
-  Self::make_str_bytes(&srcinf,"u16",&ik,set)
 }
 
 
@@ -523,29 +450,49 @@ build_const_data(&mut self)-> Result<(),Error>
       _=>{return Err(srcinf.to_error(format!("constの初期化に失敗")));}
         }
     }
-  DeclKind::Var(e,v)=>
+  DeclKind::Static(k)=>
     {
-        match evaluate_const(&e,set,None)
+        match k
         {
-      EvalResult::Const(i)=>{*v = i;}
-      _=>{return Err(srcinf.to_error(format!("varの初期化に失敗")));}
+      StorageKind::Word(e_opt,v)=>
+        {
+            if let Some(e) = e_opt
+            {
+                match evaluate_const(&e,set,None)
+                {
+              EvalResult::Const(i)=>{*v = i;}
+              _=>{return Err(srcinf.to_error(format!("varの初期化に失敗")));}
+                }
+            }
+        }
+      StorageKind::EmptyField(e,sz)=>
+        {
+            match evaluate_const(e,set,None)
+            {
+          EvalResult::Const(i)=>{*sz = i as usize;}
+          _=>{return Err(srcinf.to_error(format!("varの初期化に失敗")));}
+            }
+        }
+      StorageKind::FilledField(bytes)=>
+        {
+        }
+      StorageKind::String(s,bytes)=>
+        {
+          bytes.clear();
+
+            for c in s.chars()
+            {
+                for b in (c as u16).to_ne_bytes()
+                {
+                  bytes.push(b);
+                }
+            }
+        }
         }
     }
-  DeclKind::Str(dk,sik,bytes)=>
+  DeclKind::Var(_)=>
     {
-        match Self::make_str_bytes(&srcinf,&dk,&sik,set)
-        {
-      Ok(str_bytes)=>{*bytes = str_bytes}
-      Err(e)=>{return Err(srcinf.to_error(format!("styrの初期化に失敗")).wrap(e));}
-        }
-    }
-  DeclKind::Field(e,sz)=>
-    {
-        match evaluate_const(&e,set,None)
-        {
-      EvalResult::Const(i)=>{*sz = i as usize;}
-      _=>{return Err(srcinf.to_error(format!("fieldの大きさの算出に失敗")));}
-        }
+      return Err(srcinf.to_error(format!("グローバル変数の宣言はvarではなくstaticを使ってください")));
     }
   _=>{}
     }
@@ -584,21 +531,19 @@ read(s: &str)-> Result<Self,Error>
 pub fn
 print(&self)
 {
-  println!("<{}>",&self.canonical_name);
-
   self.kind.print(&self.name);
 
   println!("");
 
-    for name in &self.deps_parent_names
+    for s in &self.deps_parent_names
     {
-      println!("** requires {}",name);
+      println!("** requires {}",s);
     }
 
 
-    for name in &self.deps_child_names
+    for s in &self.deps_child_names
     {
-      println!("** required by {}",name);
+      println!("** required by {}",s);
     }
 }
 
@@ -642,29 +587,7 @@ read_parameter_list(start_nd: &Node)-> Vec<String>
 
 
 pub fn
-read_initialize(start_nd: &Node)-> Expr
-{
-  let  mut cur = start_nd.cursor();
-
-    if let Some(s) = cur.get_semi_string()
-    {
-      cur.advance(1);
-
-        if let Some(e_nd) = cur.select_node("expression")
-        {
-          let  expr = read_expr(e_nd);
-
-          return expr;
-        }
-    }
-
-
-  panic!();
-}
-
-
-pub fn
-read_object_decl(start_nd: &Node)-> (String,Expr)
+read_const(start_nd: &Node)-> (String,Expr)
 {
   let  mut cur = start_nd.cursor();
 
@@ -674,11 +597,11 @@ read_object_decl(start_nd: &Node)-> (String,Expr)
     {
       let  name = id_s.clone();
 
-      cur.advance(1);
+      cur.advance(2);
 
-        if let Some(init_nd) = cur.select_node("initialize")
+        if let Some(e_nd) = cur.select_node("expression")
         {
-          let  expr = read_initialize(init_nd);
+          let  expr = read_expr(e_nd);
 
           return (name,expr);
         }
@@ -689,8 +612,28 @@ read_object_decl(start_nd: &Node)-> (String,Expr)
 }
 
 
+
+
+
 pub fn
-read_str_decl(start_nd: &Node)-> (String,String,StrInitKind)
+read_expr_for_init(start_nd: &Node)-> Expr
+{
+  let  mut cur = start_nd.cursor();
+
+   cur.advance(1);
+
+    if let Some(nd) = cur.select_node("expression")
+    {
+      return read_expr(nd);
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+read_var(start_nd: &Node)-> (String,StorageKind)
 {
   let  mut cur = start_nd.cursor();
 
@@ -700,73 +643,33 @@ read_str_decl(start_nd: &Node)-> (String,String,StrInitKind)
     {
       let  name = id_s.clone();
 
+      let  mut k = StorageKind::Word(None,0);
+
       cur.advance(1);
 
-      let  dk = cur.get_keyword().unwrap().clone();
-
-      cur.advance(2);
-
-        if let Some(es_dir) = cur.select_node("expression_list")
+        if let Some(nd) = cur.select_node("init_as_word")
         {
-          let  es = read_expr_list(es_dir);
+          let  e = read_expr_for_init(nd);
 
-          return (name,dk,StrInitKind::ExprList(es));
+          k = StorageKind::Word(Some(e),0);
         }
 
       else
-        if let Some(s) = cur.get_string()
+        if let Some(nd) = cur.select_node("init_as_field")
         {
-          return (name,dk,StrInitKind::String(s.clone()));
+          let  e = read_expr_for_init(nd);
+
+          k = StorageKind::EmptyField(e,0);
         }
-    }
 
-
-  panic!();
-}
-
-
-pub fn
-read_field_decl(start_nd: &Node)-> (String,Expr)
-{
-  let  mut cur = start_nd.cursor();
-
-  cur.advance(1);
-
-    if let Some(id_s) = cur.get_identifier()
-    {
-      let  name = id_s.clone();
-
-      cur.advance(1);
-
-        if let Some(e_dir) = cur.select_node("expression")
+      else
+        if let Some(nd) = cur.select_node("init_by_data")
         {
-          let  e = read_expr(e_dir);
-
-          return (name,e);
+todo!();
         }
-    }
 
 
-  panic!();
-}
-
-
-pub fn
-read_io_decl(start_nd: &Node)-> String
-{
-  let  mut cur = start_nd.cursor();
-
-  cur.advance(1);
-
-    if let Some(id_s) = cur.get_identifier()
-    {
-      let  name = id_s.clone();
-
-//      cur.advance(2);
-
-//      let  expr = read_expr(cur.select_node("expression").unwrap());
-
-      return name;
+      return (name,k);
     }
 
 
@@ -907,33 +810,6 @@ read_decl(start_nd: &Node)-> Result<Decl,Error>
         }
 
       else
-        if nd_name == "str"
-        {
-          let  (name,dk,sik) = read_str_decl(nd);
-
-          decl.name = name;
-          decl.kind = DeclKind::Str(dk,sik,Vec::new());
-        }
-
-      else
-        if nd_name == "field"
-        {
-          let  (name,e) = read_field_decl(nd);
-
-          decl.name = name;
-          decl.kind = DeclKind::Field(e,0);
-        }
-
-      else
-        if nd_name == "io"
-        {
-          let  name = read_io_decl(nd);
-
-          decl.name = name;
-          decl.kind = DeclKind::Io;
-        }
-
-      else
         if nd_name == "enum"
         {
           let  ls = read_enum(nd);
@@ -944,16 +820,25 @@ read_decl(start_nd: &Node)-> Result<Decl,Error>
       else
         if nd_name == "var"
         {
-          let  (name,expr) = read_object_decl(nd);
+          let  (name,k) = read_var(nd);
 
           decl.name = name;
-          decl.kind = DeclKind::Var(expr,0);
+          decl.kind = DeclKind::Var(k);
+        }
+
+      else
+        if nd_name == "static"
+        {
+          let  (name,k) = read_var(nd);
+
+          decl.name = name;
+          decl.kind = DeclKind::Static(k);
         }
 
       else
         if nd_name == "const"
         {
-          let  (name,expr) = read_object_decl(nd);
+          let  (name,expr) = read_const(nd);
 
           decl.name = name;
           decl.kind = DeclKind::Const(expr,0);
@@ -992,12 +877,14 @@ read_decl(start_nd: &Node)-> Result<Decl,Error>
 pub struct
 DeclSet
 {
-  parent_ptr: *const Self,
-    decl_ptr: *const Decl,
+  parent_ptr: *mut Self,
+    decl_ptr: *mut Decl,
 
-  map: Rc<HashMap<String,*const Decl>>,
+  qualifier: String,
 
   decls: Vec<Box<Decl>>,
+
+  size: usize,
 
 }
 
@@ -1011,10 +898,13 @@ pub fn
 new()-> Self
 {
   Self{
-    parent_ptr: std::ptr::null(),
-      decl_ptr: std::ptr::null(),
-    map: Rc::new(HashMap::new()),
+    parent_ptr: std::ptr::null_mut(),
+      decl_ptr: std::ptr::null_mut(),
+
+    qualifier: String::new(),
+
     decls: Vec::new(),
+    size: 0,
   }
 }
 
@@ -1022,7 +912,7 @@ new()-> Self
 pub fn
 get_parent(&self)-> Option<&Self>
 {
-    if self.parent_ptr != std::ptr::null()
+    if self.parent_ptr != std::ptr::null_mut()
     {
       Some(unsafe{&*self.parent_ptr})
     }
@@ -1031,6 +921,57 @@ get_parent(&self)-> Option<&Self>
     {
       None
     }
+}
+
+
+pub fn
+get_parent_mut(&mut self)-> Option<&mut Self>
+{
+    if self.parent_ptr != std::ptr::null_mut()
+    {
+      Some(unsafe{&mut *self.parent_ptr})
+    }
+
+  else
+    {
+      None
+    }
+}
+
+
+pub fn
+get_root_ptr(&self)-> *const Self
+{
+  let  mut r = self;
+
+    while r.parent_ptr != std::ptr::null_mut()
+    {
+      r = unsafe{&*r.parent_ptr};
+    }
+
+
+  r as *const Self
+}
+
+
+pub fn
+get_root(&self)-> &Self
+{
+  unsafe{&*self.get_root_ptr()}
+}
+
+
+pub fn
+get_root_mut(&mut self)-> &mut Self
+{
+  unsafe{&mut *(self.get_root_ptr() as *mut Self)}
+}
+
+
+pub fn
+get_qualifier(&self)-> &String
+{
+  &self.qualifier
 }
 
 
@@ -1106,15 +1047,43 @@ find(&self, name: &str)-> Option<&Decl>
 
 
 pub fn
-find_class(&self, name: &str)-> Option<&DeclSet>
+find_mut(&mut self, name: &str)-> Option<&mut Decl>
 {
-    for decl in &self.decls
+    for decl in &mut self.decls
     {
         if &decl.name == name
         {
-            if let DeclKind::Class(set) = &decl.kind
+          return Some(decl);
+        }
+    }
+
+
+  None
+}
+
+
+fn
+search_downwards(&self, q_name: &str, exclude: &str)-> Option<usize>
+{
+    if q_name.starts_with(&self.qualifier)
+    {
+        for decl in &self.decls
+        {
+            if &decl.name != exclude
             {
-              return Some(set);
+                if decl.get_qualified_name() == q_name
+                {
+                  return Some((&**decl) as *const Decl as usize);
+                }
+
+
+                if let DeclKind::Class(set) = &decl.kind
+                {
+                    if let Some(u) = set.search_downwards(q_name,"")
+                    {
+                      return Some(u)
+                    }
+                }
             }
         }
     }
@@ -1124,49 +1093,18 @@ find_class(&self, name: &str)-> Option<&DeclSet>
 }
 
 
-pub fn
-find_by_qualified(&self, names: &Vec<String>)-> Option<&Decl>
+fn
+search_internal(&self, q_name: &str, exclude: &str)-> Option<usize>
 {
-    if names.len() == 0
+    if let Some(u) = self.search_downwards(q_name,exclude)
     {
-      None
-    }
-
-  else
-    {
-      let  mut next = self;
-
-        for i in 0..(names.len()-1)
-        {
-            if let Some(set) = next.find_class(&names[i])
-            {
-              next = set;
-            }
-
-          else
-            {
-              return None;
-            }
-        }
-
-
-      next.find(names.last().unwrap())
-    }
-}
-
-
-pub fn
-search(&self, names: &Vec<String>)-> Option<&Decl>
-{
-    if let Some(decl) = self.find_by_qualified(names)
-    {
-      return Some(decl);
+      return Some(u);
     }
 
 
     if let Some(parent) = self.get_parent()
     {
-      return parent.search(names);
+      return parent.search_internal(q_name,self.as_decl().get_name());
     }
 
 
@@ -1175,20 +1113,11 @@ search(&self, names: &Vec<String>)-> Option<&Decl>
 
 
 pub fn
-find_canonical_name(&self, name: &str)-> Option<&String>
+search(&self, q_name: &str)-> Option<&Decl>
 {
-    for decl in &self.decls
+    if let Some(u) = self.search_internal(q_name,"")
     {
-        if &decl.name == name
-        {
-          return Some(&decl.canonical_name);
-        }
-    }
-
-
-    if self.parent_ptr != std::ptr::null()
-    {
-      return unsafe{&*self.parent_ptr}.find_canonical_name(name);
+      return Some(unsafe{&*(u as *const Decl)})
     }
 
 
@@ -1196,6 +1125,24 @@ find_canonical_name(&self, name: &str)-> Option<&String>
 }
 
 
+pub fn
+search_mut(&mut self, q_name: &str)-> Option<&mut Decl>
+{
+    if let Some(u) = self.search_internal(q_name,"")
+    {
+      return Some(unsafe{&mut *(u as *mut Decl)})
+    }
+
+
+  None
+}
+
+
+pub fn
+search_by_qualified_name_mut(&mut self, qname: &str)-> Option<&mut Decl>
+{
+  todo!();
+}
 
 
 pub fn
@@ -1310,7 +1257,7 @@ collect_as_tplg_nodes(&mut self, buf: &mut Vec<TplgNode>)
     {
       let  value = decl.as_mut() as *mut Decl as usize;
 
-      let  nd = TplgNode::new(&decl.canonical_name,
+      let  nd = TplgNode::new(&decl.get_qualified_name(),
                               value,
                               &decl.deps_child_names,
                               decl.deps_parent_names.len());
@@ -1326,65 +1273,26 @@ collect_as_tplg_nodes(&mut self, buf: &mut Vec<TplgNode>)
 
 
 fn
-get_mut_ptr_by_canonical_name(&mut self, canonical_name: &str)-> *mut Decl
+canonicalize(&mut self, parent_ptr: *mut Self, decl_ptr: *mut Decl)
 {
-    for decl in &mut self.decls
-    {
-        if &decl.canonical_name == canonical_name
-        {
-          return decl.as_mut() as *mut Decl;
-        }
-    }
-
-
-    for decl in &mut self.decls
-    {
-        if canonical_name.starts_with(&decl.canonical_name)
-        {
-            if let DeclKind::Class(set) = &mut decl.kind
-            {
-              let  ptr = set.get_mut_ptr_by_canonical_name(canonical_name);
-
-                if ptr != std::ptr::null_mut()
-                {
-                  return ptr;
-                }
-            }
-        }
-    }
-
-
-  std::ptr::null_mut()
-}
-
-
-fn
-canonicalize(&mut self, parent_ptr: *const Self, decl_ptr: *const Decl, parent_canon_name: &str)
-{
-  let  self_ptr = self as *const Self;
+  let  self_ptr = self as *mut Self;
 
   self.parent_ptr = parent_ptr;
   self.decl_ptr   =   decl_ptr;
-
-  let  mut canonical_name_base = String::new();
-
-    if parent_ptr != std::ptr::null()
-    {
-      canonical_name_base = format!("{}::",parent_canon_name);
-    }
-
 
     for decl in &mut self.decls
     {
       decl.set_ptr = self_ptr;
 
-      decl.canonical_name = format!("{}{}",&canonical_name_base,&decl.name);
-
-      let  sub_decl_ptr = decl.as_ref() as *const Decl;
+      let  sub_decl_ptr = decl.as_ref() as *const Decl as *mut Decl;
 
         if let DeclKind::Class(set) = &mut decl.kind
         {
-          set.canonicalize(self_ptr,sub_decl_ptr,&decl.canonical_name);
+          let  parent_q: &str = if parent_ptr != std::ptr::null_mut(){&unsafe{&*parent_ptr}.qualifier} else{""};
+
+          set.qualifier = format!("{}{}::",parent_q,&decl.name);
+
+          set.canonicalize(self_ptr,sub_decl_ptr);
         }
     }
 }
@@ -1416,14 +1324,10 @@ process_deps_relationship(&mut self)-> Result<(),Error>
         for s in ss.set
         {
           let  parent_name = s;
-          let   child_name = self.decls[i].canonical_name.clone();
+          let   child_name = self.decls[i].get_qualified_name();
 
-          let  ptr = self.get_mut_ptr_by_canonical_name(&parent_name);
-
-            if ptr != std::ptr::null_mut()
+            if let Some(parent) = self.get_root_mut().search_mut(&parent_name)
             {
-              let  parent = unsafe{&mut *ptr};
-
               parent.deps_child_names.push(child_name);
 
               self.decls[i].deps_parent_names.push(parent_name);
@@ -1431,6 +1335,12 @@ process_deps_relationship(&mut self)-> Result<(),Error>
 
           else
             {panic!();}
+        }
+
+
+        if let DeclKind::Class(set) = &mut self.decls[i].kind
+        {
+          set.process_deps_relationship();
         }
     }
 
@@ -1440,88 +1350,33 @@ process_deps_relationship(&mut self)-> Result<(),Error>
 
 
 fn
-process_io_offset(&mut self, start: usize)-> usize
-{
-  let  mut pos = start;
-
-    for decl in &mut self.decls
-    {
-        match &decl.kind
-        {
-      DeclKind::Io=>
-        {
-          decl.offset = get_word_aligned(pos)            ;
-                                         pos += WORD_SIZE;
-        }
-      _=>{}
-        }
-    }
-
-
-  get_word_aligned(pos)
-}
-
-
-fn
 process_data_offset(&mut self, start: usize)-> usize
 {
   let  mut pos = start;
 
+  self.size = 0;
+
     for decl in &mut self.decls
     {
-        match &decl.kind
+        match &mut decl.kind
         {
-      DeclKind::Var(_,_)
-     |DeclKind::Fn(_)=>
+      DeclKind::Static(k)=>
+        {
+          decl.offset = get_word_aligned(pos)               ;
+                                         pos += k.get_size();
+        }
+      DeclKind::Var(k)=>
+        {
+          panic!();
+        }
+      DeclKind::Fn(_)=>
         {
           decl.offset = get_word_aligned(pos)            ;
                                          pos += WORD_SIZE;
         }
-      _=>{}
-        }
-    }
-
-
-  get_word_aligned(pos)
-}
-
-
-fn
-process_str_offset(&mut self, start: usize)-> usize
-{
-  let  mut pos = start;
-
-    for decl in &mut self.decls
-    {
-        match &decl.kind
+      DeclKind::Class(set)=>
         {
-      DeclKind::Str(_,_,bytes)=>
-        {
-          decl.offset = get_word_aligned(pos)                        ;
-                                         pos += bytes.len()+WORD_SIZE;
-        }
-      _=>{}
-        }
-    }
-
-
-  get_word_aligned(pos)
-}
-
-
-fn
-process_field_offset(&mut self, start: usize)-> usize
-{
-  let  mut pos = start;
-
-    for decl in &mut self.decls
-    {
-        match &decl.kind
-        {
-      DeclKind::Field(_,sz)=>
-        {
-          decl.offset = get_word_aligned(pos)     ;
-                                         pos += sz;
+          set.process_data_offset(0);
         }
       _=>{}
         }
@@ -1609,22 +1464,6 @@ install_font14(dst: &mut [u8])
 }
 
 
-pub fn
-find_text_offset(ls: &Vec<(String,Vec<u8>,usize)>, name: &str)-> usize
-{
-    for (text_name,_,offset) in ls
-    {
-        if text_name == name
-        {
-          return *offset;
-        }
-    }
-
-
-  panic!();
-}
-
-
 fn
 get_const_or(&mut self, s: &str, defval: usize)-> usize
 {
@@ -1649,7 +1488,21 @@ finalize(&mut self)-> Result<(),Error>
 
   self.collect_string(&mut ss);
 
-  self.canonicalize(std::ptr::null(),std::ptr::null(),"");
+    for s in ss.set
+    {
+      let  mut decl = Decl::new();
+
+      decl.name = Self::make_name_for_string(&s);
+
+      let  k = StorageKind::String(s,Vec::new());
+
+      decl.kind = DeclKind::Static(k);
+
+      self.insert(decl);
+    }
+
+
+  self.canonicalize(std::ptr::null_mut(),std::ptr::null_mut());
 
     match self.process_deps_relationship()
     {
@@ -1690,6 +1543,8 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
 {
     for decl in &self.decls
     {
+      let  q_name = decl.get_qualified_name();
+
         match &decl.kind
         {
       DeclKind::Class(set)=>
@@ -1702,8 +1557,8 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
         }
       DeclKind::Fn(fd)=>
         {
-          let   ptr_sym = Symbol::new(decl.offset,decl.name.clone(),SymbolKind::Data);
-          let  text_sym = Symbol::new(       *pos,decl.name.clone(),SymbolKind::Text);
+          let   ptr_sym = Symbol::new(decl.offset,q_name.clone(),SymbolKind::Data);
+          let  text_sym = Symbol::new(       *pos,q_name.clone(),SymbolKind::Text);
 
           exec.add_symbol( ptr_sym);
           exec.add_symbol(text_sym);
@@ -1732,40 +1587,44 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
 
               *pos += bytes.len();
             }
-          Err(e)=>{return Err(Error::new(format!("関数{}のアセンブルに失敗",&decl.name)).wrap(e));}
+          Err(e)=>{return Err(Error::new(format!("関数{}のアセンブルに失敗",&q_name)).wrap(e));}
             }
         }
       DeclKind::Const(_,v)=>
         {
-          exec.add_symbol(Symbol::new(0,decl.name.clone(),SymbolKind::Const(*v)));
+          exec.add_symbol(Symbol::new(0,q_name.clone(),SymbolKind::Const(*v)));
         }
-      DeclKind::Var(_,v)=>
+      DeclKind::Static(k)=>
         {
-          let  v_bytes = v.to_ne_bytes();
+            match k
+            {
+          StorageKind::Word(_,v)=>
+            {
+              exec.put_u64(decl.offset,*v as u64);
 
-          exec.put_bytes(decl.offset,&v_bytes);
+              exec.add_symbol(Symbol::new(decl.offset,q_name,SymbolKind::Data));
+            }
+          StorageKind::EmptyField(_,sz)=>
+            {
+              exec.add_symbol(Symbol::new(decl.offset,q_name,SymbolKind::Field(*sz)));
+            }
+          StorageKind::FilledField(bytes)=>
+            {
+              exec.put_bytes(decl.offset,bytes);
 
-          exec.add_symbol(Symbol::new(decl.offset,decl.name.clone(),SymbolKind::Data));
+              exec.add_symbol(Symbol::new(decl.offset,q_name,SymbolKind::Field(bytes.len())));
+            }
+          StorageKind::String(_,bytes)=>
+            {
+              exec.put_bytes(decl.offset,bytes);
+
+              exec.add_symbol(Symbol::new(decl.offset,q_name,SymbolKind::Field(bytes.len())));
+            }
+            }
         }
-      DeclKind::Io=>
+      DeclKind::Var(_)=>
         {
-          exec.add_symbol(Symbol::new(decl.offset,decl.name.clone(),SymbolKind::Io));
-        }
-      DeclKind::Str(ty,_,bytes)=>
-        {
-          exec.put_bytes(decl.offset,bytes);
-
-          let  n = bytes.len()/if (ty ==  "i8") || (ty ==  "u8"){1}
-                          else if (ty == "i16") || (ty == "u16"){2}
-                          else if (ty == "i32") || (ty == "u32"){4}
-                          else if (ty == "i64")                 {8}
-                          else                                  {1};
-
-          exec.add_symbol(Symbol::new(decl.offset,decl.name.clone(),SymbolKind::Str(ty.clone(),n)));
-        }
-      DeclKind::Field(_,sz)=>
-        {
-          exec.add_symbol(Symbol::new(decl.offset,decl.name.clone(),SymbolKind::Field(*sz)));
+          panic!();
         }
       _=>{}
         }
@@ -1781,13 +1640,10 @@ generate_exec(&mut self)-> Result<Exec,Error>
 {
   let  mut exec = Exec::new_with_memory();
 
-  let    data_start = self.process_io_offset(256);
-  let     str_start = self.process_data_offset(data_start);
-  let   font8_start = self.process_str_offset(str_start);
+  let   font8_start = self.process_data_offset(256);
   let  combi8_start = get_word_aligned( font8_start+(   8*0x10000));
   let  font14_start = get_word_aligned(combi8_start+(2* 3*0x10000));
-  let   field_start = get_word_aligned(font14_start+(2*14*0x10000));
-  let   stack_start = self.process_field_offset(field_start);
+  let   stack_start = get_word_aligned(font14_start+(2*14*0x10000));
 
   let  stack_size = self.get_const_or("STACK_SIZE",STACK_SIZE*CORE_NUMBER);
 
@@ -1852,8 +1708,10 @@ add_ex_img(&mut self, name: &str, w: u32, h: u32, data: &Vec<u8>)
 
   let  mut decl = Decl::new();
 
-  decl.name.push_str(name);
-  decl.kind = DeclKind::Str("u8".to_string(),StrInitKind::Null,new_data);
+  let  k = StorageKind::FilledField(new_data);
+
+  decl.name = name.to_string();
+  decl.kind = DeclKind::Static(k);
 
   self.insert(decl);
 }

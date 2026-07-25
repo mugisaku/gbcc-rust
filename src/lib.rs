@@ -57,10 +57,10 @@ set_input(v: u32)
 
 #[wasm_bindgen]
 pub fn
-get_io(s: &str)-> u32
+get_data(s: &str)-> u32
 {
   unsafe{
-    EXEC.find_io(s).unwrap() as u32
+    EXEC.find_data(s).unwrap() as u32
   }
 }
 
@@ -115,12 +115,12 @@ compile(s: &str)-> bool
         {
       Ok(mut root)=>
         {
+          root.add_ex_img("image",EX_IMG_W,EX_IMG_H,&EX_IMG_DATA);
+
             match root.finalize()
             {
           Ok(())=>
             {
-              root.add_ex_img("image",EX_IMG_W,EX_IMG_H,&EX_IMG_DATA);
-
                 match root.generate_exec()
                 {
               Ok(exec)=>
@@ -165,6 +165,14 @@ setup(freq: u32)-> String
       MACHINE.reset(freq as usize,&mut EXEC,"main");
 
       let  mut buf = String::new();
+
+      buf.push_str(&format!("ex_img w: {}, h: {}, len: {}\n",EX_IMG_W,EX_IMG_H,EX_IMG_DATA.len()));
+
+      buf.push_str("\n  [data]  \n");
+
+      EXEC.print_memory_to(&mut buf);
+
+      buf.push_str("\n  [text]  \n");
 
       EXEC.print_text_to(&mut buf);
 

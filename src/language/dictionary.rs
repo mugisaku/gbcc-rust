@@ -7,7 +7,9 @@ static DIC_S: &'static str =
 r##"
 
 
-operand_core: (.Identifier & [{"::" & .Identifier}]) | .Number | .Character | .String | ("(" & expression & ")");
+qualified_identifier: .Identifier & [{"::" & .Identifier}];
+
+operand_core: qualified_identifier | .Number | .Character | .String | ("(" & expression & ")");
 
 unary_operator: "!" | "-" | "~";
 
@@ -101,33 +103,25 @@ fn: 'fn -> .Identifier & parameter_list & block;
 
 expression_list: "{" & [{expression & [","]}] & "}";
 
-initialize: "=" & expression;
 
-str: 'str
-  -> .Identifier
-  & ('i8 | 'i16 | 'i32 | 'i64 | 'u8 | 'u16 | 'u32)
-  & "=" & (.String | expression_list);
+init_as_word: "=" & expression;
+init_as_field: "[" & expression & "]";
+init_by_data: "{" & {expression & [","]} & "}";
 
-
-empty: ";";
-field: 'field -> .Identifier & expression;
-io   : 'io    -> .Identifier;
-var  : 'var   -> .Identifier & initialize;
-const: 'const -> .Identifier & initialize;
-enum: 'enum -> "{" & {.Identifier & [","]} & "}";
-
-mvar: 'var -> .Identifier & ":" & .Identifier;
+empty : ";";
+static: 'static -> .Identifier & [init_as_word | init_as_field | init_by_data];
+var   : 'var    -> .Identifier & [init_as_word | init_as_field | init_by_data];
+const : 'const  -> .Identifier & "=" & expression;
+enum  : 'enum   -> "{" & {.Identifier & [","]} & "}";
 
 class: 'class -> .Identifier & "{" & [{declaration}] & "}";
 
 declaration: fn
-           | io
+           | static
            | var
-           | mvar
            | const
            | enum
-           | str
-           | field
+           | static
            | class
            | empty;
 
