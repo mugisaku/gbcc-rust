@@ -114,7 +114,7 @@ var   : 'var    -> .Identifier & [init_as_word | init_as_field | init_by_data];
 const : 'const  -> .Identifier & "=" & expression;
 enum  : 'enum   -> "{" & {.Identifier & [","]} & "}";
 
-class: 'class -> .Identifier & "{" & [{declaration}] & "}";
+mod: 'mod -> .Identifier & "{" & [{declaration}] & "}";
 
 declaration: fn
            | static
@@ -122,7 +122,7 @@ declaration: fn
            | const
            | enum
            | static
-           | class
+           | mod
            | empty;
 
 

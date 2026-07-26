@@ -26,7 +26,7 @@ EvalResult
   InlineAsm(AsmText),
   Const(i64),
   String(String),
-  Class(std::ptr::NonNull<DeclSet>),
+  Mod(std::ptr::NonNull<DeclSet>),
   System,
   SystemMember(String),
 
@@ -76,7 +76,7 @@ try_to_text(self, srcinf: &SourceInfo)-> Result<AsmEvalText,Error>
   Self::InlineAsm(txt)=>{Err(srcinf.to_error(format!("to_text is failed. from inline asm")))}
   Self::Const(i)=>{Ok(Self::to_text_from_const(i))}
   Self::String(_)=>{Err(srcinf.to_error(format!("to_text is failed. from str")))}
-  Self::Class(_) =>{Err(srcinf.to_error(format!("to_text is failed. from class")))}
+  Self::Mod(_) =>{Err(srcinf.to_error(format!("to_text is failed. from mod")))}
   Self::System   =>{Err(srcinf.to_error(format!("to_text is failed. from sys")))}
   Self::SystemMember(_)=>{Err(srcinf.to_error(format!("to_text is failed. from sysmemb")))}
   Self::Undef(s)=>{Err(srcinf.to_error(format!("to_text is failed. from undef: {}",s)))}
@@ -94,7 +94,7 @@ print(&self)
   Self::InlineAsm(_)=>{print!("asm");}
   Self::Const(i)=>{print!("const {}",*i);}
   Self::String(s)=>{print!("\"{}\"",s);}
-  Self::Class(ptr)=>{print!("CLASS {}",&unsafe{ptr.as_ref()}.as_decl().get_qualified_name());}
+  Self::Mod(ptr)=>{print!("MOD {}",&unsafe{ptr.as_ref()}.as_decl().get_qualified_name());}
   Self::System=>{print!("SYS");}
   Self::SystemMember(s)=>{print!("SYS({})",s);}
   Self::Undef(s)=>{print!("UNDEF {}",s);}
@@ -323,7 +323,7 @@ evaluate_decl(decl: &Decl)-> EvalResult
     {
       EvalResult::InlineAsm(txt.clone())
     }
-  DeclKind::Class(set)=>{EvalResult::Class(std::ptr::NonNull::from_ref(set))}
+  DeclKind::Mod(set)=>{EvalResult::Mod(std::ptr::NonNull::from_ref(set))}
   _=>{EvalResult::Err(decl.get_source_info().to_error(format!("evaluate_identifier error: {} is invalid symbol kind",&decl.get_qualified_name())))}
     }
 }

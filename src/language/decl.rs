@@ -187,7 +187,7 @@ DeclKind
 
   InlineAsm(AsmText),
 
-  Class(Box<DeclSet>),
+  Mod(Box<DeclSet>),
 
 }
 
@@ -251,9 +251,9 @@ print(&self, name: &str)
 
       print!("__");
     }
-  DeclKind::Class(set)=>
+  DeclKind::Mod(set)=>
     {
-      println!("class {}{{",name);
+      println!("mod {}{{",name);
 
       set.print();
 
@@ -414,7 +414,7 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
   DeclKind::Const(e,_)=>{e.collect_identifier(set,ss);}
   DeclKind::Static(k)=>{k.collect_identifier(set,ss);}
   DeclKind::Var(k)=>{k.collect_identifier(set,ss);}
-  DeclKind::Class(set)=>{set.collect_identifier(ss);}
+  DeclKind::Mod(set)=>{set.collect_identifier(ss);}
   _=>{}
     }
 }
@@ -428,7 +428,7 @@ collect_string(&self, ss: &mut StringSet)
   DeclKind::Const(e,_)=>{e.collect_string(ss);}
   DeclKind::Static(k)=>{k.collect_string(ss);}
   DeclKind::Var(k)=>{k.collect_string(ss);}
-  DeclKind::Class(set)=>{set.collect_string(ss);}
+  DeclKind::Mod(set)=>{set.collect_string(ss);}
   _=>{}
     }
 }
@@ -461,7 +461,7 @@ build_const_data(&mut self)-> Result<(),Error>
                 match evaluate_const(&e,set,None)
                 {
               EvalResult::Const(i)=>{*v = i;}
-              _=>{return Err(srcinf.to_error(format!("varの初期化に失敗")));}
+              _=>{return Err(srcinf.to_error(format!("static wordの初期化に失敗")));}
                 }
             }
         }
@@ -470,7 +470,7 @@ build_const_data(&mut self)-> Result<(),Error>
             match evaluate_const(e,set,None)
             {
           EvalResult::Const(i)=>{*sz = i as usize;}
-          _=>{return Err(srcinf.to_error(format!("varの初期化に失敗")));}
+          _=>{return Err(srcinf.to_error(format!("static fieldのサイズ算出に失敗")));}
             }
         }
       StorageKind::FilledField(bytes)=>
@@ -490,7 +490,7 @@ build_const_data(&mut self)-> Result<(),Error>
         }
         }
     }
-  DeclKind::Var(_)=>
+  DeclKind::Var(k)=>
     {
       return Err(srcinf.to_error(format!("グローバル変数の宣言はvarではなくstaticを使ってください")));
     }
@@ -741,7 +741,7 @@ read_fn_decl(start_nd: &Node)-> (String,FnDecl)
 
 
 pub fn
-read_class(start_nd: &Node)-> Result<(String,DeclSet),Error>
+read_mod(start_nd: &Node)-> Result<(String,DeclSet),Error>
 {
   let  source_info = start_nd.get_source_info().clone();
 
@@ -845,14 +845,14 @@ read_decl(start_nd: &Node)-> Result<Decl,Error>
         }
 
       else
-        if nd_name == "class"
+        if nd_name == "mod"
         {
-            match read_class(nd)
+            match read_mod(nd)
             {
           Ok((name,set))=>
             {
               decl.name = name;
-              decl.kind = DeclKind::Class(Box::new(set));
+              decl.kind = DeclKind::Mod(Box::new(set));
             }
           Err(e)=>{return Err(e);}
             }
@@ -884,8 +884,6 @@ DeclSet
 
   decls: Vec<Box<Decl>>,
 
-  size: usize,
-
 }
 
 
@@ -904,7 +902,7 @@ new()-> Self
     qualifier: String::new(),
 
     decls: Vec::new(),
-    size: 0,
+
   }
 }
 
@@ -1077,7 +1075,7 @@ search_downwards(&self, q_name: &str, exclude: &str)-> Option<usize>
                 }
 
 
-                if let DeclKind::Class(set) = &decl.kind
+                if let DeclKind::Mod(set) = &decl.kind
                 {
                     if let Some(u) = set.search_downwards(q_name,"")
                     {
@@ -1264,7 +1262,7 @@ collect_as_tplg_nodes(&mut self, buf: &mut Vec<TplgNode>)
 
       buf.push(nd);
 
-        if let DeclKind::Class(set) = &mut decl.kind
+        if let DeclKind::Mod(set) = &mut decl.kind
         {
           set.collect_as_tplg_nodes(buf);
         }
@@ -1286,7 +1284,7 @@ canonicalize(&mut self, parent_ptr: *mut Self, decl_ptr: *mut Decl)
 
       let  sub_decl_ptr = decl.as_ref() as *const Decl as *mut Decl;
 
-        if let DeclKind::Class(set) = &mut decl.kind
+        if let DeclKind::Mod(set) = &mut decl.kind
         {
           let  parent_q: &str = if parent_ptr != std::ptr::null_mut(){&unsafe{&*parent_ptr}.qualifier} else{""};
 
@@ -1338,7 +1336,7 @@ process_deps_relationship(&mut self)-> Result<(),Error>
         }
 
 
-        if let DeclKind::Class(set) = &mut self.decls[i].kind
+        if let DeclKind::Mod(set) = &mut self.decls[i].kind
         {
           set.process_deps_relationship();
         }
@@ -1352,9 +1350,7 @@ process_deps_relationship(&mut self)-> Result<(),Error>
 fn
 process_data_offset(&mut self, start: usize)-> usize
 {
-  let  mut pos = start;
-
-  self.size = 0;
+  let  mut pos = get_word_aligned(start);
 
     for decl in &mut self.decls
     {
@@ -1362,8 +1358,8 @@ process_data_offset(&mut self, start: usize)-> usize
         {
       DeclKind::Static(k)=>
         {
-          decl.offset = get_word_aligned(pos)               ;
-                                         pos += k.get_size();
+          decl.offset = pos                ;
+                        pos += k.get_size();
         }
       DeclKind::Var(k)=>
         {
@@ -1371,15 +1367,18 @@ process_data_offset(&mut self, start: usize)-> usize
         }
       DeclKind::Fn(_)=>
         {
-          decl.offset = get_word_aligned(pos)            ;
-                                         pos += WORD_SIZE;
+          decl.offset = pos             ;
+                        pos += WORD_SIZE;
         }
-      DeclKind::Class(set)=>
+      DeclKind::Mod(set)=>
         {
-          set.process_data_offset(0);
+          pos = set.process_data_offset(pos);
         }
       _=>{}
         }
+
+
+      pos = get_word_aligned(pos);
     }
 
 
@@ -1547,7 +1546,7 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
 
         match &decl.kind
         {
-      DeclKind::Class(set)=>
+      DeclKind::Mod(set)=>
         {
             match set.write_to_exec(exec,pos)
             {
@@ -1654,7 +1653,6 @@ generate_exec(&mut self)-> Result<Exec,Error>
   self.add_const("COMBI8_START",combi8_start as i64);
   self.add_const("FONT14_START",font14_start as i64);
   self.add_const( "STACK_START", stack_start as i64);
-
 
   let  mut pos = text_start;
 

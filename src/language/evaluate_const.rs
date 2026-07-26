@@ -113,7 +113,7 @@ evaluate_decl(decl: &Decl)-> EvalResult
     match decl.get_kind()
     {
   DeclKind::Const(_,i)=>{return EvalResult::Const(*i);}
-  DeclKind::Class(set)=>{return EvalResult::Class(std::ptr::NonNull::from_ref(set));}
+  DeclKind::Mod(set)  =>{return EvalResult::Mod(std::ptr::NonNull::from_ref(set));}
                      _=>{return EvalResult::Undef("");}
     }
 }

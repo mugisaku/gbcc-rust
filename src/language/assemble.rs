@@ -332,23 +332,33 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
         }
       DeclKind::Var(k)=>
         {
-todo!();
-/*
-            match evaluate(e,set,Some(scp)).try_to_text(srcinf)
+            match k
             {
-          Ok(r_txt)=>
+          StorageKind::Word(e_opt,_)=>
             {
-              let  off = scp.add_var(decl.get_name());
+                if let Some(e) = e_opt
+                {
+                    match evaluate(e,set,Some(scp)).try_to_text(srcinf)
+                    {
+                  Ok(r_txt)=>
+                    {
+                      let  off = scp.add_var(decl.get_name());
 
-              let  mut l_txt = AsmEvalText::new();
+                      let  mut l_txt = AsmEvalText::new();
 
-              l_txt.push_local_var(off);
+                      l_txt.push_local_var(off);
 
-              output.try_push_assign(srcinf,l_txt,r_txt,"=")
+                      output.try_push_assign(srcinf,l_txt,r_txt,"=")
+                    }
+                  Err(e)=>{Err(e)}
+                    }
+                }
+
+              else
+                {Ok(())}
             }
-          Err(e)=>{Err(e)}
+          _=>{Err(srcinf.to_error(format!("invalid decl")))}
             }
-*/
         }
       _=>{Err(srcinf.to_error(format!("invalid decl")))}
         }

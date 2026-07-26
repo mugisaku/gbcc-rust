@@ -57,21 +57,21 @@
     </span>
   <span>
     <textarea id="text" cols="48" rows="12">
-io video;
+static video;
 
-io sin_freq;
-io sin_vol ;
-io squ_freq;
-io squ_vol ;
-io saw_freq;
-io saw_vol ;
-io tri_freq;
-io tri_vol ;
-io noi_vol ;
+static sin_freq;
+static sin_vol ;
+static squ_freq;
+static squ_vol ;
+static saw_freq;
+static saw_vol ;
+static tri_freq;
+static tri_vol ;
+static noi_vol ;
 
-io report;
+static report;
 
-field video_field 4*VIDEO_W*VIDEO_H;
+static video_field[4*VIDEO_W*VIDEO_H];
 
 const VIDEO_W = 400;
 const VIDEO_H = 200;
@@ -117,7 +117,7 @@ sleep(tm)
 fn
 dot(x,y,pixel)
 {
-  (video+(4*VIDEO_W*y)+(4*x)).u32 = pixel;
+  (video_field+(4*VIDEO_W*y)+(4*x)).u32 = pixel;
 }
 
 
@@ -243,10 +243,10 @@ print_character(dir,anim,dst_x,dst_y)
        if anim == 1{src_x = CHR_W;}
   else if anim == 3{src_x = CHR_W*2;}
 
-  var  dst_ptr_base = video+(4*VIDEO_W*dst_y)+(4*dst_x);
+  var  dst_ptr_base = video_field.ptr+(4*VIDEO_W*dst_y)+(4*dst_x);
 
-  var  src_pitch = 4*(image+4).u32;
-  var  src_ptr_base = image+8+(src_pitch*src_y)+(4*src_x);
+  var  src_pitch = 4*(image.ptr+4).u32;
+  var  src_ptr_base = image.ptr+8+(src_pitch*src_y)+(4*src_x);
 
     for y in CHR_H
     {
@@ -286,7 +286,7 @@ print_character(dir,anim,dst_x,dst_y)
 fn
 fill(x,y,w,h,pixel)
 {
-  var  base_ptr = video+(4*VIDEO_W*y)+(4*x);
+  var  base_ptr = video_field.ptr+(4*VIDEO_W*y)+(4*x);
 
     for y_off in h
     {
@@ -317,13 +317,13 @@ test(x,y)
 }
 
 
-var  dir = 0;
+static  dir = 0;
 
-var  x = 80;
-var  y = 80;
-var  anim = 0;
-var  x_move_value = 0;
-var  y_move_value = 0;
+static  x = 80;
+static  y = 80;
+static  anim = 0;
+static  x_move_value = 0;
+static  y_move_value = 0;
 
 
 fn
@@ -386,7 +386,7 @@ object_proc()
 fn
 main()
 {
-  video = video_field;
+  video = video_field.ptr;
 
   sys.spawn(video_proc);
   sys.spawn(object_proc);
@@ -405,7 +405,7 @@ main()
         get_word,
         put_word,
         set_input,
-        get_io,
+        get_data_address,
         get_const,
         process,
         get_error_message,
@@ -453,8 +453,6 @@ main()
       const  g_volume_max = 0.1;
 
       const  g_millisec = 1000/40;
-
-      let  g_video_addr;
 
       let  g_sin_freq_addr;
       let  g_sin_vol_addr ;
@@ -591,7 +589,9 @@ main()
         process();
 
 
-        const  base = get_word(g_video_addr);
+        const  video_addr = get_data_address("video");
+
+        const  base = get_word(video_addr);
 
           for(let  i = 0|0;  i < (g_imgdat.width*g_imgdat.height);  ++i)
           {
@@ -643,17 +643,16 @@ main()
         g_asmtext.value = setup(1024*1024*32);
 
 
-        g_video_addr = get_io("video");
-        g_sin_freq_addr = get_io("sin_freq");
-        g_sin_vol_addr  = get_io("sin_vol");
-        g_squ_freq_addr = get_io("squ_freq");
-        g_squ_vol_addr  = get_io("squ_vol");
-        g_saw_freq_addr = get_io("saw_freq");
-        g_saw_vol_addr  = get_io("saw_vol");
-        g_tri_freq_addr = get_io("tri_freq");
-        g_tri_vol_addr  = get_io("tri_vol");
-        g_noi_vol_addr  = get_io("noi_vol");
-        g_report_addr   = get_io("report");
+        g_sin_freq_addr = get_data_address("sin_freq");
+        g_sin_vol_addr  = get_data_address("sin_vol");
+        g_squ_freq_addr = get_data_address("squ_freq");
+        g_squ_vol_addr  = get_data_address("squ_vol");
+        g_saw_freq_addr = get_data_address("saw_freq");
+        g_saw_vol_addr  = get_data_address("saw_vol");
+        g_tri_freq_addr = get_data_address("tri_freq");
+        g_tri_vol_addr  = get_data_address("tri_vol");
+        g_noi_vol_addr  = get_data_address("noi_vol");
+        g_report_addr   = get_data_address("report");
 
         g_up_key    = get_const("UP_KEY");
         g_left_key  = get_const("LEFT_KEY");

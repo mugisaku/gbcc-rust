@@ -245,7 +245,7 @@ add_text(&mut self, txt: (String,usize,AsmText))
 
 
 pub fn
-find_data(&self, name: &str)-> Option<i64>
+find_data_address(&self, name: &str)-> Option<usize>
 {
     for sym in &self.symbols
     {
@@ -253,7 +253,7 @@ find_data(&self, name: &str)-> Option<i64>
         {
             if &sym.name == name
             {
-              return Some(self.get_u64(sym.offset) as i64);
+              return Some(sym.offset);
             }
         }
     }

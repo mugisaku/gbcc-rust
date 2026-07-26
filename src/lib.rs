@@ -57,10 +57,10 @@ set_input(v: u32)
 
 #[wasm_bindgen]
 pub fn
-get_data(s: &str)-> u32
+get_data_address(s: &str)-> u32
 {
   unsafe{
-    EXEC.find_data(s).unwrap() as u32
+    EXEC.find_data_address(s).unwrap() as u32
   }
 }
 
