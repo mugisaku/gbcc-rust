@@ -18,48 +18,6 @@ use crate::source_file::{
 
 
 
-#[derive(Clone)]
-pub enum
-SymbolKind
-{
-  Data, Text, Const(i64), Field(usize),
-
-}
-
-
-#[derive(Clone)]
-pub struct
-Symbol
-{
-  offset: usize,
-    name: String,
-
-  kind: SymbolKind,
-
-}
-
-
-impl
-Symbol
-{
-
-
-pub fn
-new(offset: usize, name: String, kind: SymbolKind)-> Self
-{
-  Self{offset,name,kind}
-}
-
-
-pub fn  get_offset(&self)-> usize{self.offset}
-pub fn  get_name(&self)-> &String{&self.name}
-pub fn  get_kind(&self)-> &SymbolKind{&self.kind}
-
-
-}
-
-
-
 pub struct
 Exec
 {
@@ -249,11 +207,11 @@ find_data_address(&self, name: &str)-> Option<usize>
 {
     for sym in &self.symbols
     {
-        if let SymbolKind::Data = &sym.kind
+        if let SymbolKind::Data = sym.get_kind()
         {
-            if &sym.name == name
+            if sym.get_name() == name
             {
-              return Some(sym.offset);
+              return Some(sym.get_offset() as usize);
             }
         }
     }
@@ -268,9 +226,9 @@ find_const(&self, name: &str)-> Option<i64>
 {
     for sym in &self.symbols
     {
-        if let SymbolKind::Const(v) = &sym.kind
+        if let SymbolKind::Const(v) = sym.get_kind()
         {
-            if &sym.name == name
+            if sym.get_name() == name
             {
               return Some(*v);
             }
@@ -287,11 +245,11 @@ find_field(&self, name: &str)-> Option<(usize,usize)>
 {
     for sym in &self.symbols
     {
-        if let SymbolKind::Field(sz) = &sym.kind
+        if let SymbolKind::Field(sz) = sym.get_kind()
         {
-            if &sym.name == name
+            if sym.get_name() == name
             {
-              return Some((sym.offset,*sz));
+              return Some((sym.get_offset() as usize,*sz));
             }
         }
     }
@@ -306,11 +264,11 @@ find_entry_point(&self, name: &str)-> Option<usize>
 {
     for sym in &self.symbols
     {
-        if let SymbolKind::Text = &sym.kind
+        if let SymbolKind::Text = sym.get_kind()
         {
-            if &sym.name == name
+            if sym.get_name() == name
             {
-              return Some(sym.offset);
+              return Some(sym.get_offset() as usize);
             }
         }
     }
@@ -325,11 +283,11 @@ print_memory_to(&self, buf: &mut String)
 {
     for sym in &self.symbols
     {
-      let  off = sym.get_offset();
+      let  off = sym.get_offset() as usize;
 
       buf.push_str(sym.get_name());
 
-        match &sym.kind
+        match sym.get_kind()
         {
       SymbolKind::Data=>
         {

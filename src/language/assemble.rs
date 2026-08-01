@@ -357,7 +357,33 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
               else
                 {Ok(())}
             }
+          StorageKind::EmptyField(_,sz)=>
+            {
+              scp.add_field(decl.get_name(),*sz);
+
+              Ok(())
+            }
+          StorageKind::FilledField(_,bytes)=>
+            {
+              scp.add_field(decl.get_name(),bytes.len());
+
+              Ok(())
+            }
           _=>{Err(srcinf.to_error(format!("invalid decl")))}
+            }
+        }
+      DeclKind::LocalStatic(name)=>
+        {
+            if let Some(src_decl) = set.get_root().find(name)
+            {
+              scp.add_static(decl.get_name(),src_decl.get_offset());
+
+              Ok(())
+            }
+
+          else
+            {
+              Err(srcinf.to_error(format!("local static {} is not found",name)))
             }
         }
       _=>{Err(srcinf.to_error(format!("invalid decl")))}

@@ -1,6 +1,6 @@
 
 
-use std::rc::{Rc,Weak};
+use std::rc::Rc;
 use std::cell::Cell;
 
 use super::*;
@@ -13,24 +13,26 @@ use super::evaluate_const::*;
 
 
 pub enum
-LocalSymbolKind
+SymbolKind
 {
-  Const,
-    Var,
+  Data,
+  Text, 
 
-  IntV(Cell<i64>),
+  Const(i64),
+  Static,
+     Var,
+
+  Field(usize),
 
 }
 
 
 pub struct
-LocalSymbol
+Symbol
 {
   name: String,
 
-  kind: LocalSymbolKind,
-
-  value: i64,
+  kind: SymbolKind,
 
   offset: isize,
 
@@ -38,8 +40,30 @@ LocalSymbol
 
 
 impl
-LocalSymbol
+Symbol
 {
+
+
+pub fn
+new_data(name: &str, offset: isize)-> Self
+{
+  Self{
+    name: name.to_string(),
+    kind: SymbolKind::Data,
+    offset,
+  }
+}
+
+
+pub fn
+new_text(name: &str, offset: isize)-> Self
+{
+  Self{
+    name: name.to_string(),
+    kind: SymbolKind::Text,
+    offset,
+  }
+}
 
 
 pub fn
@@ -47,8 +71,7 @@ new_const_bool(name: &str, b: bool)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: LocalSymbolKind::Const,
-    value: if b{1} else{0},
+    kind: SymbolKind::Const(if b{1} else{0}),
     offset: 0,
   }
 }
@@ -59,21 +82,19 @@ new_const_int(name: &str, i: i64)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: LocalSymbolKind::Const,
-    value: i,
+    kind: SymbolKind::Const(i),
     offset: 0,
   }
 }
 
 
 pub fn
-new_int_v(name: &str)-> Self
+new_static(name: &str, offset: isize)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: LocalSymbolKind::IntV(Cell::new(0)),
-    value: 0,
-    offset: 0,
+    kind: SymbolKind::Static,
+    offset,
   }
 }
 
@@ -83,8 +104,20 @@ new_var(name: &str, offset: isize)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: LocalSymbolKind::Var,
-    value: 0,
+    kind: SymbolKind::Var,
+    offset,
+  }
+}
+
+
+
+
+pub fn
+new_field(name: &str, offset: isize, sz: usize)-> Self
+{
+  Self{
+    name: name.to_string(),
+    kind: SymbolKind::Field(sz),
     offset,
   }
 }
@@ -98,16 +131,9 @@ get_name(&self)-> &String
 
 
 pub fn
-get_kind(&self)-> &LocalSymbolKind
+get_kind(&self)-> &SymbolKind
 {
   &self.kind
-}
-
-
-pub fn
-get_value(&self)-> i64
-{
-  self.value
 }
 
 
@@ -128,7 +154,7 @@ Scope<'a>
 {
   previous_opt: Option<&'a Scope<'a>>,
 
-  symbol_list: Vec<LocalSymbol>,
+  symbols: Vec<Symbol>,
 
   offset: usize,
 
@@ -147,7 +173,7 @@ new_root(decl: &FnDecl)-> Self
 {
   let  mut scp = Self{
     previous_opt: None,
-    symbol_list: Vec::new(),
+    symbols: Vec::new(),
     offset: 0,
     offset_max: Rc::new(Cell::new(0)),
   };
@@ -159,7 +185,7 @@ new_root(decl: &FnDecl)-> Self
 
     for name in decl.get_parameter_names()
     {
-      scp.symbol_list.push(LocalSymbol::new_var(name,off));
+      scp.symbols.push(Symbol::new_var(name,off));
 
       off += (WORD_SIZE as isize);
     }
@@ -174,7 +200,7 @@ new(&'a self)-> Self
 {
   Self{
     previous_opt: Some(self),
-    symbol_list: Vec::new(),
+    symbols: Vec::new(),
     offset: self.offset,
     offset_max: Rc::clone(&self.offset_max),
   }
@@ -210,18 +236,18 @@ get_offset_max(&self)-> usize
 pub fn
 add_const_bool(&mut self, name: &str, b: bool)
 {
-  let  sym = LocalSymbol::new_const_bool(name,b);
+  let  sym = Symbol::new_const_bool(name,b);
 
-  self.symbol_list.push(sym);
+  self.symbols.push(sym);
 }
 
 
 pub fn
 add_const_int(&mut self, name: &str, i: i64)
 {
-  let  sym = LocalSymbol::new_const_int(name,i);
+  let  sym = Symbol::new_const_int(name,i);
 
-  self.symbol_list.push(sym);
+  self.symbols.push(sym);
 }
 
 
@@ -230,9 +256,9 @@ add_var(&mut self, name: &str)-> isize
 {
   let  offset = self.offset as isize;
 
-  let  sym = LocalSymbol::new_var(name,offset);
+  let  sym = Symbol::new_var(name,offset);
 
-  self.symbol_list.push(sym);
+  self.symbols.push(sym);
 
   self.offset += WORD_SIZE;
 
@@ -243,22 +269,39 @@ add_var(&mut self, name: &str)-> isize
 
 
 pub fn
-add_int_v(&mut self, name: &str)
+add_static(&mut self, name: &str, offset: usize)
 {
-  let  sym = LocalSymbol::new_int_v(name);
+  let  sym = Symbol::new_static(name,offset as isize);
 
-  self.symbol_list.push(sym);
+  self.symbols.push(sym);
 }
 
 
 pub fn
-find(&'a self, name: &str)-> Option<&'a LocalSymbol>
+add_field(&mut self, name: &str, sz: usize)-> isize
 {
-    for sym in &self.symbol_list
+  let  offset = self.offset as isize;
+
+  let  sym = Symbol::new_field(name,offset,sz);
+
+  self.symbols.push(sym);
+
+  self.offset = get_word_aligned(self.offset+sz);
+
+  self.update_offset_max();
+
+  offset as isize
+}
+
+
+pub fn
+find(&'a self, name: &str)-> Option<&'a Symbol>
+{
+    for decl in &self.symbols
     {
-        if &sym.name == name
+        if &decl.name == name
         {
-          return Some(sym);
+          return Some(decl);
         }
     }
 

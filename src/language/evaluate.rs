@@ -25,7 +25,7 @@ EvalResult
   Value(AsmEvalText),
   InlineAsm(AsmText),
   Const(i64),
-  String(String),
+  String(String,String),
   Mod(std::ptr::NonNull<DeclSet>),
   System,
   SystemMember(String),
@@ -75,7 +75,7 @@ try_to_text(self, srcinf: &SourceInfo)-> Result<AsmEvalText,Error>
   Self::Value(txt)=>{Ok(txt)}
   Self::InlineAsm(txt)=>{Err(srcinf.to_error(format!("to_text is failed. from inline asm")))}
   Self::Const(i)=>{Ok(Self::to_text_from_const(i))}
-  Self::String(_)=>{Err(srcinf.to_error(format!("to_text is failed. from str")))}
+  Self::String(_,_)=>{Err(srcinf.to_error(format!("to_text is failed. from str")))}
   Self::Mod(_) =>{Err(srcinf.to_error(format!("to_text is failed. from mod")))}
   Self::System   =>{Err(srcinf.to_error(format!("to_text is failed. from sys")))}
   Self::SystemMember(_)=>{Err(srcinf.to_error(format!("to_text is failed. from sysmemb")))}
@@ -93,7 +93,7 @@ print(&self)
   Self::Value(_)=>{print!("value");}
   Self::InlineAsm(_)=>{print!("asm");}
   Self::Const(i)=>{print!("const {}",*i);}
-  Self::String(s)=>{print!("\"{}\"",s);}
+  Self::String(s,_)=>{print!("\"{}\"",s);}
   Self::Mod(ptr)=>{print!("MOD {}",&unsafe{ptr.as_ref()}.as_decl().get_qualified_name());}
   Self::System=>{print!("SYS");}
   Self::SystemMember(s)=>{print!("SYS({})",s);}
@@ -334,19 +334,27 @@ evaluate_identifier(srcinf: &SourceInfo, name: &str, set: &DeclSet, scp_opt: Opt
 {
     if let Some(scp) = scp_opt
     {
-        if let Some(lsym) = scp.find(name)
+        if let Some(sym) = scp.find(name)
         {
-          return match lsym.get_kind()
+          return match sym.get_kind()
             {
-          LocalSymbolKind::Const=>
+          SymbolKind::Const(i)=>
             {
-              EvalResult::Const(lsym.get_value())
+              EvalResult::Const(*i)
             }
-          LocalSymbolKind::Var=>
+          SymbolKind::Static=>
             {
               let  mut txt = AsmEvalText::new();
 
-              txt.push_local_var(lsym.get_offset());
+              txt.push_global_var(sym.get_offset() as usize);
+
+              EvalResult::Value(txt)
+            }
+          SymbolKind::Var=>
+            {
+              let  mut txt = AsmEvalText::new();
+
+              txt.push_local_var(sym.get_offset());
 
               EvalResult::Value(txt)
             }
@@ -456,6 +464,29 @@ evaluate_binary(l: &Expr, r: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Sc
 
 
 pub fn
+get_string(srcinf: &SourceInfo, name: &str, set: &DeclSet)-> EvalResult
+{
+    if let Some(decl) = set.get_root().find(name)
+    {
+        if let DeclKind::Static(k) = decl.get_kind()
+        {
+            if let StorageKind::String(_,_) = k
+            {
+              let  mut txt = AsmEvalText::new();
+
+              txt.push_i64(decl.get_offset() as i64);
+
+              return EvalResult::Value(txt);
+            }
+        }
+    }
+
+
+  EvalResult::Err(srcinf.to_error(format!("{} is not found or string",name)))
+}
+
+
+pub fn
 evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
   let  res = evaluate_const(e,set,scp_opt);
@@ -474,15 +505,9 @@ evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
         {
           EvalResult::Const(*i)
         }
-      ExprKind::String(s)=>
+      ExprKind::String(_,name)=>
         {
-          let  decl = set.find_string(s).unwrap();
-
-          let  mut txt = AsmEvalText::new();
-
-          txt.push_i64(decl.get_offset() as i64);
-
-          EvalResult::Value(txt)
+          get_string(e.get_source_info(),name,set)
         }
       ExprKind::CallOp(f,args)=>
         {
@@ -505,6 +530,10 @@ evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
           evaluate_binary(l,r,op,set,scp_opt)
         }
         }
+    }
+  EvalResult::String(_,name)=>
+    {
+      get_string(e.get_source_info(),&name,set)
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
   _=>{res}

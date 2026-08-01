@@ -135,12 +135,12 @@ evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 
         if let Some(scp) = scp_opt
         {
-            if let Some(lsym) = scp.find(s)
+            if let Some(sym) = scp.find(s)
             {
-                match lsym.get_kind()
+                match sym.get_kind()
                 {
-              LocalSymbolKind::Const=>{return EvalResult::Const(lsym.get_value());}
-              _                     =>{return EvalResult::Undef("");}
+              SymbolKind::Const(i)=>{return EvalResult::Const(*i);}
+                                 _=>{return EvalResult::Undef("");}
                 }
             }
         }
@@ -156,7 +156,7 @@ evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
           EvalResult::Err(srcinf.to_error(format!("{} is not found",s)))
         }
     }
-  ExprKind::String(s)=>{EvalResult::String(s.clone())}
+  ExprKind::String(s,name)=>{EvalResult::String(s.clone(),name.clone())}
   ExprKind::Int(i)   =>{EvalResult::Const(*i)}
   ExprKind::CallOp(f,args)=>
     {

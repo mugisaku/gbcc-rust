@@ -19,7 +19,7 @@ ExprKind
 {
   Identifier(String),
 
-  String(String),
+  String(String,String),
 
   Int(i64),
 
@@ -101,15 +101,15 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
     {
         if let Some(decl) = set.search(s)
         {
-          ss.insert(s.clone());
+          ss.insert(s);
         }
 
       else
         {
-          ss.record_fail(&self.source_info,self.to_string());
+          ss.record_fail(&self.source_info,s);
         }
     }
-  ExprKind::String(s)=>{}
+  ExprKind::String(_,_)=>{}
   ExprKind::CallOp(f,args)=>
     {
       f.collect_identifier(set,ss);
@@ -136,33 +136,33 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
 
 
 pub fn
-collect_string(&self, ss: &mut StringSet)
+collect_static(&mut self, ss: &mut StaticSet)
 {
-    match &self.kind
+    match &mut self.kind
     {
-  ExprKind::String(s)=>
+  ExprKind::String(s,name)=>
     {
-      ss.insert(s.clone());
+      *name = ss.insert_string(s);
     }
   ExprKind::CallOp(f,args)=>
     {
-      f.collect_string(ss);
+      f.collect_static(ss);
 
         for e in args
         {
-          e.collect_string(ss);
+          e.collect_static(ss);
         }
     }
   ExprKind::AccessOp(ins,_)=>
     {
-      ins.collect_string(ss);
+      ins.collect_static(ss);
     }
-  ExprKind::Expr(e)=>{e.collect_string(ss);}
-  ExprKind::UnaryOp(o,op)=>{o.collect_string(ss);}
+  ExprKind::Expr(e)=>{e.collect_static(ss);}
+  ExprKind::UnaryOp(o,op)=>{o.collect_static(ss);}
   ExprKind::BinaryOp(l,r,op)=>
     {
-      l.collect_string(ss);
-      r.collect_string(ss);
+      l.collect_static(ss);
+      r.collect_static(ss);
     }
   _=>{}
     }
@@ -186,7 +186,7 @@ print_to(&self, buf: &mut String)
     match &self.kind
     {
   ExprKind::Identifier(s)=>{buf.push_str(s)}
-  ExprKind::String(s)=>
+  ExprKind::String(s,_)=>
     {
       buf.push('\"');
       buf.push_str(s);
@@ -467,7 +467,7 @@ read_operand_core(start_nd: &Node)-> Expr
 
           panic!();
         }
-      ValueKind::String(s)=>{return Expr{source_info, kind: ExprKind::String(s.clone())};}
+      ValueKind::String(s)=>{return Expr{source_info, kind: ExprKind::String(s.clone(),String::new())};}
       ValueKind::Uint(u) =>{return Expr{source_info, kind: ExprKind::Int(*u as i64)};}
       ValueKind::Char(c) =>{return Expr{source_info, kind: ExprKind::Int(*c as i64)};}
       ValueKind::Float(_) =>{panic!("do not use floating point number");}

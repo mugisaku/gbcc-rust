@@ -37,18 +37,18 @@ pub fn  get_else_block_opt(&self)-> &Option<Block>{&self.else_block_opt}
 
 
 pub fn
-collect_string(&self, ss: &mut StringSet)
+collect_static(&mut self, ss: &mut StaticSet)
 {
-    for (e,blk) in &self.cond_block_list
+    for (e,blk) in &mut self.cond_block_list
     {
-      e.collect_string(ss);
-      blk.collect_string(ss);
+        e.collect_static(ss);
+      blk.collect_static(ss);
     }
 
 
-    if let Some(blk) = &self.else_block_opt
+    if let Some(blk) = &mut self.else_block_opt
     {
-      blk.collect_string(ss);
+      blk.collect_static(ss);
     }
 }
 
@@ -142,10 +142,10 @@ pub fn  get_block(&self)-> &Block{&self.block}
 
 
 pub fn
-collect_string(&self, ss: &mut StringSet)
+collect_static(&mut self, ss: &mut StaticSet)
 {
-   self.expr.collect_string(ss);
-  self.block.collect_string(ss);
+   self.expr.collect_static(ss);
+  self.block.collect_static(ss);
 }
 
 
@@ -202,11 +202,11 @@ get_stmt_list(&self)-> &Vec<Stmt>
 
 
 pub fn
-collect_string(&self, ss: &mut StringSet)
+collect_static(&mut self, ss: &mut StaticSet)
 {
-    for stmt in &self.stmt_list
+    for stmt in &mut self.stmt_list
     {
-      stmt.collect_string(ss);
+      stmt.collect_static(ss);
     }
 }
 
@@ -325,35 +325,54 @@ get_kind(&self)-> &StmtKind
 
 
 pub fn
-collect_string(&self, ss: &mut StringSet)
+collect_static(&mut self, ss: &mut StaticSet)
 {
-    match &self.kind
+    match &mut self.kind
     {
-  StmtKind::Empty=>{}
-  StmtKind::Block(blk)=>{blk.collect_string(ss);}
-  StmtKind::Decl(decl)=>{decl.collect_string(ss);}
-  StmtKind::Expr(e)=>{e.collect_string(ss);}
-  StmtKind::If(i)=>{i.collect_string(ss);}
-  StmtKind::Loop(blk)=>{blk.collect_string(ss);}
+  StmtKind::Block(blk)=>{blk.collect_static(ss);}
+  StmtKind::Decl(decl)=>
+    {
+      decl.collect_static(ss);
+
+      let  mut name_opt = Option::<String>::None;
+
+        if let DeclKind::Static(k) = decl.get_kind_mut()
+        {
+          let  mut tmp = StorageKind::Null;
+
+          std::mem::swap(k, &mut tmp);
+
+          name_opt = Some(ss.insert_storage(tmp));
+        }
+
+
+        if let Some(name) = name_opt
+        {
+          *decl.get_kind_mut() = DeclKind::LocalStatic(name);
+        }
+    }
+  StmtKind::Expr(e)=>{e.collect_static(ss);}
+  StmtKind::If(i)=>{i.collect_static(ss);}
+  StmtKind::Loop(blk)=>{blk.collect_static(ss);}
   StmtKind::While(e,blk)=>
     {
-        e.collect_string(ss);
-      blk.collect_string(ss);
+        e.collect_static(ss);
+      blk.collect_static(ss);
     }
-  StmtKind::For(f)=>{f.collect_string(ss);}
+  StmtKind::For(f)=>{f.collect_static(ss);}
   StmtKind::Return(e_opt)=>
     {
         if let Some(e) = e_opt
         {
-          e.collect_string(ss);
+          e.collect_static(ss);
         }
     }
   StmtKind::Assign(l,r,_)=>
     {
-      l.collect_string(ss);
-      r.collect_string(ss);
+      l.collect_static(ss);
+      r.collect_static(ss);
     }
-  StmtKind::Print(e)=>{e.collect_string(ss);}
+  StmtKind::Print(e)=>{e.collect_static(ss);}
   _=>{}
     }
 }
