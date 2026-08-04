@@ -342,7 +342,7 @@ collect_static(&mut self, ss: &mut StaticSet)
 
           std::mem::swap(k, &mut tmp);
 
-          name_opt = Some(ss.insert_storage(tmp));
+          name_opt = Some(ss.insert_storage(&self.source_info,tmp));
         }
 
 

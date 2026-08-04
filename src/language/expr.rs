@@ -142,7 +142,7 @@ collect_static(&mut self, ss: &mut StaticSet)
     {
   ExprKind::String(s,name)=>
     {
-      *name = ss.insert_string(s);
+      *name = ss.insert_string(&self.source_info,s);
     }
   ExprKind::CallOp(f,args)=>
     {

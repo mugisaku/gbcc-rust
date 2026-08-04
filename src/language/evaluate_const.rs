@@ -130,7 +130,6 @@ evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
     {
            if s == "false"{return EvalResult::Const(0);}
       else if s ==  "true"{return EvalResult::Const(1);}
-      else if s ==   "sys"{return EvalResult::System;}
 
 
         if let Some(scp) = scp_opt
@@ -184,19 +183,7 @@ evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
     }
   ExprKind::AccessOp(ins,s)=>
     {
-        match evaluate_const(ins,set,scp_opt)
-        {
-      EvalResult::System=>
-        {
-               if s == "spawn"{EvalResult::SystemMember(s.clone())}
-          else if s == "print"{EvalResult::SystemMember(s.clone())}
-          else if s ==    "id"{EvalResult::SystemMember(s.clone())}
-          else if s == "input"{EvalResult::SystemMember(s.clone())}
-          else if s == "timer"{EvalResult::SystemMember(s.clone())}
-          else                {EvalResult::Err(srcinf.to_error(format!("{} is not found in sys",s)))}
-        }
-      _=>{EvalResult::Undef("")}
-        }
+      EvalResult::Undef("const access is always undef")
     }
   ExprKind::Expr(e)         =>{evaluate_const(e,set,scp_opt)}
   ExprKind::UnaryOp(o,op)   =>{evaluate_unary_const(o,op,set,scp_opt)}

@@ -21,7 +21,7 @@ use super::expr::*;
 use super::stmt::*;
 use super::scope::*;
 use super::assemble::assemble;
-use super::asm::AsmText;
+use super::asm::Opcode;
 use super::font14::*;
 use super::font8::*;
 use super::tplg_sort::*;
@@ -85,7 +85,7 @@ record_fail(&mut self, srcinf: &SourceInfo, s: &str)
 pub struct
 StaticSet
 {
-  set: Vec<(String,StorageKind)>,
+  set: Vec<(SourceInfo,String,StorageKind)>,
 
 }
 
@@ -103,9 +103,9 @@ new()-> Self
 
 
 pub fn
-insert_string(&mut self, new_s: &str)-> String
+insert_string(&mut self, srcinf: &SourceInfo, new_s: &str)-> String
 {
-    for (name,k) in &self.set
+    for (_,name,k) in &self.set
     {
         if let StorageKind::String(s,_) = k
         {
@@ -123,20 +123,20 @@ insert_string(&mut self, new_s: &str)-> String
 
   let  name = format!(".STATIC{}",n);
 
-  self.set.push((name.clone(),k));
+  self.set.push((srcinf.clone(),name.clone(),k));
 
   name
 }
 
 
 pub fn
-insert_storage(&mut self, k: StorageKind)-> String
+insert_storage(&mut self, srcinf: &SourceInfo, k: StorageKind)-> String
 {
   let  n = self.set.len();
 
   let  name = format!(".STATIC{}",n);
 
-  self.set.push((name.clone(),k));
+  self.set.push((srcinf.clone(),name.clone(),k));
 
   name
 }
@@ -324,7 +324,8 @@ DeclKind
 
   Fn(FnDecl),
 
-  InlineAsm(AsmText),
+  Asm(Vec<Opcode>),
+  AsmWithArgc(Vec<Opcode>),
 
   Mod(Box<DeclSet>),
 
@@ -386,13 +387,29 @@ print(&self, name: &str)
 
       f.print();
     }
-  DeclKind::InlineAsm(txt)=>
+  DeclKind::Asm(ops)=>
     {
       print!("asm{{");
 
-      txt.print(0);
+        for op in ops
+        {
+          print!("{},",op.to_str());
+        }
 
-      print!("__");
+
+      print!("}}");
+    }
+  DeclKind::AsmWithArgc(ops)=>
+    {
+      print!("asm with argc{{");
+
+        for op in ops
+        {
+          print!("{},",op.to_str());
+        }
+
+
+      print!("}}");
     }
   DeclKind::Mod(set)=>
     {
@@ -452,6 +469,47 @@ new()-> Self
     deps_parent_names: Vec::new(),
      deps_child_names: Vec::new(),
   }
+}
+
+
+pub fn
+new_sys()-> Self
+{
+  let  mut decl = Self::new();
+
+  let  sys = DeclSet::new_sys();
+
+  decl.name.push_str("sys");
+
+  decl.kind = DeclKind::Mod(Box::new(sys));
+
+  decl
+}
+
+
+pub fn
+new_asm(name: &str, ops: Vec<Opcode>)-> Self
+{
+  let  mut decl = Self::new();
+
+  decl.name = name.to_string();
+
+  decl.kind = DeclKind::Asm(ops);
+
+  decl
+}
+
+
+pub fn
+new_asm_with_argc(name: &str, ops: Vec<Opcode>)-> Self
+{
+  let  mut decl = Self::new();
+
+  decl.name = name.to_string();
+
+  decl.kind = DeclKind::AsmWithArgc(ops);
+
+  decl
 }
 
 
@@ -1051,6 +1109,23 @@ new()-> Self
 
 
 pub fn
+new_sys()-> Self
+{
+  let  mut set = Self::new();
+
+  set.decls.push(Box::new(Decl::new_asm_with_argc("spawn",vec![Opcode::Spw])));
+  set.decls.push(Box::new(Decl::new_asm("id",vec![Opcode::Pushid])));
+  set.decls.push(Box::new(Decl::new_asm("pc",vec![Opcode::Pushpc])));
+  set.decls.push(Box::new(Decl::new_asm("fp",vec![Opcode::Pushfp])));
+  set.decls.push(Box::new(Decl::new_asm("sp",vec![Opcode::Pushsp])));
+  set.decls.push(Box::new(Decl::new_asm("input",vec![Opcode::Pushinput])));
+  set.decls.push(Box::new(Decl::new_asm("timer",vec![Opcode::Pushtimer])));
+
+  set
+}
+
+
+pub fn
 get_parent(&self)-> Option<&Self>
 {
     if self.parent_ptr != std::ptr::null_mut()
@@ -1156,6 +1231,10 @@ read(s: &str)-> Result<Box<Self>,Error>
             }
         }
 
+
+      let  sys = Decl::new_sys();
+
+      set.decls.push(Box::new(sys));
 
       Ok(Box::new(set))
     }
@@ -1614,9 +1693,19 @@ finalize(&mut self)-> Result<(),Error>
 
   self.collect_static(&mut ss);
 
-    for (name,k) in ss.set
+    for (srcinf,name,k) in ss.set
     {
-todo!();
+      let  mut decl = Decl::new();
+
+      decl.source_info = srcinf;
+      decl.name = name;
+      decl.kind = DeclKind::Static(k);
+
+        match self.insert(decl)
+        {
+      Ok(())=>{}
+      Err(e)=>{return Err(e);}
+        }
     }
 
 

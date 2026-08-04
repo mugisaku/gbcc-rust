@@ -23,12 +23,12 @@ pub enum
 EvalResult
 {
   Value(AsmEvalText),
-  InlineAsm(AsmText),
+  Values(Vec<AsmEvalText>),
+  Asm(Vec<Opcode>),
+  AsmWithArgc(Vec<Opcode>),
   Const(i64),
   String(String,String),
   Mod(std::ptr::NonNull<DeclSet>),
-  System,
-  SystemMember(String),
 
   Undef(&'static str),
 
@@ -73,12 +73,12 @@ try_to_text(self, srcinf: &SourceInfo)-> Result<AsmEvalText,Error>
     match self
     {
   Self::Value(txt)=>{Ok(txt)}
-  Self::InlineAsm(txt)=>{Err(srcinf.to_error(format!("to_text is failed. from inline asm")))}
+  Self::Values(txts)=>{Err(srcinf.to_error(format!("to_text is failed. from values")))}
+  Self::Asm(_)        =>{Err(srcinf.to_error(format!("to_text is failed. from asm")))}
+  Self::AsmWithArgc(_)=>{Err(srcinf.to_error(format!("to_text is failed. from asm with argc")))}
   Self::Const(i)=>{Ok(Self::to_text_from_const(i))}
   Self::String(_,_)=>{Err(srcinf.to_error(format!("to_text is failed. from str")))}
   Self::Mod(_) =>{Err(srcinf.to_error(format!("to_text is failed. from mod")))}
-  Self::System   =>{Err(srcinf.to_error(format!("to_text is failed. from sys")))}
-  Self::SystemMember(_)=>{Err(srcinf.to_error(format!("to_text is failed. from sysmemb")))}
   Self::Undef(s)=>{Err(srcinf.to_error(format!("to_text is failed. from undef: {}",s)))}
   Self::Err(e)=>{Err(e)}
     }
@@ -91,12 +91,12 @@ print(&self)
     match self
     {
   Self::Value(_)=>{print!("value");}
-  Self::InlineAsm(_)=>{print!("asm");}
+  Self::Values(_)=>{print!("values");}
+  Self::Asm(_)=>{print!("asm");}
+  Self::AsmWithArgc(_)=>{print!("asm with argc");}
   Self::Const(i)=>{print!("const {}",*i);}
   Self::String(s,_)=>{print!("\"{}\"",s);}
   Self::Mod(ptr)=>{print!("MOD {}",&unsafe{ptr.as_ref()}.as_decl().get_qualified_name());}
-  Self::System=>{print!("SYS");}
-  Self::SystemMember(s)=>{print!("SYS({})",s);}
   Self::Undef(s)=>{print!("UNDEF {}",s);}
   Self::Err(e)=>{print!("ERR");}
     }
@@ -109,107 +109,31 @@ print(&self)
 
 
 pub fn
-evaluate_system_member(s: &str, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_args(args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
 {
-    if s == "spawn"
-    {
-      let  mut buf = Vec::<AsmEvalText>::new();
+  let  mut buf = Vec::<AsmEvalText>::new();
 
-        for a in args
+    for a in args
+    {
+        match evaluate(a,set,scp_opt)
         {
-            match evaluate(a,set,scp_opt)
-            {
-          EvalResult::Value(mut a_txt)=>
-            {
-              a_txt.push_load();
+      EvalResult::Value(mut a_txt)=>
+        {
+          a_txt.push_load();
 
-              buf.push(a_txt);
-            }
-          EvalResult::Const(a_val)=>
-            {
-              buf.push(EvalResult::to_text_from_const(a_val));
-            }
-          EvalResult::Err(e)=>{return EvalResult::Err(e);}
-          _=>{return EvalResult::Undef("call spawn default");}
-            }
+          buf.push(a_txt);
         }
-
-
-      let  txt = AsmEvalText::to_spawn(buf);
-
-      EvalResult::Value(txt)
+      EvalResult::Const(a_val)=>
+        {
+          buf.push(EvalResult::to_text_from_const(a_val));
+        }
+      EvalResult::Err(e)=>{return EvalResult::Err(e);}
+      _=>{return EvalResult::Undef("call value default");}
+        }
     }
 
-  else
-    if s == "id"
-    {
-      let  mut txt = AsmEvalText::new();
 
-      txt.push_opcode(Opcode::Pushid);
-      txt.set_kind(AsmEvalKind::Value);
-
-      EvalResult::Value(txt)
-    }
-
-  else
-    if s == "pc"
-    {
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_opcode(Opcode::Pushpc);
-      txt.set_kind(AsmEvalKind::Value);
-
-      EvalResult::Value(txt)
-    }
-
-  else
-    if s == "fp"
-    {
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_opcode(Opcode::Pushfp);
-      txt.set_kind(AsmEvalKind::Value);
-
-      EvalResult::Value(txt)
-    }
-
-  else
-    if s == "sp"
-    {
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_opcode(Opcode::Pushsp);
-      txt.set_kind(AsmEvalKind::Value);
-
-      EvalResult::Value(txt)
-    }
-
-  else
-    if s == "input"
-    {
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_opcode(Opcode::Pushinput);
-      txt.set_kind(AsmEvalKind::Value);
-
-      EvalResult::Value(txt)
-    }
-
-  else
-    if s == "timer"
-    {
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_opcode(Opcode::Pushtimer);
-      txt.set_kind(AsmEvalKind::Value);
-
-      EvalResult::Value(txt)
-    }
-
-  else
-    {
-      EvalResult::Undef("SystemMember")
-    }
+  EvalResult::Values(buf)
 }
 
 
@@ -222,34 +146,47 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>
     {
   EvalResult::Value(mut txt)=>
     {
-      let  mut buf = Vec::<AsmEvalText>::new();
-
-        for a in args
+        match evaluate_args(args,set,scp_opt)
         {
-            match evaluate(a,set,scp_opt)
-            {
-          EvalResult::Value(mut a_txt)=>
-            {
-              a_txt.push_load();
+      EvalResult::Values(txts)=>
+        {
+          txt.push_call(txts);
 
-              buf.push(a_txt);
-            }
-          EvalResult::Const(a_val)=>
-            {
-              buf.push(EvalResult::to_text_from_const(a_val));
-            }
-          EvalResult::Err(e)=>{return EvalResult::Err(e);}
-          _=>{return EvalResult::Undef("call value default");}
-            }
+          EvalResult::Value(txt)
         }
+      EvalResult::Err(e)=>{EvalResult::Err(e)}
+      _=>{EvalResult::Undef("call value")}
+        }
+    }
+  EvalResult::Asm(ops)=>
+    {
+        match evaluate_args(args,set,scp_opt)
+        {
+      EvalResult::Values(txts)=>
+        {
+          let  txt = AsmEvalText::concatenate(txts,ops,false);
 
+          EvalResult::Value(txt)
+        }
+      EvalResult::Err(e)=>{EvalResult::Err(e)}
+      _=>{EvalResult::Undef("call asm")}
+        }
+    }
+  EvalResult::AsmWithArgc(ops)=>
+    {
+        match evaluate_args(args,set,scp_opt)
+        {
+      EvalResult::Values(txts)=>
+        {
+          let  txt = AsmEvalText::concatenate(txts,ops,true);
 
-      txt.push_call(buf);
-
-      EvalResult::Value(txt)
+          EvalResult::Value(txt)
+        }
+      EvalResult::Err(e)=>{EvalResult::Err(e)}
+      _=>{EvalResult::Undef("call asm with argc")}
+        }
     }
   EvalResult::Err(e)=>{EvalResult::Err(e)}
-  EvalResult::SystemMember(s)=>{evaluate_system_member(&s,args,set,scp_opt)}
   _=>{EvalResult::Undef("call defalut")}
     }
 }
@@ -319,9 +256,13 @@ evaluate_decl(decl: &Decl)-> EvalResult
 
       EvalResult::Value(txt)
     }
-  DeclKind::InlineAsm(txt)=>
+  DeclKind::Asm(txt)=>
     {
-      EvalResult::InlineAsm(txt.clone())
+      EvalResult::Asm(txt.clone())
+    }
+  DeclKind::AsmWithArgc(txt)=>
+    {
+      EvalResult::AsmWithArgc(txt.clone())
     }
   DeclKind::Mod(set)=>{EvalResult::Mod(std::ptr::NonNull::from_ref(set))}
   _=>{EvalResult::Err(decl.get_source_info().to_error(format!("evaluate_identifier error: {} is invalid symbol kind",&decl.get_qualified_name())))}

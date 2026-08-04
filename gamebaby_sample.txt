@@ -40,11 +40,11 @@ const  CHR_H = 40;
 fn
 sleep(tm)
 {
-  var  base = sys.timer();
+  var  base = sys::timer();
 
     loop
     {
-        if (sys.timer()-base) >= tm
+        if (sys::timer()-base) >= tm
         {
           break;
         }
@@ -289,11 +289,11 @@ object_proc()
 {
   loop
   {
-    var  input = sys.input();
+    var  input = sys::input();
 
       if input&Z_KEY
       {
-        sys.spawn(test,g_x,g_y);
+        sys::spawn(test,g_x,g_y);
       }
 
 
@@ -329,8 +329,8 @@ main()
 {
   video = video_field.ptr;
 
-  sys.spawn(video_proc);
-  sys.spawn(object_proc);
+  sys::spawn(video_proc);
+  sys::spawn(object_proc);
 
 }
 

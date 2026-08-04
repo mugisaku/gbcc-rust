@@ -547,6 +547,7 @@ print(&self)
 pub enum
 AsmEvalKind
 {
+  Undef,
   Void,
   Value,
 
@@ -580,7 +581,7 @@ AsmEvalText
 pub fn
 new()-> Self
 {
-  Self{lines: Vec::new(), kind: AsmEvalKind::Void}
+  Self{lines: Vec::new(), kind: AsmEvalKind::Undef}
 }
 
 
@@ -629,7 +630,8 @@ push_to_ptr(&mut self)
 {
     match &self.kind
     {
-  AsmEvalKind::Void=>{panic!();}
+   AsmEvalKind::Undef
+  |AsmEvalKind::Void=>{panic!();}
   _=>{}
     }
 
@@ -715,11 +717,11 @@ push_call(&mut self, args: Vec<Self>)
 
 
 pub fn
-to_spawn(args: Vec<Self>)-> Self
+concatenate(args: Vec<Self>, ops: Vec<Opcode>, with_argc: bool)-> Self
 {
   let  mut txt = Self::new();
 
-  let  arg_n = args.len();
+  let  argc = args.len();
 
     for a in args
     {
@@ -727,9 +729,17 @@ to_spawn(args: Vec<Self>)-> Self
     }
 
 
-  txt.push_i64(arg_n as i64);
+    if with_argc
+    {
+      txt.push_i64(argc as i64);
+    }
 
-  txt.push_opcode(Opcode::Spw);
+
+    for op in ops
+    {
+      txt.push_opcode(op);
+    }
+
 
   txt.kind = AsmEvalKind::Value;
 
@@ -742,6 +752,7 @@ push_load(&mut self)
 {
     match &self.kind
     {
+  AsmEvalKind::Undef   =>{panic!();}
   AsmEvalKind::Void    =>{panic!();}
   AsmEvalKind::Value   =>{}
   AsmEvalKind::DerefI8 =>{self.push_opcode(Opcode::Ld_i8 );}
