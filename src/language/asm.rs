@@ -1,6 +1,11 @@
 
 
 use super::*;
+use super::decl::{
+  TyKind,
+
+};
+
 use crate::source_file::{
   SourceInfo,
   Error,
@@ -551,13 +556,7 @@ AsmEvalKind
   Void,
   Value,
 
-  DerefI8,
-  DerefI16,
-  DerefI32,
-  DerefI64,
-  DerefU8,
-  DerefU16,
-  DerefU32,
+  Deref(TyKind),
 
 }
 
@@ -590,13 +589,7 @@ is_deref(&self)-> bool
 {
     match &self.kind
     {
-  AsmEvalKind::DerefI8
- |AsmEvalKind::DerefI16
- |AsmEvalKind::DerefI32
- |AsmEvalKind::DerefI64
- |AsmEvalKind::DerefU8
- |AsmEvalKind::DerefU16
- |AsmEvalKind::DerefU32=>{true}
+  AsmEvalKind::Deref(_)=>{true}
   _=>{false}
     }
 }
@@ -670,7 +663,7 @@ push_global_var(&mut self, off: usize)
 {
   self.push_i64(off as i64);
 
-  self.kind = AsmEvalKind::DerefI64;
+  self.kind = AsmEvalKind::Deref(TyKind::I64);
 }
 
 
@@ -691,7 +684,7 @@ push_local_var(&mut self, off: isize)
   self.push_i64(off as i64);
   self.push_opcode(Opcode::Add);
 
-  self.kind = AsmEvalKind::DerefI64;
+  self.kind = AsmEvalKind::Deref(TyKind::I64);
 }
 
 
@@ -755,13 +748,20 @@ push_load(&mut self)
   AsmEvalKind::Undef   =>{panic!();}
   AsmEvalKind::Void    =>{panic!();}
   AsmEvalKind::Value   =>{}
-  AsmEvalKind::DerefI8 =>{self.push_opcode(Opcode::Ld_i8 );}
-  AsmEvalKind::DerefI16=>{self.push_opcode(Opcode::Ld_i16);}
-  AsmEvalKind::DerefI32=>{self.push_opcode(Opcode::Ld_i32);}
-  AsmEvalKind::DerefI64=>{self.push_opcode(Opcode::Ld_i64);}
-  AsmEvalKind::DerefU8 =>{self.push_opcode(Opcode::Ld_u8 );}
-  AsmEvalKind::DerefU16=>{self.push_opcode(Opcode::Ld_u16);}
-  AsmEvalKind::DerefU32=>{self.push_opcode(Opcode::Ld_u32);}
+  AsmEvalKind::Deref(k)=>
+    {
+        match k
+        {
+      TyKind::I8 =>{self.push_opcode(Opcode::Ld_i8 );}
+      TyKind::I16=>{self.push_opcode(Opcode::Ld_i16);}
+      TyKind::I32=>{self.push_opcode(Opcode::Ld_i32);}
+      TyKind::I64=>{self.push_opcode(Opcode::Ld_i64);}
+      TyKind::U8 =>{self.push_opcode(Opcode::Ld_u8 );}
+      TyKind::U16=>{self.push_opcode(Opcode::Ld_u16);}
+      TyKind::U32=>{self.push_opcode(Opcode::Ld_u32);}
+      _=>{panic!();}
+        }
+    }
     }
 
 
@@ -984,25 +984,33 @@ try_push_assign(&mut self, srcinf: &SourceInfo, mut l: AsmEvalText, mut r: AsmEv
     }
 
 
-  let  op = match k
+  self.push_eval_text(l);
+
+    match k
     {
-  AsmEvalKind::DerefI8 =>{Opcode::St_i8 }
-  AsmEvalKind::DerefI16=>{Opcode::St_i16}
-  AsmEvalKind::DerefI32=>{Opcode::St_i32}
-  AsmEvalKind::DerefI64=>{Opcode::St_i64}
-  AsmEvalKind::DerefU8 =>{Opcode::St_i8 }
-  AsmEvalKind::DerefU16=>{Opcode::St_i16}
-  AsmEvalKind::DerefU32=>{Opcode::St_i32}
+  AsmEvalKind::Deref(k)=>
+    {
+        match k
+        {
+       TyKind::I8
+      |TyKind::U8=>{self.push_opcode(Opcode::St_i8);}
+       TyKind::I16
+      |TyKind::U16=>{self.push_opcode(Opcode::St_i16);}
+       TyKind::I32
+      |TyKind::U32=>{self.push_opcode(Opcode::St_i32);}
+      TyKind::I64=>{self.push_opcode(Opcode::St_i64);}
+      _=>
+        {
+          return Err(srcinf.to_error(format!("push_assign error: assign to non deref")));
+        }
+        }
+    }
   _=>
     {
       return Err(srcinf.to_error(format!("push_assign error: assign to non deref")));
     }
-    };
+    }
 
-
-  self.push_eval_text(l);
-
-  self.push_opcode(op);
 
   Ok(())
 }

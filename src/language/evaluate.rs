@@ -202,13 +202,13 @@ evaluate_access(ins: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> E
   EvalResult::Value(mut txt)=>
     {
            if s == "ptr"{txt.push_to_ptr();}
-      else if s ==  "i8"{txt.change_kind(AsmEvalKind::DerefI8 );}
-      else if s == "i16"{txt.change_kind(AsmEvalKind::DerefI16);}
-      else if s == "i32"{txt.change_kind(AsmEvalKind::DerefI32);}
-      else if s == "i64"{txt.change_kind(AsmEvalKind::DerefI64);}
-      else if s ==  "u8"{txt.change_kind(AsmEvalKind::DerefU8 );}
-      else if s == "u16"{txt.change_kind(AsmEvalKind::DerefU16);}
-      else if s == "u32"{txt.change_kind(AsmEvalKind::DerefU32);}
+      else if s ==  "i8"{txt.change_kind(AsmEvalKind::Deref(TyKind::I8));}
+      else if s == "i16"{txt.change_kind(AsmEvalKind::Deref(TyKind::I16));}
+      else if s == "i32"{txt.change_kind(AsmEvalKind::Deref(TyKind::I32));}
+      else if s == "i64"{txt.change_kind(AsmEvalKind::Deref(TyKind::I64));}
+      else if s ==  "u8"{txt.change_kind(AsmEvalKind::Deref(TyKind::U8));}
+      else if s == "u16"{txt.change_kind(AsmEvalKind::Deref(TyKind::U16));}
+      else if s == "u32"{txt.change_kind(AsmEvalKind::Deref(TyKind::U32));}
       else
         {
           return EvalResult::Err(srcinf.to_error(format!("evalute_access error: unknown field {}",s)));

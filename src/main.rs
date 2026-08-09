@@ -76,7 +76,7 @@ main()
   let  codes =
 r#"
 
-class Test{
+mod Test{
 
 enum{
   Apple, Grape, Orange
@@ -98,12 +98,11 @@ static y_obj = Test::Grape;
 fn
 main()
 {
-  sys.spawn(test,123,9);
-  sys.input();
+  sys::spawn(test,123,9);
+  sys::input();
 
   return Test::Apple;
 }
-*/
 
 
 
@@ -150,11 +149,11 @@ const  CHR_H = 40;
 fn
 sleep(tm)
 {
-  var  base = sys.timer();
+  var  base = sys::timer();
 
     loop
     {
-        if (sys.timer()-base) >= tm
+        if (sys::timer()-base) >= tm
         {
           break;
         }
@@ -399,11 +398,11 @@ object_proc()
 {
   loop
   {
-    var  input = sys.input();
+    var  input = sys::input();
 
       if input&Z_KEY
       {
-        sys.spawn(test,x,y);
+        sys::spawn(test,x,y);
       }
 
 
@@ -439,10 +438,21 @@ main()
 {
   video = video_field;
 
-  sys.spawn(video_proc);
-  sys.spawn(object_proc);
+//  sys::spawn(video_proc);
+//  sys::spawn(object_proc);
 
 }
+*/
+
+type
+TestSt: struct
+{
+  b:  u8,
+  a: i32,
+  c: void,
+
+}
+
 
 
 "#;

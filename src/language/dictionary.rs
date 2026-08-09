@@ -112,9 +112,18 @@ empty : ";";
 static: 'static -> .Identifier & [init_as_word | init_as_field | init_by_data];
 var   : 'var    -> .Identifier & [init_as_word | init_as_field | init_by_data];
 const : 'const  -> .Identifier & "=" & expression;
+type  : 'type   -> .Identifier & ":" & type_spec;
+
 enum  : 'enum   -> "{" & {.Identifier & [","]} & "}";
+struct: 'struct -> "{" & [{field & [","]}] & "}";
 
 mod: 'mod -> .Identifier & "{" & [{declaration}] & "}";
+
+
+field: .Identifier & ":" & type_spec;
+
+type_spec: struct | qualified_identifier;
+
 
 declaration: fn
            | static
@@ -122,6 +131,7 @@ declaration: fn
            | const
            | enum
            | static
+           | type
            | mod
            | empty;
 
