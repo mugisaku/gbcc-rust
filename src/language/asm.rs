@@ -1,6 +1,10 @@
 
 
 use super::*;
+use super::evaluate::{
+  Operand,
+};
+
 use super::decl::{
   TyKind,
 
@@ -13,7 +17,7 @@ use crate::source_file::{
 };
 
 
-#[derive(Clone)]
+#[derive(Clone,Copy)]
 pub enum
 Opcode
 {
@@ -549,290 +553,6 @@ print(&self)
 
 
 #[derive(Clone)]
-pub enum
-AsmEvalKind
-{
-  Undef,
-  Void,
-  Value,
-
-  Deref(TyKind),
-
-}
-
-
-#[derive(Clone)]
-pub struct
-AsmEvalText
-{
-  lines: Vec<AsmLine>,
-
-  kind: AsmEvalKind,
-
-}
-
-
-impl
-AsmEvalText
-{
-
-
-pub fn
-new()-> Self
-{
-  Self{lines: Vec::new(), kind: AsmEvalKind::Undef}
-}
-
-
-pub fn
-is_deref(&self)-> bool
-{
-    match &self.kind
-    {
-  AsmEvalKind::Deref(_)=>{true}
-  _=>{false}
-    }
-}
-
-
-pub fn
-get_kind(&self)-> &AsmEvalKind
-{
-  &self.kind
-}
-
-
-pub fn
-set_kind(&mut self, k: AsmEvalKind)
-{
-  self.kind = k;
-}
-
-
-pub fn
-change_kind(&mut self, k: AsmEvalKind)
-{
-  self.push_load();
-
-  self.kind = k;
-}
-
-
-pub fn
-push_to_ptr(&mut self)
-{
-    match &self.kind
-    {
-   AsmEvalKind::Undef
-  |AsmEvalKind::Void=>{panic!();}
-  _=>{}
-    }
-
-
-  self.kind = AsmEvalKind::Value;
-}
-
-
-pub fn
-push_opcode(&mut self, opcode: Opcode)
-{
-  self.lines.push(AsmLine::Opcode(opcode));
-}
-
-
-pub fn
-push_bool(&mut self, b: bool)
-{
-  self.lines.push(AsmLine::Push8(if b{1} else{0}));
-
-  self.kind = AsmEvalKind::Value;
-}
-
-
-pub fn
-push_i64(&mut self, i: i64)
-{
-  self.lines.push(AsmLine::make_push(i));
-
-  self.kind = AsmEvalKind::Value;
-}
-
-
-pub fn
-push_global_var(&mut self, off: usize)
-{
-  self.push_i64(off as i64);
-
-  self.kind = AsmEvalKind::Deref(TyKind::I64);
-}
-
-
-pub fn
-push_fn(&mut self, off: usize)
-{
-  self.push_i64(off as i64);
-  self.push_opcode(Opcode::Ld_i64);
-
-  self.kind = AsmEvalKind::Value;
-}
-
-
-pub fn
-push_local_var(&mut self, off: isize)
-{
-  self.push_opcode(Opcode::Pushfp);
-  self.push_i64(off as i64);
-  self.push_opcode(Opcode::Add);
-
-  self.kind = AsmEvalKind::Deref(TyKind::I64);
-}
-
-
-pub fn
-push_call(&mut self, args: Vec<Self>)
-{
-  self.push_load();
-
-  let  arg_n = args.len();
-
-    for a in args
-    {
-      self.lines.extend(a.lines);
-    }
-
-
-  self.push_i64(arg_n as i64);
-
-  self.push_opcode(Opcode::Cal);
-
-  self.kind = AsmEvalKind::Value;
-}
-
-
-pub fn
-concatenate(args: Vec<Self>, ops: Vec<Opcode>, with_argc: bool)-> Self
-{
-  let  mut txt = Self::new();
-
-  let  argc = args.len();
-
-    for a in args
-    {
-      txt.lines.extend(a.lines);
-    }
-
-
-    if with_argc
-    {
-      txt.push_i64(argc as i64);
-    }
-
-
-    for op in ops
-    {
-      txt.push_opcode(op);
-    }
-
-
-  txt.kind = AsmEvalKind::Value;
-
-  txt
-}
-
-
-pub fn
-push_load(&mut self)
-{
-    match &self.kind
-    {
-  AsmEvalKind::Undef   =>{panic!();}
-  AsmEvalKind::Void    =>{panic!();}
-  AsmEvalKind::Value   =>{}
-  AsmEvalKind::Deref(k)=>
-    {
-        match k
-        {
-      TyKind::I8 =>{self.push_opcode(Opcode::Ld_i8 );}
-      TyKind::I16=>{self.push_opcode(Opcode::Ld_i16);}
-      TyKind::I32=>{self.push_opcode(Opcode::Ld_i32);}
-      TyKind::I64=>{self.push_opcode(Opcode::Ld_i64);}
-      TyKind::U8 =>{self.push_opcode(Opcode::Ld_u8 );}
-      TyKind::U16=>{self.push_opcode(Opcode::Ld_u16);}
-      TyKind::U32=>{self.push_opcode(Opcode::Ld_u32);}
-      _=>{panic!();}
-        }
-    }
-    }
-
-
-  self.kind = AsmEvalKind::Value;
-}
-
-
-pub fn
-push_unary(&mut self, op: &str)
-{
-  self.push_load();
-
-    match op
-    {
-  (s) if s == "-"=>{self.push_opcode(Opcode::Neg);}
-  (s) if s == "^"=>{self.push_opcode(Opcode::Not);}
-  (s) if s == "!"=>{self.push_opcode(Opcode::Lnot);}
-  _=>{panic!();}
-    }
-}
-
-
-pub fn
-push_binary(&mut self, mut other: Self, op_s: &str)
-{
-   self.push_load();
-  other.push_load();
-
-  self.lines.extend(other.lines);
-
-  let  op = match op_s
-    {
-  (s) if s ==  "+"=>{Opcode::Add}
-  (s) if s ==  "-"=>{Opcode::Sub}
-  (s) if s ==  "*"=>{Opcode::Mul}
-  (s) if s ==  "/"=>{Opcode::Div}
-  (s) if s ==  "%"=>{Opcode::Rem}
-  (s) if s == "<<"=>{Opcode::Shl}
-  (s) if s == ">>"=>{Opcode::Shr}
-  (s) if s ==  "&"=>{Opcode::And}
-  (s) if s ==  "|"=>{Opcode::Or}
-  (s) if s ==  "^"=>{Opcode::Xor}
-  (s) if s == "&&"=>{Opcode::Land}
-  (s) if s == "||"=>{Opcode::Lor}
-  (s) if s == "=="=>{Opcode::Eq}
-  (s) if s == "!="=>{Opcode::Neq}
-  (s) if s ==  "<"=>{Opcode::Lt}
-  (s) if s == "<="=>{Opcode::Lteq}
-  (s) if s ==  ">"=>{Opcode::Gt}
-  (s) if s == ">="=>{Opcode::Gteq}
-  _=>{panic!();}
-    };
-
-
-  self.push_opcode(op);
-}
-
-
-pub fn
-push_text(&mut self, mut other: Self)
-{
-  self.lines.append(&mut other.lines);
-}
-
-
-}
-
-
-
-
-#[derive(Clone)]
 pub struct
 AsmText
 {
@@ -916,16 +636,6 @@ push_line(&mut self, ln: AsmLine)
 
 
 pub fn
-push_eval_text(&mut self, et: AsmEvalText)
-{
-    for ln in et.lines
-    {
-      self.push_line(ln);
-    }
-}
-
-
-pub fn
 push_i64(&mut self, i: i64)
 {
   self.push_line(AsmLine::make_push(i));
@@ -954,42 +664,46 @@ push_brnz(&mut self, s: &str)
 
 
 pub fn
-try_push_assign(&mut self, srcinf: &SourceInfo, mut l: AsmEvalText, mut r: AsmEvalText, op: &str)-> Result<(),Error>
+try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str)-> Result<(),Error>
 {
-  let  k = l.kind.clone();
-
-    if op == "="
+    if let Some(k) = l.get_ty_kind()
     {
-      r.push_load();
+      l.print_to(false,self);
 
-      l.push_text(r);
-    }
+        if op != "="
+        {
+          self.push_opcode(Opcode::Dup);
 
-  else
-    {
-      l.push_opcode(Opcode::Dup);
-      l.push_load();
-
-           if op ==  "+="{l.push_binary(r,"+");}
-      else if op ==  "-="{l.push_binary(r,"-");}
-      else if op ==  "*="{l.push_binary(r,"*");}
-      else if op ==  "/="{l.push_binary(r,"/");}
-      else if op ==  "%="{l.push_binary(r,"%");}
-      else if op == "<<="{l.push_binary(r,"<<");}
-      else if op == ">>="{l.push_binary(r,">>");}
-      else if op ==  "&="{l.push_binary(r,"&");}
-      else if op ==  "|="{l.push_binary(r,"|");}
-      else if op ==  "^="{l.push_binary(r,"^");}
-      else{panic!()}
-    }
+            match k
+            {
+          TyKind::I8=>{self.push_opcode(Opcode::Ld_i8);}
+          TyKind::U8=>{self.push_opcode(Opcode::Ld_u8);}
+          TyKind::I16=>{self.push_opcode(Opcode::Ld_i8);}
+          TyKind::U16=>{self.push_opcode(Opcode::Ld_u16);}
+          TyKind::I32=>{self.push_opcode(Opcode::Ld_i8);}
+          TyKind::U32=>{self.push_opcode(Opcode::Ld_u32);}
+          TyKind::I64=>{self.push_opcode(Opcode::Ld_i64);}
+          _=>
+            {
+              return Err(srcinf.to_error(format!("push_assign error: invalid type assign")));
+            }
+            }
+        }
 
 
-  self.push_eval_text(l);
+      r.print_to(true,self);
 
-    match k
-    {
-  AsmEvalKind::Deref(k)=>
-    {
+           if op ==  "+="{self.push_opcode(Opcode::Add);}
+      else if op ==  "-="{self.push_opcode(Opcode::Sub);}
+      else if op ==  "*="{self.push_opcode(Opcode::Mul);}
+      else if op ==  "/="{self.push_opcode(Opcode::Div);}
+      else if op ==  "%="{self.push_opcode(Opcode::Rem);}
+      else if op == "<<="{self.push_opcode(Opcode::Shl);}
+      else if op == ">>="{self.push_opcode(Opcode::Shr);}
+      else if op ==  "&="{self.push_opcode(Opcode::And);}
+      else if op ==  "|="{self.push_opcode(Opcode::Or);}
+      else if op ==  "^="{self.push_opcode(Opcode::Xor);}
+
         match k
         {
        TyKind::I8
@@ -1001,18 +715,18 @@ try_push_assign(&mut self, srcinf: &SourceInfo, mut l: AsmEvalText, mut r: AsmEv
       TyKind::I64=>{self.push_opcode(Opcode::St_i64);}
       _=>
         {
-          return Err(srcinf.to_error(format!("push_assign error: assign to non deref")));
+          return Err(srcinf.to_error(format!("push_assign error: invalid type assign")));
         }
         }
+
+
+      Ok(())
     }
-  _=>
+
+  else
     {
-      return Err(srcinf.to_error(format!("push_assign error: assign to non deref")));
+      Err(srcinf.to_error(format!("push_assign error: assign to non deref")))
     }
-    }
-
-
-  Ok(())
 }
 
 

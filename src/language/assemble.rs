@@ -7,7 +7,6 @@ use super::stmt::*;
 use super::asm::*;
 use super::scope::*;
 use super::evaluate::*;
-use super::evaluate_const::*;
 
 use crate::source_file::{
   SourceInfo,
@@ -155,27 +154,20 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
     for (cond,blk) in ifstmt.get_cond_block_list()
     {
-        match evaluate(cond,set,Some(scp)).try_to_text(srcinf)
+      output.push_label(blh.get_label());
+
+      let  o = evaluate(cond,set,Some(scp));
+
+      blh.increment();
+
+      o.print_to(true,output);
+
+      output.push_brz(blh.get_label());
+
+        match process_block(blk,set,lid,clh_opt,scp,output)
         {
-      Ok(mut txt)=>
-        {
-          output.push_label(blh.get_label());
-
-          blh.increment();
-
-          txt.push_load();
-
-          output.push_eval_text(txt);
-
-          output.push_brz(blh.get_label());
-
-            match process_block(blk,set,lid,clh_opt,scp,output)
-            {
-          Ok(())=>{output.push_jmp(&end_label);}
-          Err(e)=>{return Err(e);}
-            }
-        }
-    Err(e)=>{return Err(e);}
+      Ok(())=>{output.push_jmp(&end_label);}
+      Err(e)=>{return Err(e);}
         }
     }
 
@@ -210,63 +202,62 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
 
   let  mut count_max_off = 0isize;
 
-    match evaluate(forstmt.get_expr(),set,Some(scp)).try_to_text(srcinf)
     {
-  Ok(mut count_max_txt)=>
-    {
-      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>");
+      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>",1,TyKind::I64);
 
-      let  mut var_txt = AsmEvalText::new();
+      let  l = Operand::make_load_local(count_max_off,TyKind::I64);
 
-      var_txt.push_local_var(count_max_off);
+      let  r = evaluate(forstmt.get_expr(),set,Some(scp));
 
-        match output.try_push_assign(srcinf,var_txt,count_max_txt,"=")
+        match output.try_push_assign(srcinf,l,r,"=")
         {
       Ok(())=>{}
       Err(e)=>{return Err(e);}
         }
     }
-  Err(e)=>{return Err(e);}
+
+
+  let  count_cur_off = new_scp.add_var(forstmt.get_var_name(),1,TyKind::I64);
+
+    {
+      let  o = Operand::make_load_local(count_cur_off,TyKind::I64);
+
+      o.print_to(false,output);
+
+      output.push_i64(0);
+      output.push_opcode(Opcode::St_i64);
     }
 
 
-  let  count_cur_off = new_scp.add_var(forstmt.get_var_name());
-
-  let  mut init_txt = AsmEvalText::new();
-
-  init_txt.push_local_var(count_cur_off);
-  init_txt.push_i64(0);
-  init_txt.push_opcode(Opcode::St_i64);
-
-  output.push_eval_text(init_txt);
   output.push_jmp(&cmp_label);
 
 
   output.push_label(&clh.on_continue);
 
-  let  mut inc_txt = AsmEvalText::new();
+    {
+      let  lo = Operand::make_load_local(count_cur_off,TyKind::I64);
 
-  inc_txt.push_local_var(count_cur_off);
-  inc_txt.push_opcode(Opcode::Dup);
-  inc_txt.push_opcode(Opcode::Ld_i64);
-  inc_txt.push_i64(1);
-  inc_txt.push_opcode(Opcode::Add);
-  inc_txt.push_opcode(Opcode::St_i64);
+      lo.print_to(false,output);
 
-  output.push_eval_text(inc_txt);
+      output.push_opcode(Opcode::Dup);
+      output.push_opcode(Opcode::Ld_i64);
+      output.push_i64(1);
+      output.push_opcode(Opcode::Add);
+      output.push_opcode(Opcode::St_i64);
+    }
 
 
   output.push_label(&cmp_label);
 
-  let  mut cmp_txt = AsmEvalText::new();
+    {
+      let  lo = Operand::make_load_local(count_cur_off,TyKind::I64);
+      let  ro = Operand::make_load_local(count_max_off,TyKind::I64);
 
-  cmp_txt.push_local_var(count_cur_off);
-  cmp_txt.push_opcode(Opcode::Ld_i64);
-  cmp_txt.push_local_var(count_max_off);
-  cmp_txt.push_opcode(Opcode::Ld_i64);
-  cmp_txt.push_opcode(Opcode::Lt);
+      lo.print_to(true,output);
+      ro.print_to(true,output);
 
-  output.push_eval_text(cmp_txt);
+      output.push_opcode(Opcode::Lt);
+    }
 
   output.push_brz(&clh.on_break);
 
@@ -321,64 +312,44 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
         {
             match evaluate_const(e,set,Some(scp))
             {
-          EvalResult::Const(i)=>
+          Some(i)=>
             {
               scp.add_const_int(decl.get_name(),i);
 
               Ok(())
             }
-          _=>{Err(srcinf.to_error(format!("constの算出に失敗")))}
+          None=>{Err(srcinf.to_error(format!("constの算出に失敗")))}
             }
         }
-      DeclKind::Var(k)=>
+      DeclKind::Var(inf)=>
         {
-            match k
-            {
-          StorageKind::Word(e_opt,_)=>
-            {
-                if let Some(e) = e_opt
-                {
-                    match evaluate(e,set,Some(scp)).try_to_text(srcinf)
-                    {
-                  Ok(r_txt)=>
-                    {
-                      let  off = scp.add_var(decl.get_name());
+          let  off = scp.add_var(decl.get_name(),inf.get_length(),inf.get_ty_kind().clone());
 
-                      let  mut l_txt = AsmEvalText::new();
+/*
+          let  l = evaluate(e,set,Some(scp));
 
-                      l_txt.push_local_var(off);
+          let  r = Operand::make_load_local(off,inf.get_ty_kind().clone());
 
-                      output.try_push_assign(srcinf,l_txt,r_txt,"=")
-                    }
-                  Err(e)=>{Err(e)}
-                    }
-                }
+          output.try_push_assign(srcinf,l,r,"=")
+*/
 
-              else
-                {Ok(())}
-            }
-          StorageKind::EmptyField(_,sz)=>
-            {
-              scp.add_field(decl.get_name(),*sz);
-
-              Ok(())
-            }
-          StorageKind::FilledField(_,bytes)=>
-            {
-              scp.add_field(decl.get_name(),bytes.len());
-
-              Ok(())
-            }
-          _=>{Err(srcinf.to_error(format!("invalid decl")))}
-            }
+          Ok(())
         }
       DeclKind::LocalStatic(name)=>
         {
             if let Some(src_decl) = set.get_root().find(name)
             {
-              scp.add_static(decl.get_name(),src_decl.get_offset());
+                if let DeclKind::Static(inf) = src_decl.get_kind()
+                {
+                  scp.add_static(decl.get_name(),src_decl.get_offset(),inf.get_length(),inf.get_ty_kind().clone());
 
-              Ok(())
+                  Ok(())
+                }
+
+              else
+                {
+                  Err(srcinf.to_error(format!("{} is not local static",name)))
+                }
             }
 
           else
@@ -391,18 +362,13 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     }
   StmtKind::Expr(e)=>
     {
-        match evaluate(e,set,Some(scp)).try_to_text(srcinf)
-        {
-      Ok(txt)=>
-        {
-          output.push_eval_text(txt);
+      let  o = evaluate(e,set,Some(scp));
 
-          output.push_opcode(Opcode::Pop);
+      o.print_to(false,output);
 
-          Ok(())
-        }
-      Err(e)=>{Err(e)}
-        }
+      output.push_opcode(Opcode::Pop);
+
+      Ok(())
     }
   StmtKind::If(i)=>{process_if(srcinf,i,set,lid,clh_opt,scp,output)}
   StmtKind::Loop(blk)=>
@@ -431,28 +397,21 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
       output.push_label(&clh.on_continue);
 
 
-        match evaluate(e,set,Some(scp)).try_to_text(srcinf)
+      let  o = evaluate(e,set,Some(scp));
+
+      o.print_to(true,output);
+
+      output.push_brz(&clh.on_break);
+
+        match process_block(blk,set,lid,Some(&clh),scp,output)
         {
-      Ok(mut txt)=>
+      Ok(())=>
         {
-          txt.push_load();
+          output.push_jmp(&clh.on_continue);
 
-          output.push_eval_text(txt);
+          output.push_label(&clh.on_break);
 
-          output.push_brz(&clh.on_break);
-
-            match process_block(blk,set,lid,Some(&clh),scp,output)
-            {
-          Ok(())=>
-            {
-              output.push_jmp(&clh.on_continue);
-
-              output.push_label(&clh.on_break);
-
-              Ok(())
-            }
-          Err(e)=>{Err(e)}
-            }
+          Ok(())
         }
       Err(e)=>{Err(e)}
         }
@@ -462,16 +421,9 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     {
         if let Some(e) = e_opt
         {
-            match evaluate(e,set,Some(scp)).try_to_text(srcinf)
-            {
-          Ok(mut txt)=>
-            {
-              txt.push_load();
+          let  o = evaluate(e,set,Some(scp));
 
-              output.push_eval_text(txt);
-            }
-          Err(e)=>{return Err(e);}
-            }
+          o.print_to(true,output);
         }
 
       else
@@ -486,18 +438,10 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     }
   StmtKind::Assign(l,r,op)=>
     {
-        match evaluate(l,set,Some(scp)).try_to_text(srcinf)
-        {
-      Ok(l_asm)=>
-        {
-            match evaluate(r,set,Some(scp)).try_to_text(srcinf)
-            {
-          Ok(r_asm)=>{output.try_push_assign(srcinf,l_asm,r_asm,op)}
-          Err(e)=>{Err(e)}
-            }
-        }
-      Err(e)=>{Err(e)}
-        }
+      let  lo = evaluate(l,set,Some(scp));
+      let  ro = evaluate(r,set,Some(scp));
+
+      output.try_push_assign(srcinf,lo,ro,op)
     }
   StmtKind::Break=>
     {
@@ -539,20 +483,13 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     }
   StmtKind::Print(e)=>
     {
-        match evaluate(e,set,Some(scp)).try_to_text(srcinf)
-        {
-      Ok(mut txt)=>
-        {
-          txt.push_load();
+      let  o = evaluate(e,set,Some(scp));
 
-          txt.push_opcode(Opcode::Pri);
+      o.print_to(true,output);
 
-          output.push_eval_text(txt);
+      output.push_opcode(Opcode::Pri);
 
-          Ok(())
-        }
-      Err(e)=>{Err(e)}
-        }
+      Ok(())
     }
     }
 }

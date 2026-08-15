@@ -25,6 +25,8 @@ ExprKind
 
   CallOp(Box<Expr>,Vec<Expr>),
   AccessOp(Box<Expr>,String),
+  ReintOp(Box<Expr>,String),
+  SubscrOp(Box<Expr>,Box<Expr>),
 
   Expr(Box<Expr>),
 
@@ -123,6 +125,15 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
     {
       ins.collect_identifier(set,ss);
     }
+  ExprKind::ReintOp(ins,_)=>
+    {
+      ins.collect_identifier(set,ss);
+    }
+  ExprKind::SubscrOp(ref_o,idx_o)=>
+    {
+      ref_o.collect_identifier(set,ss);
+      idx_o.collect_identifier(set,ss);
+    }
   ExprKind::Expr(e)=>{e.collect_identifier(set,ss);}
   ExprKind::UnaryOp(o,op)=>{o.collect_identifier(set,ss);}
   ExprKind::BinaryOp(l,r,op)=>
@@ -156,6 +167,15 @@ collect_static(&mut self, ss: &mut StaticSet)
   ExprKind::AccessOp(ins,_)=>
     {
       ins.collect_static(ss);
+    }
+  ExprKind::ReintOp(ins,_)=>
+    {
+      ins.collect_static(ss);
+    }
+  ExprKind::SubscrOp(ref_o,idx_o)=>
+    {
+      ref_o.collect_static(ss);
+      idx_o.collect_static(ss);
     }
   ExprKind::Expr(e)=>{e.collect_static(ss);}
   ExprKind::UnaryOp(o,op)=>{o.collect_static(ss);}
@@ -214,6 +234,19 @@ print_to(&self, buf: &mut String)
       ins.print_to(buf);
       buf.push('.');
       buf.push_str(s);
+    }
+  ExprKind::ReintOp(ins,s)=>
+    {
+      ins.print_to(buf);
+      buf.push_str("->");
+      buf.push_str(s);
+    }
+  ExprKind::SubscrOp(ref_o,idx_o)=>
+    {
+      ref_o.print_to(buf);
+      buf.push_str("[");
+      idx_o.print_to(buf);
+      buf.push_str("]");
     }
   ExprKind::Expr(e)=>
     {
@@ -360,6 +393,8 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
        if name ==   "call"{return read_call_op(nd,o);}
   else if name == "access"{return read_access_op(nd,o);}
+  else if name ==  "reint"{return read_reint_op(nd,o);}
+  else if name == "subscr"{return read_subscr_op(nd,o);}
   else{panic!();}
 }
 
@@ -406,6 +441,46 @@ read_access_op(start_nd: &Node, o: Box<Expr>)-> Expr
     if let Some(id) = cur.get_identifier()
     {
       return Expr{source_info, kind: ExprKind::AccessOp(o,id.clone())};
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+read_reint_op(start_nd: &Node, o: Box<Expr>)-> Expr
+{
+  let  source_info = start_nd.get_source_info().clone();
+
+  let  mut cur = start_nd.cursor();
+
+  cur.advance(1);
+
+    if let Some(id) = cur.get_identifier()
+    {
+      return Expr{source_info, kind: ExprKind::ReintOp(o,id.clone())};
+    }
+
+
+  panic!();
+}
+
+
+pub fn
+read_subscr_op(start_nd: &Node, o: Box<Expr>)-> Expr
+{
+  let  source_info = start_nd.get_source_info().clone();
+
+  let  mut cur = start_nd.cursor();
+
+  cur.advance(1);
+
+    if let Some(nd) = cur.get_node()
+    {
+      let  e = read_expr(nd);
+
+      return Expr{source_info, kind: ExprKind::SubscrOp(o,Box::new(e))};
     }
 
 

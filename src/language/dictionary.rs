@@ -30,10 +30,12 @@ binary_operator:
 
 
 
+reint : "->" & .Identifier;
 access: "." & .Identifier;
-call: "(" & [{expression & [","]}] & ")";
+call  : "(" & [{expression & [","]}] & ")";
+subscr: "[" & expression & "]";
 
-postfix_op: call | access;
+postfix_op: call | access | reint | subscr;
 
 operand: [{unary_operator}] & operand_core & [{postfix_op}];
 
@@ -103,14 +105,14 @@ fn: 'fn -> .Identifier & parameter_list & block;
 
 expression_list: "{" & [{expression & [","]}] & "}";
 
+number_of_elements: "[" & expression & "]";
 
-init_as_word: "=" & expression;
-init_as_field: "[" & expression & "]";
-init_by_data: "{" & {expression & [","]} & "}";
+storage_info: [number_of_elements] & [":" & type_spec & [expression_list]];
+
 
 empty : ";";
-static: 'static -> .Identifier & [init_as_word | init_as_field | init_by_data];
-var   : 'var    -> .Identifier & [init_as_word | init_as_field | init_by_data];
+static: 'static -> .Identifier & [("=" & expression) | storage_info];
+var   : 'var    -> .Identifier & [("=" & expression) | storage_info];
 const : 'const  -> .Identifier & "=" & expression;
 type  : 'type   -> .Identifier & ":" & type_spec;
 

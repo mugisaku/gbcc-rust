@@ -7,7 +7,7 @@ use super::*;
 use super::decl::*;
 use super::expr::*;
 use super::stmt::*;
-use super::evaluate_const::*;
+use super::evaluate::*;
 
 
 
@@ -15,14 +15,11 @@ use super::evaluate_const::*;
 pub enum
 SymbolKind
 {
-  Data,
   Text, 
 
   Const(i64),
-  Static,
-     Var,
-
-  Field(usize),
+  Static(usize,TyKind),
+     Var(usize,TyKind),
 
 }
 
@@ -42,17 +39,6 @@ Symbol
 impl
 Symbol
 {
-
-
-pub fn
-new_data(name: &str, offset: isize)-> Self
-{
-  Self{
-    name: name.to_string(),
-    kind: SymbolKind::Data,
-    offset,
-  }
-}
 
 
 pub fn
@@ -89,38 +75,27 @@ new_const_int(name: &str, i: i64)-> Self
 
 
 pub fn
-new_static(name: &str, offset: isize)-> Self
+new_static(name: &str, offset: isize, length: usize, tk: TyKind)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: SymbolKind::Static,
+    kind: SymbolKind::Static(length,tk),
     offset,
   }
 }
 
 
 pub fn
-new_var(name: &str, offset: isize)-> Self
+new_var(name: &str, offset: isize, length: usize,tk: TyKind)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: SymbolKind::Var,
+    kind: SymbolKind::Var(length,tk),
     offset,
   }
 }
 
 
-
-
-pub fn
-new_field(name: &str, offset: isize, sz: usize)-> Self
-{
-  Self{
-    name: name.to_string(),
-    kind: SymbolKind::Field(sz),
-    offset,
-  }
-}
 
 
 pub fn
@@ -185,7 +160,7 @@ new_root(decl: &FnDecl)-> Self
 
     for name in decl.get_parameter_names()
     {
-      scp.symbols.push(Symbol::new_var(name,off));
+      scp.symbols.push(Symbol::new_var(name,off,WORD_SIZE,TyKind::I64));
 
       off += (WORD_SIZE as isize);
     }
@@ -252,15 +227,17 @@ add_const_int(&mut self, name: &str, i: i64)
 
 
 pub fn
-add_var(&mut self, name: &str)-> isize
+add_var(&mut self, name: &str, length: usize, tk: TyKind)-> isize
 {
   let  offset = self.offset as isize;
 
-  let  sym = Symbol::new_var(name,offset);
+  let  size = tk.get_size_and_align().0;
+
+  let  sym = Symbol::new_var(name,offset,length,tk);
 
   self.symbols.push(sym);
 
-  self.offset += WORD_SIZE;
+  self.offset = get_word_aligned(self.offset+(size*length));
 
   self.update_offset_max();
 
@@ -269,28 +246,11 @@ add_var(&mut self, name: &str)-> isize
 
 
 pub fn
-add_static(&mut self, name: &str, offset: usize)
+add_static(&mut self, name: &str, offset: usize, length: usize, tk: TyKind)
 {
-  let  sym = Symbol::new_static(name,offset as isize);
+  let  sym = Symbol::new_static(name,offset as isize,length,tk);
 
   self.symbols.push(sym);
-}
-
-
-pub fn
-add_field(&mut self, name: &str, sz: usize)-> isize
-{
-  let  offset = self.offset as isize;
-
-  let  sym = Symbol::new_field(name,offset,sz);
-
-  self.symbols.push(sym);
-
-  self.offset = get_word_aligned(self.offset+sz);
-
-  self.update_offset_max();
-
-  offset as isize
 }
 
 

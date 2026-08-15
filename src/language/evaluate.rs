@@ -13,24 +13,176 @@ use super::scope::*;
 use super::expr::*;
 use super::decl::*;
 use super::asm::*;
-use super::evaluate_const::*;
 
 
 
 
-#[derive(Clone)]
 pub enum
-EvalResult
+Operation
 {
-  Value(AsmEvalText),
-  Values(Vec<AsmEvalText>),
-  Asm(Vec<Opcode>),
-  AsmWithArgc(Vec<Opcode>),
-  Const(i64),
-  String(String,String),
-  Mod(std::ptr::NonNull<DeclSet>),
+  Opcode(Opcode),
 
+  Binary(Operand,Operand,Opcode),
+   Unary(Operand,Opcode),
+
+  LoadInt(i64),
+
+  Call(Operand,Vec<Operand>),
+
+}
+
+
+impl
+Operation
+{
+
+
+fn
+try_get_const2(l: &Operand, r: &Operand)-> Result<(i64,i64),()>
+{
+    match l.try_get_const()
+    {
+  Ok(li)=>
+    {
+        match r.try_get_const()
+        {
+      Ok(ri)=>
+        {
+          Ok((li,ri))
+        }
+      Err(())=>{Err(())}
+        }
+    }
+  Err(())=>{Err(())}
+    }
+}
+
+
+pub fn
+to_i64(b: bool)-> i64
+{
+  if b{1} else{0}
+}
+
+
+fn
+to_bool(i: i64)-> bool
+{
+  i != 0
+}
+
+
+pub fn
+try_get_const(&self)-> Result<i64,()>
+{
+    match self
+    {
+  Self::Opcode(op)=>{Err(())}
+  Self::Binary(lo,ro,op)=>
+    {
+        match Self::try_get_const2(lo,ro)
+        {
+      Ok((l,r))=>
+        {
+            match op
+            {
+          Opcode::Add=>{Ok(l+r)}
+          Opcode::Sub=>{Ok(l-r)}
+          Opcode::Mul=>{Ok(l*r)}
+          Opcode::Div=>{Ok(l/r)}
+          Opcode::Rem=>{Ok(l%r)}
+          Opcode::Shl=>{Ok(l<<r)}
+          Opcode::Shr=>{Ok(l>>r)}
+          Opcode::And=>{Ok(l&r)}
+          Opcode::Or =>{Ok(l|r)}
+          Opcode::Xor=>{Ok(l^r)}
+          Opcode::Eq  =>{Ok(Self::to_i64(l == r))}
+          Opcode::Neq =>{Ok(Self::to_i64(l != r))}
+          Opcode::Lt  =>{Ok(Self::to_i64(l <  r))}
+          Opcode::Lteq=>{Ok(Self::to_i64(l <= r))}
+          Opcode::Gt  =>{Ok(Self::to_i64(l >  r))}
+          Opcode::Gteq=>{Ok(Self::to_i64(l >= r))}
+          Opcode::Land=>{Ok(Self::to_i64(Self::to_bool(l) && Self::to_bool(r)))}
+          Opcode::Lor =>{Ok(Self::to_i64(Self::to_bool(l) || Self::to_bool(r)))}
+          _=>{Err(())}
+            }
+        }
+      Err(())=>{Err(())}
+        }
+    }
+  Self::Unary(o,op)=>
+    {
+        match o.try_get_const()
+        {
+      Ok(i)=>
+        {
+            match op
+            {
+          Opcode::Not=>{Ok(!i)}
+          Opcode::Lnot=>{Ok(Self::to_i64(i == 0))}
+          Opcode::Neg=>{Ok(-i)}
+          _=>{Err(())}
+            }
+        }
+      Err(())=>{Err(())}
+        }
+    }
+  Self::LoadInt(i)=>{Ok(*i)}
+  Self::Call(f,args)=>{Err(())}
+    }
+}
+
+
+pub fn
+print_to(&self, txt: &mut AsmText)
+{
+    match self
+    {
+  Self::Opcode(op)=>{txt.push_opcode(*op);}
+  Self::Binary(l,r,op)=>
+    {
+      l.print_to(true,txt);
+      r.print_to(true,txt);
+      txt.push_opcode(*op);
+    }
+  Self::Unary(o,op)=>
+    {
+      o.print_to(true,txt);
+      txt.push_opcode(*op);
+    }
+  Self::LoadInt(i)=>{txt.push_i64(*i)}
+  Self::Call(f,args)=>
+    {
+      f.print_to(true,txt);
+
+      let  arg_n = args.len();
+
+        for a in args
+        {
+          a.print_to(true,txt);
+        }
+
+
+      txt.push_i64(arg_n as i64);
+
+      txt.push_opcode(Opcode::Cal);
+    }
+    }
+}
+
+
+}
+
+
+
+
+pub enum
+Operand
+{
   Undef(&'static str),
+
+  Value(Box<Operation>),
+  Deref(Box<Operation>,TyKind),
 
   Err(Error),
 
@@ -38,240 +190,248 @@ EvalResult
 
 
 impl
-EvalResult
+Operand
 {
 
 
 pub fn
-is_ok(&self)-> bool
+from_bool(b: bool)-> Self
 {
-  !self.is_err()
+  let  i = Operation::to_i64(b);
+
+  Self::from_int(i)
 }
 
 
 pub fn
-is_err(&self)-> bool
+from_int(i: i64)-> Self
 {
-  if let Self::Err(_) = self{true} else{false}
+  Self::Value(Box::new(Operation::LoadInt(i)))
 }
 
 
 pub fn
-to_text_from_const(i: i64)-> AsmEvalText
+from_opcode(op: Opcode)-> Self
 {
-  let  mut text = AsmEvalText::new();
-
-  text.push_i64(i);
-
-  text
+  Self::Value(Box::new(Operation::Opcode(op)))
 }
 
 
 pub fn
-try_to_text(self, srcinf: &SourceInfo)-> Result<AsmEvalText,Error>
+make_load_global(offset: usize, k: TyKind)-> Self
+{
+  let  o = Operation::LoadInt(offset as i64);
+
+  Self::Deref(Box::new(o),k)
+}
+
+
+pub fn
+make_load_local(offset: isize, k: TyKind)-> Self
+{
+  let  l = Operation::Opcode(Opcode::Pushfp);
+  let  r = Operation::LoadInt(offset as i64);
+
+  let  lo = Operand::Value(Box::new(l));
+  let  ro = Operand::Value(Box::new(r));
+
+  let  bin = Operation::Binary(lo,ro,Opcode::Add);
+
+  Self::Deref(Box::new(bin),k)
+}
+
+
+pub fn
+make_binary(l: Self, r: Self, op: Opcode)-> Self
+{
+  let  bin = Operation::Binary(l,r,op);
+
+  Self::Value(Box::new(bin))
+}
+
+
+pub fn
+make_unary(o: Self, op: Opcode)-> Self
+{
+  let  un = Operation::Unary(o,op);
+
+  Self::Value(Box::new(un))
+}
+
+
+pub fn
+try_get_const(&self)-> Result<i64,()>
 {
     match self
     {
-  Self::Value(txt)=>{Ok(txt)}
-  Self::Values(txts)=>{Err(srcinf.to_error(format!("to_text is failed. from values")))}
-  Self::Asm(_)        =>{Err(srcinf.to_error(format!("to_text is failed. from asm")))}
-  Self::AsmWithArgc(_)=>{Err(srcinf.to_error(format!("to_text is failed. from asm with argc")))}
-  Self::Const(i)=>{Ok(Self::to_text_from_const(i))}
-  Self::String(_,_)=>{Err(srcinf.to_error(format!("to_text is failed. from str")))}
-  Self::Mod(_) =>{Err(srcinf.to_error(format!("to_text is failed. from mod")))}
-  Self::Undef(s)=>{Err(srcinf.to_error(format!("to_text is failed. from undef: {}",s)))}
-  Self::Err(e)=>{Err(e)}
+  Self::Undef(_)=>{Err(())}
+  Self::Value(o)=>{o.try_get_const()}
+  Self::Deref(_,_)=>{Err(())}
+  Self::Err(_)=>{Err(())}
     }
 }
 
 
 pub fn
-print(&self)
+get_ty_kind(&self)-> Option<&TyKind>
+{
+    if let Self::Deref(_,k) = self
+    {
+      return Some(k);
+    }
+
+
+  None
+}
+
+
+pub fn
+print_to(&self, loading: bool, txt: &mut AsmText)
 {
     match self
     {
-  Self::Value(_)=>{print!("value");}
-  Self::Values(_)=>{print!("values");}
-  Self::Asm(_)=>{print!("asm");}
-  Self::AsmWithArgc(_)=>{print!("asm with argc");}
-  Self::Const(i)=>{print!("const {}",*i);}
-  Self::String(s,_)=>{print!("\"{}\"",s);}
-  Self::Mod(ptr)=>{print!("MOD {}",&unsafe{ptr.as_ref()}.as_decl().get_qualified_name());}
-  Self::Undef(s)=>{print!("UNDEF {}",s);}
-  Self::Err(e)=>{print!("ERR");}
-    }
-}
-
-
-}
-
-
-
-
-pub fn
-evaluate_args(args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
-{
-  let  mut buf = Vec::<AsmEvalText>::new();
-
-    for a in args
+  Self::Undef(_)=>{}
+  Self::Value(o)=>{o.print_to(txt);}
+  Self::Deref(o,k)=>
     {
-        match evaluate(a,set,scp_opt)
-        {
-      EvalResult::Value(mut a_txt)=>
-        {
-          a_txt.push_load();
+      o.print_to(txt);
 
-          buf.push(a_txt);
-        }
-      EvalResult::Const(a_val)=>
+        if loading
         {
-          buf.push(EvalResult::to_text_from_const(a_val));
-        }
-      EvalResult::Err(e)=>{return EvalResult::Err(e);}
-      _=>{return EvalResult::Undef("call value default");}
+            match k
+            {
+          TyKind::I8 =>{txt.push_opcode(Opcode::Ld_i8 );}
+          TyKind::I16=>{txt.push_opcode(Opcode::Ld_i16);}
+          TyKind::I32=>{txt.push_opcode(Opcode::Ld_i32);}
+          TyKind::I64=>{txt.push_opcode(Opcode::Ld_i64);}
+          TyKind::U8 =>{txt.push_opcode(Opcode::Ld_u8 );}
+          TyKind::U16=>{txt.push_opcode(Opcode::Ld_u16);}
+          TyKind::U32=>{txt.push_opcode(Opcode::Ld_u32);}
+          _=>{panic!();}
+            }
         }
     }
-
-
-  EvalResult::Values(buf)
+  Self::Err(_)=>{}
+    }
 }
 
 
+}
+
+
+
+
 pub fn
-evaluate_call(f: &Expr, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_call(f: &Expr, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
 {
   let  srcinf = f.get_source_info();
 
-    match evaluate(f,set,scp_opt)
-    {
-  EvalResult::Value(mut txt)=>
-    {
-        match evaluate_args(args,set,scp_opt)
-        {
-      EvalResult::Values(txts)=>
-        {
-          txt.push_call(txts);
+  let  o = evaluate(f,set,scp_opt);
 
-          EvalResult::Value(txt)
-        }
-      EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _=>{EvalResult::Undef("call value")}
-        }
-    }
-  EvalResult::Asm(ops)=>
-    {
-        match evaluate_args(args,set,scp_opt)
-        {
-      EvalResult::Values(txts)=>
-        {
-          let  txt = AsmEvalText::concatenate(txts,ops,false);
+  let  mut buf = Vec::<Operand>::new();
 
-          EvalResult::Value(txt)
-        }
-      EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _=>{EvalResult::Undef("call asm")}
-        }
-    }
-  EvalResult::AsmWithArgc(ops)=>
+    for a in args
     {
-        match evaluate_args(args,set,scp_opt)
-        {
-      EvalResult::Values(txts)=>
-        {
-          let  txt = AsmEvalText::concatenate(txts,ops,true);
+      buf.push(evaluate(a,set,scp_opt))
+    }
 
-          EvalResult::Value(txt)
-        }
-      EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _=>{EvalResult::Undef("call asm with argc")}
-        }
-    }
-  EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef("call defalut")}
-    }
+
+  let  opr = Operation::Call(o,buf);
+
+  Operand::Value(Box::new(opr))
 }
 
 
 pub fn
-evaluate_access(ins: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_access(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
 {
-  let  srcinf = ins.get_source_info();
+  let  srcinf = e.get_source_info();
 
-    match evaluate(ins,set,scp_opt)
+  let  o = evaluate(e,set,scp_opt);
+
+  todo!();
+}
+
+
+pub fn
+evaluate_reint(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+{
+  let  srcinf = e.get_source_info();
+
+    match evaluate(e,set,scp_opt)
     {
-  EvalResult::Value(mut txt)=>
+  Operand::Undef(_)=>{Operand::Undef("")}
+  Operand::Value(o)=>
     {
-           if s == "ptr"{txt.push_to_ptr();}
-      else if s ==  "i8"{txt.change_kind(AsmEvalKind::Deref(TyKind::I8));}
-      else if s == "i16"{txt.change_kind(AsmEvalKind::Deref(TyKind::I16));}
-      else if s == "i32"{txt.change_kind(AsmEvalKind::Deref(TyKind::I32));}
-      else if s == "i64"{txt.change_kind(AsmEvalKind::Deref(TyKind::I64));}
-      else if s ==  "u8"{txt.change_kind(AsmEvalKind::Deref(TyKind::U8));}
-      else if s == "u16"{txt.change_kind(AsmEvalKind::Deref(TyKind::U16));}
-      else if s == "u32"{txt.change_kind(AsmEvalKind::Deref(TyKind::U32));}
+           if s ==  "i8"{Operand::Deref(o,TyKind::I8 )}
+      else if s == "i16"{Operand::Deref(o,TyKind::I16)}
+      else if s == "i32"{Operand::Deref(o,TyKind::I32)}
+      else if s == "i64"{Operand::Deref(o,TyKind::I64)}
+      else if s ==  "u8"{Operand::Deref(o,TyKind::U8 )}
+      else if s == "u16"{Operand::Deref(o,TyKind::U16)}
+      else if s == "u32"{Operand::Deref(o,TyKind::U32)}
       else
         {
-          return EvalResult::Err(srcinf.to_error(format!("evalute_access error: unknown field {}",s)));
+          Operand::Err(srcinf.to_error(format!("evalute_access error: unknown field {}",s)))
         }
-
-
-      EvalResult::Value(txt)
     }
-  EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef("access default")}
+  Operand::Deref(o,k)=>
+    {
+      if s == "ptr"{Operand::Value(o)}
+      else
+        {
+          Operand::Err(srcinf.to_error(format!("evalute_access error: unknown field {}",s)))
+        }
+    }
+  Operand::Err(e)=>
+    {
+      Operand::Err(e)
+    }
     }
 }
 
 
 pub fn
-evaluate_decl(decl: &Decl)-> EvalResult
+evaluate_subscr(ref_e: &Expr, idx_e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+{
+  let  srcinf = ref_e.get_source_info();
+
+  let  ref_o = evaluate(ref_e,set,scp_opt);
+  let  idx_o = evaluate(idx_e,set,scp_opt);
+
+//  Operand::Deref(Operation::(ref_o,idx_o))
+todo!();
+}
+
+
+pub fn
+evaluate_decl(decl: &Decl)-> Operand
 {
     match decl.get_kind()
     {
   DeclKind::Const(_,i)=>
     {
-      EvalResult::Const(*i)
+      Operand::from_int(*i)
     }
-  DeclKind::Static(_)=>
+  DeclKind::Static(inf)=>
     {
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_global_var(decl.get_offset());
-
-      EvalResult::Value(txt)
+      Operand::make_load_global(decl.get_offset(),inf.get_ty_kind().clone())
     }
-  DeclKind::Var(_)=>
+  DeclKind::Var(inf)=>
     {
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_global_var(decl.get_offset());
-
-      EvalResult::Value(txt)
+      panic!();
     }
   DeclKind::Fn(_)=>
     {
-      let  mut txt = AsmEvalText::new();
-
-      txt.push_fn(decl.get_offset());
-
-      EvalResult::Value(txt)
+      Operand::make_load_global(decl.get_offset(),TyKind::Fn)
     }
-  DeclKind::Asm(txt)=>
-    {
-      EvalResult::Asm(txt.clone())
-    }
-  DeclKind::AsmWithArgc(txt)=>
-    {
-      EvalResult::AsmWithArgc(txt.clone())
-    }
-  DeclKind::Mod(set)=>{EvalResult::Mod(std::ptr::NonNull::from_ref(set))}
-  _=>{EvalResult::Err(decl.get_source_info().to_error(format!("evaluate_identifier error: {} is invalid symbol kind",&decl.get_qualified_name())))}
+  _=>{Operand::Err(decl.get_source_info().to_error(format!("evaluate_identifier error: {} is invalid symbol kind",&decl.get_qualified_name())))}
     }
 }
 
 
 pub fn
-evaluate_identifier(srcinf: &SourceInfo, name: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_identifier(srcinf: &SourceInfo, name: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
 {
     if let Some(scp) = scp_opt
     {
@@ -281,25 +441,17 @@ evaluate_identifier(srcinf: &SourceInfo, name: &str, set: &DeclSet, scp_opt: Opt
             {
           SymbolKind::Const(i)=>
             {
-              EvalResult::Const(*i)
+              Operand::from_int(*i)
             }
-          SymbolKind::Static=>
+          SymbolKind::Static(_,k)=>
             {
-              let  mut txt = AsmEvalText::new();
-
-              txt.push_global_var(sym.get_offset() as usize);
-
-              EvalResult::Value(txt)
+              Operand::make_load_global(sym.get_offset() as usize,k.clone())
             }
-          SymbolKind::Var=>
+          SymbolKind::Var(_,k)=>
             {
-              let  mut txt = AsmEvalText::new();
-
-              txt.push_local_var(sym.get_offset());
-
-              EvalResult::Value(txt)
+              Operand::make_load_local(sym.get_offset(),k.clone())
             }
-          _=>{EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} is invalid local symbol kind",name)))}
+          _=>{Operand::Err(srcinf.to_error(format!("evaluate_identifier error: {} is invalid local symbol kind",name)))}
             };
         }
     }
@@ -312,172 +464,135 @@ evaluate_identifier(srcinf: &SourceInfo, name: &str, set: &DeclSet, scp_opt: Opt
 
   else
     {
-      EvalResult::Err(srcinf.to_error(format!("evaluate_identifier error: {} not found",name)))
+      Operand::Err(srcinf.to_error(format!("evaluate_identifier error: {} not found",name)))
     }
 }
 
 
 pub fn
-evaluate_unary(o: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_unary(e: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
 {
-  let  srcinf = o.get_source_info();
+  let  srcinf = e.get_source_info();
 
-    match evaluate(o,set,scp_opt)
-    {
-  EvalResult::Value(mut txt)=>
-    {
-      txt.push_unary(op);
+  let  o = evaluate(e,set,scp_opt);
 
-      EvalResult::Value(txt)
-    }
-  EvalResult::Const(i)=>
+    match op
     {
-        match evaluate_unary_int(i,op)
-        {
-      Ok(val)=>{EvalResult::Const(val)}
-      Err(msg)=>{EvalResult::Err(srcinf.to_error(msg))}
-        }
-    }
-  EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef("unary default")}
+  (s) if s == "-" =>{Operand::make_unary(o,Opcode::Neg)}
+  (s) if s == "!" =>{Operand::make_unary(o,Opcode::Lnot)}
+  (s) if s == "~" =>{Operand::make_unary(o,Opcode::Not)}
+  _=>{Operand::Err(srcinf.to_error(format!("unknown operator {}",op)))}
     }
 }
 
 
 pub fn
-evaluate_binary(l: &Expr, r: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
+evaluate_binary(l: &Expr, r: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
 {
   let  l_srcinf = l.get_source_info();
   let  r_srcinf = r.get_source_info();
 
-    match evaluate(l,set,scp_opt)
+  let  lo = evaluate(l,set,scp_opt);
+  let  ro = evaluate(r,set,scp_opt);
+
+    match op
     {
-  EvalResult::Value(mut l_txt)=>
-    {
-        match evaluate(r,set,scp_opt)
-        {
-      EvalResult::Value(r_txt)=>
-        {
-          l_txt.push_binary(r_txt,op);
-
-          EvalResult::Value(l_txt)
-        }
-      EvalResult::Const(r_val)=>
-        {
-          let  r_txt = EvalResult::to_text_from_const(r_val);
-
-          l_txt.push_binary(r_txt,op);
-
-          EvalResult::Value(l_txt)
-        }
-      EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _=>{EvalResult::Undef("binary value default")}
-        }
-    }
-  EvalResult::Const(l_val)=>
-    {
-        match evaluate(r,set,scp_opt)
-        {
-      EvalResult::Value(r_txt)=>
-        {
-          let  mut l_txt = EvalResult::to_text_from_const(l_val);
-
-          l_txt.push_binary(r_txt,op);
-
-          EvalResult::Value(l_txt)
-        }
-      EvalResult::Const(r_val)=>
-        {
-            match evaluate_binary_int(l_val,r_val,op)
-            {
-          Ok(val)=>{EvalResult::Const(val)}
-          Err(msg)=>{EvalResult::Err(l_srcinf.to_error(msg))}
-            }
-        }
-      EvalResult::Err(e)=>{EvalResult::Err(e)}
-      _=>{EvalResult::Undef("binary const default")}
-        }
-    }
-  EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{EvalResult::Undef("binary default")}
+  (s) if s == "+" =>{Operand::make_binary(lo,ro,Opcode::Add)}
+  (s) if s == "-" =>{Operand::make_binary(lo,ro,Opcode::Sub)}
+  (s) if s == "*" =>{Operand::make_binary(lo,ro,Opcode::Mul)}
+  (s) if s == "/" =>{Operand::make_binary(lo,ro,Opcode::Div)}
+  (s) if s == "%" =>{Operand::make_binary(lo,ro,Opcode::Rem)}
+  (s) if s == "<<"=>{Operand::make_binary(lo,ro,Opcode::Shl)}
+  (s) if s == ">>"=>{Operand::make_binary(lo,ro,Opcode::Shr)}
+  (s) if s == "&" =>{Operand::make_binary(lo,ro,Opcode::And)}
+  (s) if s == "|" =>{Operand::make_binary(lo,ro,Opcode::Or)}
+  (s) if s == "^" =>{Operand::make_binary(lo,ro,Opcode::Xor)}
+  (s) if s == "=="=>{Operand::make_binary(lo,ro,Opcode::Eq)}
+  (s) if s == "!="=>{Operand::make_binary(lo,ro,Opcode::Neq)}
+  (s) if s == "<" =>{Operand::make_binary(lo,ro,Opcode::Lt)}
+  (s) if s == "<="=>{Operand::make_binary(lo,ro,Opcode::Lteq)}
+  (s) if s == ">" =>{Operand::make_binary(lo,ro,Opcode::Gt)}
+  (s) if s == ">="=>{Operand::make_binary(lo,ro,Opcode::Gteq)}
+  (s) if s == "&&"=>{Operand::make_binary(lo,ro,Opcode::Land)}
+  (s) if s == "||"=>{Operand::make_binary(lo,ro,Opcode::Lor)}
+  _=>{Operand::Err(l_srcinf.to_error(format!("unknown operator {}",op)))}
     }
 }
 
 
 pub fn
-get_string(srcinf: &SourceInfo, name: &str, set: &DeclSet)-> EvalResult
+evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
 {
-    if let Some(decl) = set.get_root().find(name)
+    match e.get_kind()
     {
-        if let DeclKind::Static(k) = decl.get_kind()
+  ExprKind::Identifier(s)=>
+    {
+      evaluate_identifier(e.get_source_info(),s,set,scp_opt)
+    }
+  ExprKind::Int(i)=>
+    {
+      Operand::from_int(*i)
+    }
+  ExprKind::String(_,name)=>
+    {
+        if let Some(decl) = set.get_root().find(&name)
         {
-            if let StorageKind::String(_,_) = k
-            {
-              let  mut txt = AsmEvalText::new();
+todo!();
+        }
 
-              txt.push_i64(decl.get_offset() as i64);
-
-              return EvalResult::Value(txt);
-            }
+      else
+        {
+          Operand::Err(e.get_source_info().to_error(format!("{} is not found or string",name)))
         }
     }
-
-
-  EvalResult::Err(srcinf.to_error(format!("{} is not found or string",name)))
+  ExprKind::CallOp(f,args)=>
+    {
+      evaluate_call(f,args,set,scp_opt)
+    }
+  ExprKind::Expr(e)=>
+    {
+      evaluate(e,set,scp_opt)
+    }
+  ExprKind::AccessOp(ins,s)=>
+    {
+      evaluate_access(ins,s,set,scp_opt)
+    }
+  ExprKind::ReintOp(ins,s)=>
+    {
+      evaluate_reint(ins,s,set,scp_opt)
+    }
+  ExprKind::SubscrOp(ref_o,idx_o)=>
+    {
+      evaluate_subscr(ref_o,idx_o,set,scp_opt)
+    }
+  ExprKind::UnaryOp(o,op)=>
+    {
+      evaluate_unary(o,op,set,scp_opt)
+    }
+  ExprKind::BinaryOp(l,r,op)=>
+    {
+      evaluate_binary(l,r,op,set,scp_opt)
+    }
+    }
 }
 
 
-pub fn
-evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> EvalResult
-{
-  let  res = evaluate_const(e,set,scp_opt);
 
-    match res
+
+pub fn
+evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Option<i64>
+{
+    match evaluate(e,set,scp_opt)
     {
-  EvalResult::Undef(_)=>
+  Operand::Value(o)=>
     {
-        match e.get_kind()
+        match o.try_get_const()
         {
-      ExprKind::Identifier(s)=>
-        {
-          evaluate_identifier(e.get_source_info(),s,set,scp_opt)
-        }
-      ExprKind::Int(i)=>
-        {
-          EvalResult::Const(*i)
-        }
-      ExprKind::String(_,name)=>
-        {
-          get_string(e.get_source_info(),name,set)
-        }
-      ExprKind::CallOp(f,args)=>
-        {
-          evaluate_call(f,args,set,scp_opt)
-        }
-      ExprKind::AccessOp(ins,s)=>
-        {
-          evaluate_access(ins,s,set,scp_opt)
-        }
-      ExprKind::Expr(e)=>
-        {
-          evaluate(e,set,scp_opt)
-        }
-      ExprKind::UnaryOp(o,op)=>
-        {
-          evaluate_unary(o,op,set,scp_opt)
-        }
-      ExprKind::BinaryOp(l,r,op)=>
-        {
-          evaluate_binary(l,r,op,set,scp_opt)
-        }
+      Ok(i)=>{Some(i)}
+      Err(())=>{None}
         }
     }
-  EvalResult::String(_,name)=>
-    {
-      get_string(e.get_source_info(),&name,set)
-    }
-  EvalResult::Err(e)=>{EvalResult::Err(e)}
-  _=>{res}
+  _=>{None}
     }
 }
 

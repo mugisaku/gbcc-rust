@@ -7,7 +7,6 @@ use super::stmt::*;
 use super::asm::*;
 use super::scope::*;
 use super::evaluate::*;
-use super::evaluate_const::*;
 
 use crate::source_file::{
   SourceInfo,
@@ -207,7 +206,7 @@ find_data_address(&self, name: &str)-> Option<usize>
 {
     for sym in &self.symbols
     {
-        if let SymbolKind::Data = sym.get_kind()
+        if let SymbolKind::Static(_,_) = sym.get_kind()
         {
             if sym.get_name() == name
             {
@@ -231,25 +230,6 @@ find_const(&self, name: &str)-> Option<i64>
             if sym.get_name() == name
             {
               return Some(*v);
-            }
-        }
-    }
-
-
-  None
-}
-
-
-pub fn
-find_field(&self, name: &str)-> Option<(usize,usize)>
-{
-    for sym in &self.symbols
-    {
-        if let SymbolKind::Field(sz) = sym.get_kind()
-        {
-            if sym.get_name() == name
-            {
-              return Some((sym.get_offset() as usize,*sz));
             }
         }
     }
@@ -289,7 +269,7 @@ print_memory_to(&self, buf: &mut String)
 
         match sym.get_kind()
         {
-      SymbolKind::Data=>
+      SymbolKind::Static(_,_)=>
         {
           buf.push_str(&format!("(addr: {})",off));
 
@@ -298,10 +278,6 @@ print_memory_to(&self, buf: &mut String)
           buf.push_str(&format!(": {}",unsafe{*i64_ptr}));
         }
       SymbolKind::Const(v)=>{buf.push_str(&format!(": {}",v));}
-      SymbolKind::Field(sz)=>
-        {
-          buf.push_str(&format!(" off: {}, sz: {}: {{...}}",off,*sz));
-        }
       _=>{}
         }
 

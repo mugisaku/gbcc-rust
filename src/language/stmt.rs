@@ -10,7 +10,6 @@ use crate::source_file::{
 use super::expr::*;
 use super::decl::*;
 use super::evaluate::*;
-use super::evaluate_const::*;
 use super::asm::*;
 use super::scope::*;
 
@@ -336,11 +335,11 @@ collect_static(&mut self, ss: &mut StaticSet)
 
       let  mut name_opt = Option::<String>::None;
 
-        if let DeclKind::Static(k) = decl.get_kind_mut()
+        if let DeclKind::Static(inf) = decl.get_kind_mut()
         {
-          let  mut tmp = StorageKind::Null;
+          let  mut tmp = StorageInfo::new();
 
-          std::mem::swap(k, &mut tmp);
+          std::mem::swap(inf,&mut tmp);
 
           name_opt = Some(ss.insert_storage(&self.source_info,tmp));
         }

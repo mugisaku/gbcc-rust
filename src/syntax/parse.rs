@@ -520,7 +520,12 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<
 
       let  tok = &toks[st.position];
 
-      buf.push_str("解析途中で停止");
+      buf.push_str("解析途中で停止\n");
+      buf.push_str(" --\n");
+
+      nd.print_to(&mut buf);
+
+      buf.push_str("\n --\n");
 
       Err(tok.get_source_info().to_error(buf))
     }

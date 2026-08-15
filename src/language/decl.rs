@@ -26,7 +26,6 @@ use super::font14::*;
 use super::font8::*;
 use super::tplg_sort::*;
 use super::evaluate::*;
-use super::evaluate_const::*;
 use super::exec::*;
 
 
@@ -85,7 +84,7 @@ record_fail(&mut self, srcinf: &SourceInfo, s: &str)
 pub struct
 StaticSet
 {
-  set: Vec<(SourceInfo,String,StorageKind)>,
+  set: Vec<(SourceInfo,String,StorageInfo)>,
 
 }
 
@@ -105,38 +104,48 @@ new()-> Self
 pub fn
 insert_string(&mut self, srcinf: &SourceInfo, new_s: &str)-> String
 {
-    for (_,name,k) in &self.set
+    for (_,name,inf) in &self.set
     {
-        if let StorageKind::String(s,_) = k
+        if &inf.content == new_s.as_bytes()
         {
-            if s == new_s
-            {
-              return name.clone();
-            }
+          return name.clone();
         }
     }
 
 
-  let  k = StorageKind::String(new_s.to_string(),Vec::new());
+  let  mut inf = StorageInfo::new();
+
+  inf.ty_kind = TyKind::U8;
+  inf.length = new_s.len()+1;
+  inf.is_utf8 = true;
+
+    for b in new_s.as_bytes()
+    {
+      inf.content.push(*b);
+    }
+
+
+  inf.content.push(0);
+
 
   let  n = self.set.len();
 
   let  name = format!(".STATIC{}",n);
 
-  self.set.push((srcinf.clone(),name.clone(),k));
+  self.set.push((srcinf.clone(),name.clone(),inf));
 
   name
 }
 
 
 pub fn
-insert_storage(&mut self, srcinf: &SourceInfo, k: StorageKind)-> String
+insert_storage(&mut self, srcinf: &SourceInfo, inf: StorageInfo)-> String
 {
   let  n = self.set.len();
 
   let  name = format!(".STATIC{}",n);
 
-  self.set.push((srcinf.clone(),name.clone(),k));
+  self.set.push((srcinf.clone(),name.clone(),inf));
 
   name
 }
@@ -157,6 +166,8 @@ TyKind
   U8, U16, U32,
 
   Struct(Vec<Field>,(usize,usize)),
+
+  Fn,
 
   Alias(String,*const TyKind),
 
@@ -204,6 +215,7 @@ get_size_and_align(&self)-> (usize,usize)
   Self::U16=>{(2,2)}
   Self::U32=>{(4,4)}
   Self::Struct(_,szal)=>{*szal}
+  Self::Fn=>{(8,8)}
   Self::Alias(name,ptr)=>
     {
         if *ptr == std::ptr::null()
@@ -274,6 +286,9 @@ finalize_struct(&mut self)
 
           *al = std::cmp::max(*al,f_al);
         }
+
+
+      *sz = Align(*al).get(*sz);
     }
 }
 
@@ -308,7 +323,8 @@ print(&self)
 
       println!("}}(size: {}, align: {})",sz,al);
     }
-  TyKind::Alias(name,_)=>
+  Self::Fn=>{print!("fn");}
+  Self::Alias(name,_)=>
     {
       print!("{}",name);
     }
@@ -335,6 +351,27 @@ Field
 impl
 Field
 {
+
+
+pub fn
+get_name(&self)-> &String
+{
+  &self.name
+}
+
+
+pub fn
+get_ty_kind(&self)-> &TyKind
+{
+  &self.ty_kind
+}
+
+
+pub fn
+get_offset(&self)-> usize
+{
+  self.offset
+}
 
 
 pub fn
@@ -396,35 +433,57 @@ print(&self)
 
 
 
-pub enum
-StorageKind
+pub struct
+StorageInfo
 {
-  Null,
+  length: usize,
+  length_expr_opt: Option<Expr>,
 
-  Word(Option<Expr>,i64),
+  ty_kind: TyKind,
 
-   EmptyField(Expr,usize),
+  expr_list_opt: Option<Vec<Expr>>,
 
-  FilledField(Option<Vec<Expr>>,Vec<u8>),
+  content: Vec<u8>,
 
-  String(String,Vec<u8>),
+  is_utf8: bool,
 
 }
 
 
 impl
-StorageKind
+StorageInfo
 {
+
+
+pub fn
+new()-> Self
+{
+  Self{
+    length: 0,
+    length_expr_opt: None,
+    ty_kind: TyKind::Undef,
+    expr_list_opt: None,
+    content: Vec::new(),
+    is_utf8: false,
+  }
+}
 
 
 pub fn
 collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
 {
-    match self
+    if let Some(e) = &self.length_expr_opt
     {
-  Self::Word(e_opt,_)=>{if let Some(e) = e_opt{e.collect_identifier(set,ss);}}
-  Self::EmptyField(e,_)=>{e.collect_identifier(set,ss);}
-  _=>{}
+      e.collect_identifier(set,ss);
+    }
+
+
+    if let Some(ls) = &self.expr_list_opt
+    {
+        for e in ls
+        {
+          e.collect_identifier(set,ss);
+        }
     }
 }
 
@@ -432,78 +491,87 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
 pub fn
 collect_static(&mut self, ss: &mut StaticSet)
 {
-    match self
+    if let Some(e) = &mut self.length_expr_opt
     {
-  Self::Word(e_opt,_)=>{if let Some(e) = e_opt{e.collect_static(ss)}}
-  Self::EmptyField(e,_)=>{e.collect_static(ss)}
-  _=>{}
+      e.collect_static(ss);
     }
+
+
+    if let Some(ls) = &mut self.expr_list_opt
+    {
+        for e in ls
+        {
+          e.collect_static(ss);
+        }
+    }
+}
+
+
+pub fn
+get_length(&self)-> usize
+{
+  self.length
 }
 
 
 pub fn
 get_size(&self)-> usize
 {
-    match self
-    {
-  Self::Null     =>{0}
-  Self::Word(_,_)=>{WORD_SIZE}
-  Self::EmptyField(_,i)=>{*i}
-  Self::FilledField(_,bytes)=>{bytes.len()}
-  Self::String(_,bytes)=>{bytes.len()}
-    }
+  let  (sz,_) = self.ty_kind.get_size_and_align();
+
+  sz*self.length
+}
+
+
+pub fn
+get_ty_kind(&self)-> &TyKind
+{
+  &self.ty_kind
 }
 
 
 pub fn
 print(&self)
 {
-    match self
-    {
-  Self::Null=>{print!("NULL");}
-  Self::Word(e_opt,_)=>
-    {
-        if let Some(e) = e_opt
-        {
-          print!(" = ");
+  print!("[");
 
-          e.print();
-        }
-    }
-  Self::EmptyField(e,i)=>
+    if let Some(e) = &self.length_expr_opt
     {
-      print!("[");
-
       e.print();
-
-      print!("]");
     }
-  Self::FilledField(exprs_opt,bytes)=>
+
+  else
+    {
+      print!("{}",self.length);
+    }
+
+
+  print!("]: ");
+
+  self.ty_kind.print();
+
+    if let Some(ls) = &self.expr_list_opt
     {
       print!("{{");
 
-        if let Some(exprs) = exprs_opt
+        for e in ls
         {
-            for e in exprs
-            {
-              e.print();
+          e.print();
 
-              print!(",");
-            }
-        }
-
-      else
-        {
-          print!("...");
+          print!(",");
         }
 
 
       print!("}}");
     }
-  Self::String(s,_)=>
+
+  else
+    if self.is_utf8
     {
-      print!(": \"{}\"",s);
-    }
+        if let Ok(s) = str::from_utf8(&self.content)
+        {
+          print!("\"{}\"",s);
+        }
     }
 }
 
@@ -519,8 +587,8 @@ DeclKind
   Undef,
 
   Const(Expr,i64),
-  Static(StorageKind),
-     Var(StorageKind),
+  Static(StorageInfo),
+     Var(StorageInfo),
 
   LocalStatic(String),
 
@@ -558,17 +626,17 @@ print(&self, name: &str)
 
       print!(" = {}",*i);
     }
-  DeclKind::Static(k)=>
+  DeclKind::Static(inf)=>
     {
       print!("static {}",name);
 
-      k.print();
+      inf.print();
     }
-  DeclKind::Var(k)=>
+  DeclKind::Var(inf)=>
     {
       print!("var {}",name);
 
-      k.print();
+      inf.print();
     }
   DeclKind::LocalStatic(name)=>
     {
@@ -787,8 +855,8 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
     match &self.kind
     {
   DeclKind::Const(e,_)=>{e.collect_identifier(set,ss);}
-  DeclKind::Static(k)=>{k.collect_identifier(set,ss);}
-  DeclKind::Var(k)=>{k.collect_identifier(set,ss);}
+  DeclKind::Static(inf)=>{inf.collect_identifier(set,ss);}
+  DeclKind::Var(inf)=>{inf.collect_identifier(set,ss);}
   DeclKind::Ty(k)=>{k.collect_identifier(set,ss);}
   DeclKind::Mod(set)=>{set.collect_identifier(ss);}
   _=>{}
@@ -802,11 +870,39 @@ collect_static(&mut self, ss: &mut StaticSet)
     match &mut self.kind
     {
   DeclKind::Const(e,_)=>{e.collect_static(ss);}
-  DeclKind::Static(k)=>{k.collect_static(ss);}
-  DeclKind::Var(k)=>{k.collect_static(ss);}
+  DeclKind::Static(inf)=>{inf.collect_static(ss);}
+  DeclKind::Var(inf)=>{inf.collect_static(ss);}
   DeclKind::Mod(set)=>{set.collect_static(ss);}
   _=>{}
     }
+}
+
+
+fn
+initialize(dst: &mut [u8], src: &[Expr], k: &TyKind, set: &DeclSet)-> Result<(),Error>
+{
+    match k
+    {
+  TyKind::Struct(ls,(_,_))=>
+    {
+      let  mut src_i = 0usize;
+
+        for f in ls
+        {
+          Self::initialize(&mut dst[f.offset..],&src[src_i..],&f.ty_kind,set);
+
+          
+        }
+    }
+  TyKind::Alias(_,ptr)=>
+    {
+      Self::initialize(dst,src,unsafe{&**ptr},set);
+    }
+  _=>{}
+    }
+
+
+  Ok(())
 }
 
 
@@ -822,76 +918,37 @@ build_const_data(&mut self)-> Result<(),Error>
     {
         match evaluate_const(&e,set,None)
         {
-      EvalResult::Const(i)=>{*v = i;}
-      _=>{return Err(srcinf.to_error(format!("constの初期化に失敗")));}
+      Some(i)=>{*v = i;}
+      None=>{return Err(srcinf.to_error(format!("constの初期化に失敗")));}
         }
     }
-  DeclKind::Static(k)=>
+  DeclKind::Static(inf)=>
     {
-        match k
+        if let Some(e) = &inf.length_expr_opt
         {
-      StorageKind::Null=>{}
-      StorageKind::Word(e_opt,v)=>
-        {
-            if let Some(e) = e_opt
+            match evaluate_const(&e,set,None)
             {
-                match evaluate_const(&e,set,None)
+          Some(i)=>{inf.length = i as usize;}
+          None=>{return Err(srcinf.to_error(format!("staticの要素数の算出に失敗")));}
+            }
+        }
+
+
+        if inf.content.len() == 0
+        {
+          let  sz = inf.get_size();
+
+          inf.content.resize(sz,0);
+
+            if let Some(ls) = &inf.expr_list_opt
+            {
+                for e in ls
                 {
-              EvalResult::Const(i)=>{*v = i;}
-              _=>{return Err(srcinf.to_error(format!("static wordの初期化に失敗")));}
                 }
             }
-        }
-      StorageKind::EmptyField(e,sz)=>
-        {
-            match evaluate_const(e,set,None)
-            {
-          EvalResult::Const(i)=>{*sz = i as usize;}
-          _=>{return Err(srcinf.to_error(format!("static fieldのサイズ算出に失敗")));}
-            }
-        }
-      StorageKind::FilledField(exprs_opt,bytes)=>
-        {
-            if let Some(exprs) = exprs_opt
-            {
-              bytes.clear();
-
-                for e in exprs
-                {
-                    match evaluate_const(e,set,None)
-                    {
-                  EvalResult::Const(i)=>
-                    {
-                        if (i <= 255) && (i >= -127)
-                        {
-                          bytes.push(i as u8)
-                        }
-
-                      else
-                        {
-                          return Err(e.get_source_info().to_error(format!("8ビット整数の範囲外")));
-                        }
-                    }
-                  _=>{return Err(srcinf.to_error(format!("static fieldのサイズ算出に失敗")));}
-                    }
-                }
-            }
-        }
-      StorageKind::String(s,bytes)=>
-        {
-          bytes.clear();
-
-            for c in s.chars()
-            {
-                for b in (c as u16).to_ne_bytes()
-                {
-                  bytes.push(b);
-                }
-            }
-        }
         }
     }
-  DeclKind::Var(k)=>
+  DeclKind::Var(_)=>
     {
       return Err(srcinf.to_error(format!("グローバル変数の宣言はvarではなくstaticを使ってください")));
     }
@@ -1024,15 +1081,17 @@ read_const(start_nd: &Node)-> (String,Expr)
 
 
 pub fn
-read_expr_for_init(start_nd: &Node)-> Expr
+read_number_of_elements(start_nd: &Node)-> Expr
 {
   let  mut cur = start_nd.cursor();
 
-   cur.advance(1);
+  cur.advance(1);
 
     if let Some(nd) = cur.select_node("expression")
     {
-      return read_expr(nd);
+      let  e = read_expr(nd);
+
+      return e;
     }
 
 
@@ -1041,33 +1100,51 @@ read_expr_for_init(start_nd: &Node)-> Expr
 
 
 pub fn
-read_exprs(start_nd: &Node)-> Vec<Expr>
+read_storage_info(start_nd: &Node)-> StorageInfo
 {
   let  mut cur = start_nd.cursor();
 
-  let  mut exprs = Vec::<Expr>::new();
+  let  mut inf = StorageInfo::new();
 
-   cur.advance(1);
-
-    while let Some(nd) = cur.select_node("expression")
+    if let Some(nd) = cur.select_node("number_of_elements")
     {
-      exprs.push(read_expr(nd));
+      inf.length_expr_opt = Some(read_number_of_elements(nd));
 
       cur.advance(1);
+    }
 
-        if cur.is_semi_string()
-        {
-          cur.advance(1);
-        }
+  else
+    {
+      inf.length  = 1;
     }
 
 
-  exprs
+    if cur.is_semi_string()
+    {
+      cur.advance(1);
+
+      inf.ty_kind = read_ty_spec(cur.get_node().unwrap());
+
+      cur.advance(1);
+
+        if let Some(nd) = cur.select_node("expression_list")
+        {
+          inf.expr_list_opt = Some(read_expr_list(nd));
+        }
+    }
+
+  else
+    {
+      inf.ty_kind = TyKind::I64;
+    }
+
+
+  inf
 }
 
 
 pub fn
-read_var(start_nd: &Node)-> (String,StorageKind)
+read_var(start_nd: &Node)-> (String,StorageInfo)
 {
   let  mut cur = start_nd.cursor();
 
@@ -1077,35 +1154,43 @@ read_var(start_nd: &Node)-> (String,StorageKind)
     {
       let  name = id_s.clone();
 
-      let  mut k = StorageKind::Word(None,0);
-
       cur.advance(1);
 
-        if let Some(nd) = cur.select_node("init_as_word")
+        if let Some(nd) = cur.select_node("storage_info")
         {
-          let  e = read_expr_for_init(nd);
+          let  inf = read_storage_info(nd);
 
-          k = StorageKind::Word(Some(e),0);
+          return (name,inf);
         }
 
       else
-        if let Some(nd) = cur.select_node("init_as_field")
         {
-          let  e = read_expr_for_init(nd);
+          let  mut inf = StorageInfo::new();
 
-          k = StorageKind::EmptyField(e,0);
+          inf.length  = 1;
+          inf.ty_kind = TyKind::I64;
+
+            if cur.is_semi_string()
+            {
+              cur.advance(1);
+
+                if let Some(nd) = cur.select_node("expression")
+                {
+                  inf.expr_list_opt = Some(vec![read_expr(nd)]);
+                }
+            }
+
+          else
+            {
+                for _ in 0..8
+                {
+                  inf.content.push(0);
+                }
+            }
+
+
+          return (name,inf);
         }
-
-      else
-        if let Some(nd) = cur.select_node("init_by_data")
-        {
-          let  exprs = read_exprs(nd);
-
-          k = StorageKind::FilledField(Some(exprs),Vec::new());
-        }
-
-
-      return (name,k);
     }
 
 
@@ -1366,19 +1451,19 @@ read_decl(start_nd: &Node)-> Result<Decl,Error>
       else
         if nd_name == "var"
         {
-          let  (name,k) = read_var(nd);
+          let  (name,inf) = read_var(nd);
 
           decl.name = name;
-          decl.kind = DeclKind::Var(k);
+          decl.kind = DeclKind::Var(inf);
         }
 
       else
         if nd_name == "static"
         {
-          let  (name,k) = read_var(nd);
+          let  (name,inf) = read_var(nd);
 
           decl.name = name;
-          decl.kind = DeclKind::Static(k);
+          decl.kind = DeclKind::Static(inf);
         }
 
       else
@@ -1924,10 +2009,10 @@ process_data_offset(&mut self, start: usize)-> usize
     {
         match &mut decl.kind
         {
-      DeclKind::Static(k)=>
+      DeclKind::Static(inf)=>
         {
-          decl.offset = pos                ;
-                        pos += k.get_size();
+          decl.offset = pos                  ;
+                        pos += inf.get_size();
         }
       DeclKind::Var(k)=>
         {
@@ -2126,7 +2211,7 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
         }
       DeclKind::Fn(fd)=>
         {
-          let   ptr_sym = Symbol::new_data(&q_name,decl.offset as isize);
+          let   ptr_sym = Symbol::new_static(&q_name,decl.offset as isize,1,TyKind::Fn);
           let  text_sym = Symbol::new_text(&q_name,*pos as isize);
 
           exec.add_symbol( ptr_sym);
@@ -2163,34 +2248,9 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
         {
           exec.add_symbol(Symbol::new_const_int(&q_name,*v));
         }
-      DeclKind::Static(k)=>
+      DeclKind::Static(inf)=>
         {
-            match k
-            {
-          StorageKind::Null=>{}
-          StorageKind::Word(_,v)=>
-            {
-              exec.put_u64(decl.offset,*v as u64);
-
-              exec.add_symbol(Symbol::new_data(&q_name,decl.offset as isize));
-            }
-          StorageKind::EmptyField(_,sz)=>
-            {
-              exec.add_symbol(Symbol::new_field(&q_name,decl.offset as isize,*sz));
-            }
-          StorageKind::FilledField(_,bytes)=>
-            {
-              exec.put_bytes(decl.offset,bytes);
-
-              exec.add_symbol(Symbol::new_field(&q_name,decl.offset as isize,bytes.len()));
-            }
-          StorageKind::String(_,bytes)=>
-            {
-              exec.put_bytes(decl.offset,bytes);
-
-              exec.add_symbol(Symbol::new_field(&q_name,decl.offset as isize,bytes.len()));
-            }
-            }
+          exec.add_symbol(Symbol::new_static(&q_name,decl.offset as isize,inf.length,inf.ty_kind.clone()));
         }
       DeclKind::Var(_)=>
         {
@@ -2277,10 +2337,14 @@ add_ex_img(&mut self, name: &str, w: u32, h: u32, data: &Vec<u8>)
 
   let  mut decl = Decl::new();
 
-  let  k = StorageKind::FilledField(None,new_data);
+  let  mut inf = StorageInfo::new();
+
+  inf.length = new_data.len();
+  inf.ty_kind = TyKind::U8;
+  inf.content = new_data;
 
   decl.name = name.to_string();
-  decl.kind = DeclKind::Static(k);
+  decl.kind = DeclKind::Static(inf);
 
   self.insert(decl);
 }
