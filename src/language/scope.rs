@@ -237,11 +237,12 @@ add_var(&mut self, name: &str, length: usize, tk: TyKind)-> isize
 
   self.symbols.push(sym);
 
+
   self.offset = get_word_aligned(self.offset+(size*length));
 
   self.update_offset_max();
 
-  offset as isize
+  offset
 }
 
 

@@ -28,6 +28,7 @@ Operation
   LoadInt(i64),
 
   Call(Operand,Vec<Operand>),
+  Subsc(Operand,Operand),
 
 }
 
@@ -129,6 +130,7 @@ try_get_const(&self)-> Result<i64,()>
     }
   Self::LoadInt(i)=>{Ok(*i)}
   Self::Call(f,args)=>{Err(())}
+  Self::Subsc(_,_)=>{Err(())}
     }
 }
 
@@ -166,6 +168,35 @@ print_to(&self, txt: &mut AsmText)
       txt.push_i64(arg_n as i64);
 
       txt.push_opcode(Opcode::Cal);
+    }
+  Self::Subsc(ref_o,idx_o)=>
+    {
+        if let Operand::Deref(ref_op,k) = ref_o
+        {
+            if let TyKind::Undef = k
+            {
+              panic!();
+            }
+
+
+          let  sz = k.get_size_and_align().0;
+
+            if let Operand::Value(idx_op) = idx_o
+            {
+              ref_op.print_to(txt);
+              idx_op.print_to(txt);
+
+              txt.push_i64(sz as i64);
+
+              txt.push_opcode(Opcode::Mul);
+              txt.push_opcode(Opcode::Add);
+
+              return;
+            }
+        }
+
+
+      panic!();
     }
     }
 }
@@ -273,15 +304,15 @@ try_get_const(&self)-> Result<i64,()>
 
 
 pub fn
-get_ty_kind(&self)-> Option<&TyKind>
+clone_ty_kind(&self)-> TyKind
 {
     if let Self::Deref(_,k) = self
     {
-      return Some(k);
+      return k.clone();
     }
 
 
-  None
+  TyKind::Undef
 }
 
 
@@ -392,15 +423,18 @@ evaluate_reint(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Oper
 
 
 pub fn
-evaluate_subscr(ref_e: &Expr, idx_e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+evaluate_subsc(ref_e: &Expr, idx_e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
 {
   let  srcinf = ref_e.get_source_info();
 
   let  ref_o = evaluate(ref_e,set,scp_opt);
   let  idx_o = evaluate(idx_e,set,scp_opt);
 
-//  Operand::Deref(Operation::(ref_o,idx_o))
-todo!();
+  let  k = ref_o.clone_ty_kind();
+
+  let  subsc = Operation::Subsc(ref_o,idx_o);
+
+  Operand::Deref(Box::new(subsc),k)
 }
 
 
@@ -561,9 +595,9 @@ todo!();
     {
       evaluate_reint(ins,s,set,scp_opt)
     }
-  ExprKind::SubscrOp(ref_o,idx_o)=>
+  ExprKind::SubscOp(ref_o,idx_o)=>
     {
-      evaluate_subscr(ref_o,idx_o,set,scp_opt)
+      evaluate_subsc(ref_o,idx_o,set,scp_opt)
     }
   ExprKind::UnaryOp(o,op)=>
     {

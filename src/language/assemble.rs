@@ -323,7 +323,19 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
         }
       DeclKind::Var(inf)=>
         {
-          let  off = scp.add_var(decl.get_name(),inf.get_length(),inf.get_ty_kind().clone());
+          let  mut len = inf.get_length();
+
+            if let Some(e) = inf.get_length_expr_opt()
+            {
+                match evaluate_const(e,set,Some(scp))
+                {
+              Some(i)=>{len = i as usize;}
+              None=>{return Err(srcinf.to_error(format!("varの要素数の算出に失敗")));}
+                }
+            }
+
+
+          let  off = scp.add_var(decl.get_name(),len,inf.get_ty_kind().clone());
 
 /*
           let  l = evaluate(e,set,Some(scp));

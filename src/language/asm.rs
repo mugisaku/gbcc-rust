@@ -666,67 +666,61 @@ push_brnz(&mut self, s: &str)
 pub fn
 try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str)-> Result<(),Error>
 {
-    if let Some(k) = l.get_ty_kind()
+  let  k = l.clone_ty_kind();
+
+  l.print_to(false,self);
+
+    if op != "="
     {
-      l.print_to(false,self);
-
-        if op != "="
-        {
-          self.push_opcode(Opcode::Dup);
-
-            match k
-            {
-          TyKind::I8=>{self.push_opcode(Opcode::Ld_i8);}
-          TyKind::U8=>{self.push_opcode(Opcode::Ld_u8);}
-          TyKind::I16=>{self.push_opcode(Opcode::Ld_i8);}
-          TyKind::U16=>{self.push_opcode(Opcode::Ld_u16);}
-          TyKind::I32=>{self.push_opcode(Opcode::Ld_i8);}
-          TyKind::U32=>{self.push_opcode(Opcode::Ld_u32);}
-          TyKind::I64=>{self.push_opcode(Opcode::Ld_i64);}
-          _=>
-            {
-              return Err(srcinf.to_error(format!("push_assign error: invalid type assign")));
-            }
-            }
-        }
-
-
-      r.print_to(true,self);
-
-           if op ==  "+="{self.push_opcode(Opcode::Add);}
-      else if op ==  "-="{self.push_opcode(Opcode::Sub);}
-      else if op ==  "*="{self.push_opcode(Opcode::Mul);}
-      else if op ==  "/="{self.push_opcode(Opcode::Div);}
-      else if op ==  "%="{self.push_opcode(Opcode::Rem);}
-      else if op == "<<="{self.push_opcode(Opcode::Shl);}
-      else if op == ">>="{self.push_opcode(Opcode::Shr);}
-      else if op ==  "&="{self.push_opcode(Opcode::And);}
-      else if op ==  "|="{self.push_opcode(Opcode::Or);}
-      else if op ==  "^="{self.push_opcode(Opcode::Xor);}
+      self.push_opcode(Opcode::Dup);
 
         match k
         {
-       TyKind::I8
-      |TyKind::U8=>{self.push_opcode(Opcode::St_i8);}
-       TyKind::I16
-      |TyKind::U16=>{self.push_opcode(Opcode::St_i16);}
-       TyKind::I32
-      |TyKind::U32=>{self.push_opcode(Opcode::St_i32);}
-      TyKind::I64=>{self.push_opcode(Opcode::St_i64);}
+      TyKind::I8=>{self.push_opcode(Opcode::Ld_i8);}
+      TyKind::U8=>{self.push_opcode(Opcode::Ld_u8);}
+      TyKind::I16=>{self.push_opcode(Opcode::Ld_i8);}
+      TyKind::U16=>{self.push_opcode(Opcode::Ld_u16);}
+      TyKind::I32=>{self.push_opcode(Opcode::Ld_i8);}
+      TyKind::U32=>{self.push_opcode(Opcode::Ld_u32);}
+      TyKind::I64=>{self.push_opcode(Opcode::Ld_i64);}
       _=>
         {
           return Err(srcinf.to_error(format!("push_assign error: invalid type assign")));
         }
         }
-
-
-      Ok(())
     }
 
-  else
+
+  r.print_to(true,self);
+
+       if op ==  "+="{self.push_opcode(Opcode::Add);}
+  else if op ==  "-="{self.push_opcode(Opcode::Sub);}
+  else if op ==  "*="{self.push_opcode(Opcode::Mul);}
+  else if op ==  "/="{self.push_opcode(Opcode::Div);}
+  else if op ==  "%="{self.push_opcode(Opcode::Rem);}
+  else if op == "<<="{self.push_opcode(Opcode::Shl);}
+  else if op == ">>="{self.push_opcode(Opcode::Shr);}
+  else if op ==  "&="{self.push_opcode(Opcode::And);}
+  else if op ==  "|="{self.push_opcode(Opcode::Or);}
+  else if op ==  "^="{self.push_opcode(Opcode::Xor);}
+
+    match k
     {
-      Err(srcinf.to_error(format!("push_assign error: assign to non deref")))
+   TyKind::I8
+  |TyKind::U8=>{self.push_opcode(Opcode::St_i8);}
+   TyKind::I16
+  |TyKind::U16=>{self.push_opcode(Opcode::St_i16);}
+   TyKind::I32
+  |TyKind::U32=>{self.push_opcode(Opcode::St_i32);}
+  TyKind::I64=>{self.push_opcode(Opcode::St_i64);}
+  _=>
+    {
+      return Err(srcinf.to_error(format!("push_assign error: invalid type assign")));
     }
+    }
+
+
+  Ok(())
 }
 
 

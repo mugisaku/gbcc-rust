@@ -97,17 +97,12 @@ static y_obj = Test::Grape;
 fn
 main()
 {
-  var  x;
+  var  x[2];
 
-  x = 8;
+  x[0] = 100000;
+  x[1] = 1;
 
-  while x
-  {
-    x -= 1;
-  }
-
-
-  return x;
+  return x[0]-x[1];
 }
 
 

@@ -33,9 +33,9 @@ binary_operator:
 reint : "->" & .Identifier;
 access: "." & .Identifier;
 call  : "(" & [{expression & [","]}] & ")";
-subscr: "[" & expression & "]";
+subsc : "[" & expression & "]";
 
-postfix_op: call | access | reint | subscr;
+postfix_op: call | access | reint | subsc;
 
 operand: [{unary_operator}] & operand_core & [{postfix_op}];
 

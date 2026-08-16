@@ -515,6 +515,13 @@ get_length(&self)-> usize
 
 
 pub fn
+get_length_expr_opt(&self)-> &Option<Expr>
+{
+  &self.length_expr_opt
+}
+
+
+pub fn
 get_size(&self)-> usize
 {
   let  (sz,_) = self.ty_kind.get_size_and_align();

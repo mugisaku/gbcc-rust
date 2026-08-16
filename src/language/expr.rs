@@ -26,7 +26,7 @@ ExprKind
   CallOp(Box<Expr>,Vec<Expr>),
   AccessOp(Box<Expr>,String),
   ReintOp(Box<Expr>,String),
-  SubscrOp(Box<Expr>,Box<Expr>),
+  SubscOp(Box<Expr>,Box<Expr>),
 
   Expr(Box<Expr>),
 
@@ -129,7 +129,7 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
     {
       ins.collect_identifier(set,ss);
     }
-  ExprKind::SubscrOp(ref_o,idx_o)=>
+  ExprKind::SubscOp(ref_o,idx_o)=>
     {
       ref_o.collect_identifier(set,ss);
       idx_o.collect_identifier(set,ss);
@@ -172,7 +172,7 @@ collect_static(&mut self, ss: &mut StaticSet)
     {
       ins.collect_static(ss);
     }
-  ExprKind::SubscrOp(ref_o,idx_o)=>
+  ExprKind::SubscOp(ref_o,idx_o)=>
     {
       ref_o.collect_static(ss);
       idx_o.collect_static(ss);
@@ -241,7 +241,7 @@ print_to(&self, buf: &mut String)
       buf.push_str("->");
       buf.push_str(s);
     }
-  ExprKind::SubscrOp(ref_o,idx_o)=>
+  ExprKind::SubscOp(ref_o,idx_o)=>
     {
       ref_o.print_to(buf);
       buf.push_str("[");
@@ -394,7 +394,7 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
        if name ==   "call"{return read_call_op(nd,o);}
   else if name == "access"{return read_access_op(nd,o);}
   else if name ==  "reint"{return read_reint_op(nd,o);}
-  else if name == "subscr"{return read_subscr_op(nd,o);}
+  else if name ==  "subsc"{return read_subsc_op(nd,o);}
   else{panic!();}
 }
 
@@ -468,7 +468,7 @@ read_reint_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
 
 pub fn
-read_subscr_op(start_nd: &Node, o: Box<Expr>)-> Expr
+read_subsc_op(start_nd: &Node, o: Box<Expr>)-> Expr
 {
   let  source_info = start_nd.get_source_info().clone();
 
@@ -480,7 +480,7 @@ read_subscr_op(start_nd: &Node, o: Box<Expr>)-> Expr
     {
       let  e = read_expr(nd);
 
-      return Expr{source_info, kind: ExprKind::SubscrOp(o,Box::new(e))};
+      return Expr{source_info, kind: ExprKind::SubscOp(o,Box::new(e))};
     }
 
 
