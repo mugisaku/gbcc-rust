@@ -18,8 +18,8 @@ SymbolKind
   Text, 
 
   Const(i64),
-  Static(usize,TyKind),
-     Var(usize,TyKind),
+  Static(usize),
+     Var(usize),
 
 }
 
@@ -75,22 +75,22 @@ new_const_int(name: &str, i: i64)-> Self
 
 
 pub fn
-new_static(name: &str, offset: isize, length: usize, tk: TyKind)-> Self
+new_static(name: &str, offset: isize, length: usize)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: SymbolKind::Static(length,tk),
+    kind: SymbolKind::Static(length),
     offset,
   }
 }
 
 
 pub fn
-new_var(name: &str, offset: isize, length: usize,tk: TyKind)-> Self
+new_var(name: &str, offset: isize, length: usize)-> Self
 {
   Self{
     name: name.to_string(),
-    kind: SymbolKind::Var(length,tk),
+    kind: SymbolKind::Var(length),
     offset,
   }
 }
@@ -160,7 +160,7 @@ new_root(decl: &FnDecl)-> Self
 
     for name in decl.get_parameter_names()
     {
-      scp.symbols.push(Symbol::new_var(name,off,WORD_SIZE,TyKind::I64));
+      scp.symbols.push(Symbol::new_var(name,off,1));
 
       off += (WORD_SIZE as isize);
     }
@@ -227,18 +227,16 @@ add_const_int(&mut self, name: &str, i: i64)
 
 
 pub fn
-add_var(&mut self, name: &str, length: usize, tk: TyKind)-> isize
+add_var(&mut self, name: &str, length: usize)-> isize
 {
   let  offset = self.offset as isize;
 
-  let  size = tk.get_size_and_align().0;
-
-  let  sym = Symbol::new_var(name,offset,length,tk);
+  let  sym = Symbol::new_var(name,offset,length);
 
   self.symbols.push(sym);
 
 
-  self.offset = get_word_aligned(self.offset+(size*length));
+  self.offset = get_word_aligned(self.offset+(WORD_SIZE*length));
 
   self.update_offset_max();
 
@@ -247,9 +245,9 @@ add_var(&mut self, name: &str, length: usize, tk: TyKind)-> isize
 
 
 pub fn
-add_static(&mut self, name: &str, offset: usize, length: usize, tk: TyKind)
+add_static(&mut self, name: &str, offset: usize, length: usize)
 {
-  let  sym = Symbol::new_static(name,offset as isize,length,tk);
+  let  sym = Symbol::new_static(name,offset as isize,length);
 
   self.symbols.push(sym);
 }

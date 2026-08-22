@@ -30,12 +30,11 @@ binary_operator:
 
 
 
-reint : "->" & .Identifier;
-access: "." & .Identifier;
-call  : "(" & [{expression & [","]}] & ")";
-subsc : "[" & expression & "]";
+dot  : "." & .Identifier;
+call : "(" & [{expression & [","]}] & ")";
+subsc: "[" & expression & "]";
 
-postfix_op: call | access | reint | subsc;
+postfix_op: call | dot | subsc;
 
 operand: [{unary_operator}] & operand_core & [{postfix_op}];
 
@@ -107,24 +106,17 @@ expression_list: "{" & [{expression & [","]}] & "}";
 
 number_of_elements: "[" & expression & "]";
 
-storage_info: [number_of_elements] & [":" & type_spec & [expression_list]];
+storage_info: number_of_elements & [expression_list];
 
 
 empty : ";";
 static: 'static -> .Identifier & [("=" & expression) | storage_info];
 var   : 'var    -> .Identifier & [("=" & expression) | storage_info];
 const : 'const  -> .Identifier & "=" & expression;
-type  : 'type   -> .Identifier & ":" & type_spec;
 
-enum  : 'enum   -> "{" & {.Identifier & [","]} & "}";
-struct: 'struct -> "{" & [{field & [","]}] & "}";
+enum: 'enum   -> "{" & {.Identifier & [","]} & "}";
 
 mod: 'mod -> .Identifier & "{" & [{declaration}] & "}";
-
-
-field: .Identifier & ":" & type_spec;
-
-type_spec: struct | qualified_identifier;
 
 
 declaration: fn
@@ -133,7 +125,6 @@ declaration: fn
            | const
            | enum
            | static
-           | type
            | mod
            | empty;
 

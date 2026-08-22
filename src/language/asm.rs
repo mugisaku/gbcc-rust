@@ -668,7 +668,7 @@ try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str
 {
   let  k = l.clone_ty_kind();
 
-  l.print_to(false,self);
+  l.write_to(false,self)?;
 
     if op != "="
     {
@@ -685,13 +685,13 @@ try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str
       TyKind::I64=>{self.push_opcode(Opcode::Ld_i64);}
       _=>
         {
-          return Err(srcinf.to_error(format!("push_assign error: invalid type assign")));
+          return Err(srcinf.to_error(format!("push_assign error: invalid type load")));
         }
         }
     }
 
 
-  r.print_to(true,self);
+  r.write_to(true,self)?;
 
        if op ==  "+="{self.push_opcode(Opcode::Add);}
   else if op ==  "-="{self.push_opcode(Opcode::Sub);}
@@ -712,10 +712,10 @@ try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str
   |TyKind::U16=>{self.push_opcode(Opcode::St_i16);}
    TyKind::I32
   |TyKind::U32=>{self.push_opcode(Opcode::St_i32);}
-  TyKind::I64=>{self.push_opcode(Opcode::St_i64);}
+   TyKind::I64=>{self.push_opcode(Opcode::St_i64);}
   _=>
     {
-      return Err(srcinf.to_error(format!("push_assign error: invalid type assign")));
+      return Err(srcinf.to_error(format!("push_assign error: invalid type store")));
     }
     }
 

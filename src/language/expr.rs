@@ -23,9 +23,8 @@ ExprKind
 
   Int(i64),
 
-  CallOp(Box<Expr>,Vec<Expr>),
-  AccessOp(Box<Expr>,String),
-  ReintOp(Box<Expr>,String),
+   CallOp(Box<Expr>,Vec<Expr>),
+    DotOp(Box<Expr>,String),
   SubscOp(Box<Expr>,Box<Expr>),
 
   Expr(Box<Expr>),
@@ -121,11 +120,7 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
           e.collect_identifier(set,ss);
         }
     }
-  ExprKind::AccessOp(ins,_)=>
-    {
-      ins.collect_identifier(set,ss);
-    }
-  ExprKind::ReintOp(ins,_)=>
+  ExprKind::DotOp(ins,_)=>
     {
       ins.collect_identifier(set,ss);
     }
@@ -151,6 +146,9 @@ collect_static(&mut self, ss: &mut StaticSet)
 {
     match &mut self.kind
     {
+  ExprKind::Identifier(_)=>
+    {
+    }
   ExprKind::String(s,name)=>
     {
       *name = ss.insert_string(&self.source_info,s);
@@ -164,11 +162,7 @@ collect_static(&mut self, ss: &mut StaticSet)
           e.collect_static(ss);
         }
     }
-  ExprKind::AccessOp(ins,_)=>
-    {
-      ins.collect_static(ss);
-    }
-  ExprKind::ReintOp(ins,_)=>
+  ExprKind::DotOp(ins,_)=>
     {
       ins.collect_static(ss);
     }
@@ -205,7 +199,10 @@ print_to(&self, buf: &mut String)
 {
     match &self.kind
     {
-  ExprKind::Identifier(s)=>{buf.push_str(s)}
+  ExprKind::Identifier(s)=>
+    {
+      buf.push_str(s);
+    }
   ExprKind::String(s,_)=>
     {
       buf.push('\"');
@@ -229,16 +226,10 @@ print_to(&self, buf: &mut String)
 
       buf.push(')');
     }
-  ExprKind::AccessOp(ins,s)=>
+  ExprKind::DotOp(ins,s)=>
     {
       ins.print_to(buf);
       buf.push('.');
-      buf.push_str(s);
-    }
-  ExprKind::ReintOp(ins,s)=>
-    {
-      ins.print_to(buf);
-      buf.push_str("->");
       buf.push_str(s);
     }
   ExprKind::SubscOp(ref_o,idx_o)=>
@@ -391,10 +382,9 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
   let  nd = cur.get_node().unwrap();
   let  name = nd.get_name();
 
-       if name ==   "call"{return read_call_op(nd,o);}
-  else if name == "access"{return read_access_op(nd,o);}
-  else if name ==  "reint"{return read_reint_op(nd,o);}
-  else if name ==  "subsc"{return read_subsc_op(nd,o);}
+       if name ==  "call"{return read_call_op(nd,o);}
+  else if name ==   "dot"{return read_dot_op(nd,o);}
+  else if name == "subsc"{return read_subsc_op(nd,o);}
   else{panic!();}
 }
 
@@ -430,7 +420,7 @@ read_call_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
 
 pub fn
-read_access_op(start_nd: &Node, o: Box<Expr>)-> Expr
+read_dot_op(start_nd: &Node, o: Box<Expr>)-> Expr
 {
   let  source_info = start_nd.get_source_info().clone();
 
@@ -440,26 +430,7 @@ read_access_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
     if let Some(id) = cur.get_identifier()
     {
-      return Expr{source_info, kind: ExprKind::AccessOp(o,id.clone())};
-    }
-
-
-  panic!();
-}
-
-
-pub fn
-read_reint_op(start_nd: &Node, o: Box<Expr>)-> Expr
-{
-  let  source_info = start_nd.get_source_info().clone();
-
-  let  mut cur = start_nd.cursor();
-
-  cur.advance(1);
-
-    if let Some(id) = cur.get_identifier()
-    {
-      return Expr{source_info, kind: ExprKind::ReintOp(o,id.clone())};
+      return Expr{source_info, kind: ExprKind::DotOp(o,id.clone())};
     }
 
 
@@ -499,15 +470,23 @@ read_qualified_identifier(start_nd: &Node)-> String
 
       buf.push_str(first_s);
 
-      cur.advance(2);
+      cur.advance(1);
 
-        while let Some(s) = cur.get_identifier()
+        while cur.is_semi_string()
         {
-          buf.push_str("::");
+          cur.advance(1);
 
-          buf.push_str(s);
+            if let Some(s) = cur.get_identifier()
+            {
+              buf.push_str("::");
 
-          cur.advance(2);
+              buf.push_str(s);
+
+              cur.advance(1);
+            }
+
+          else
+            {panic!();}
         }
 
 

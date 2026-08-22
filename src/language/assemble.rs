@@ -160,7 +160,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
       blh.increment();
 
-      o.print_to(true,output);
+      o.write_to(true,output);
 
       output.push_brz(blh.get_label());
 
@@ -203,9 +203,9 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
   let  mut count_max_off = 0isize;
 
     {
-      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>",1,TyKind::I64);
+      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>",1);
 
-      let  l = Operand::make_load_local(count_max_off,TyKind::I64);
+      let  l = Operand::make_load_local(srcinf.clone(),count_max_off);
 
       let  r = evaluate(forstmt.get_expr(),set,Some(scp));
 
@@ -217,12 +217,12 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
     }
 
 
-  let  count_cur_off = new_scp.add_var(forstmt.get_var_name(),1,TyKind::I64);
+  let  count_cur_off = new_scp.add_var(forstmt.get_var_name(),1);
 
     {
-      let  o = Operand::make_load_local(count_cur_off,TyKind::I64);
+      let  o = Operand::make_load_local(srcinf.clone(),count_cur_off);
 
-      o.print_to(false,output);
+      o.write_to(false,output);
 
       output.push_i64(0);
       output.push_opcode(Opcode::St_i64);
@@ -235,9 +235,9 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
   output.push_label(&clh.on_continue);
 
     {
-      let  lo = Operand::make_load_local(count_cur_off,TyKind::I64);
+      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off);
 
-      lo.print_to(false,output);
+      lo.write_to(false,output);
 
       output.push_opcode(Opcode::Dup);
       output.push_opcode(Opcode::Ld_i64);
@@ -250,11 +250,11 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
   output.push_label(&cmp_label);
 
     {
-      let  lo = Operand::make_load_local(count_cur_off,TyKind::I64);
-      let  ro = Operand::make_load_local(count_max_off,TyKind::I64);
+      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off);
+      let  ro = Operand::make_load_local(srcinf.clone(),count_max_off);
 
-      lo.print_to(true,output);
-      ro.print_to(true,output);
+      lo.write_to(true,output);
+      ro.write_to(true,output);
 
       output.push_opcode(Opcode::Lt);
     }
@@ -335,7 +335,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
             }
 
 
-          let  off = scp.add_var(decl.get_name(),len,inf.get_ty_kind().clone());
+          let  off = scp.add_var(decl.get_name(),len);
 
 /*
           let  l = evaluate(e,set,Some(scp));
@@ -353,7 +353,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
             {
                 if let DeclKind::Static(inf) = src_decl.get_kind()
                 {
-                  scp.add_static(decl.get_name(),src_decl.get_offset(),inf.get_length(),inf.get_ty_kind().clone());
+                  scp.add_static(decl.get_name(),src_decl.get_offset(),inf.get_length());
 
                   Ok(())
                 }
@@ -376,7 +376,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     {
       let  o = evaluate(e,set,Some(scp));
 
-      o.print_to(false,output);
+      o.write_to(false,output);
 
       output.push_opcode(Opcode::Pop);
 
@@ -411,7 +411,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
       let  o = evaluate(e,set,Some(scp));
 
-      o.print_to(true,output);
+      o.write_to(true,output);
 
       output.push_brz(&clh.on_break);
 
@@ -435,7 +435,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
         {
           let  o = evaluate(e,set,Some(scp));
 
-          o.print_to(true,output);
+          o.write_to(true,output);
         }
 
       else
@@ -497,7 +497,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     {
       let  o = evaluate(e,set,Some(scp));
 
-      o.print_to(true,output);
+      o.write_to(true,output);
 
       output.push_opcode(Opcode::Pri);
 
