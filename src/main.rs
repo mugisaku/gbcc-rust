@@ -144,11 +144,11 @@ const  CHR_H = 40;
 fn
 sleep(tm)
 {
-  var  base = sys::timer();
+  var  base = sys.timer();
 
     loop
     {
-        if (sys::timer()-base) >= tm
+        if (sys.timer()-base) >= tm
         {
           break;
         }
@@ -162,7 +162,7 @@ sleep(tm)
 fn
 dot(x,y,pixel)
 {
-  (video_field.ptr+(4*VIDEO_W*y)+(4*x)).u32ref = pixel;
+  video_field.u32ref[(VIDEO_W*y)+x] = pixel;
 }
 
 
@@ -290,7 +290,7 @@ print_character(dir,anim,dst_x,dst_y)
 
   var  dst_ptr_base = video_field.ptr+(4*VIDEO_W*dst_y)+(4*dst_x);
 
-  var  src_pitch = (4*(image.ptr+4)).u32ref;
+  var  src_pitch = 4*image[0];
   var  src_ptr_base = image.ptr+8+(src_pitch*src_y)+(4*src_x);
 
     for y in CHR_H
@@ -393,7 +393,7 @@ object_proc()
 {
   loop
   {
-    var  input = sys::input();
+    var  input = sys.input();
 
       if input&Z_KEY
       {
@@ -428,21 +428,15 @@ object_proc()
 }
 
 
-static tmp[2]{8,1};
-
-
 fn
 main()
 {
   video = video_field.ptr;
 
-//  sys::spawn(video_proc);
-//  sys::spawn(object_proc);
+  sys.spawn(video_proc);
+  sys.spawn(object_proc);
 
-
-return tmp[0]+tmp[1];
 }
-
 
 
 "#;

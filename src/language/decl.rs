@@ -412,9 +412,6 @@ DeclKind
 
   Fn(FnDecl),
 
-  Asm(Vec<Opcode>),
-  AsmWithArgc(Vec<Opcode>),
-
   Mod(Box<DeclSet>),
 
 }
@@ -475,30 +472,6 @@ print(&self, name: &str)
 
       f.print();
     }
-  DeclKind::Asm(ops)=>
-    {
-      print!("asm{{");
-
-        for op in ops
-        {
-          print!("{},",op.to_str());
-        }
-
-
-      print!("}}");
-    }
-  DeclKind::AsmWithArgc(ops)=>
-    {
-      print!("asm with argc{{");
-
-        for op in ops
-        {
-          print!("{},",op.to_str());
-        }
-
-
-      print!("}}");
-    }
   DeclKind::Mod(set)=>
     {
       println!("mod {}{{",name);
@@ -557,47 +530,6 @@ new()-> Self
     deps_parent_names: Vec::new(),
      deps_child_names: Vec::new(),
   }
-}
-
-
-pub fn
-new_sys()-> Self
-{
-  let  mut decl = Self::new();
-
-  let  sys = DeclSet::new_sys();
-
-  decl.name.push_str("sys");
-
-  decl.kind = DeclKind::Mod(Box::new(sys));
-
-  decl
-}
-
-
-pub fn
-new_asm(name: &str, ops: Vec<Opcode>)-> Self
-{
-  let  mut decl = Self::new();
-
-  decl.name = name.to_string();
-
-  decl.kind = DeclKind::Asm(ops);
-
-  decl
-}
-
-
-pub fn
-new_asm_with_argc(name: &str, ops: Vec<Opcode>)-> Self
-{
-  let  mut decl = Self::new();
-
-  decl.name = name.to_string();
-
-  decl.kind = DeclKind::AsmWithArgc(ops);
-
-  decl
 }
 
 
@@ -674,11 +606,9 @@ collect_static(&mut self, ss: &mut StaticSet)
 
 
 pub fn
-initialize_content(dst: &mut [u8], exprs: &[Expr], set: &DeclSet)-> Result<(),Error>
+initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, set: &DeclSet)-> Result<(),Error>
 {
   let  mut ptr = dst.as_mut_ptr() as *mut i64;
-
-  let  mut n = dst.len()/WORD_SIZE;
 
     for e in exprs
     {
@@ -744,7 +674,7 @@ build_const_data(&mut self)-> Result<(),Error>
 
             if let Some(exprs) = &inf.init_exprs_opt
             {
-              Self::initialize_content(&mut inf.content,exprs,set)?;
+              Self::initialize_content(&mut inf.content,exprs,inf.length,set)?;
             }
         }
     }
@@ -1208,23 +1138,6 @@ new()-> Self
 
 
 pub fn
-new_sys()-> Self
-{
-  let  mut set = Self::new();
-
-  set.decls.push(Box::new(Decl::new_asm_with_argc("spawn",vec![Opcode::Spw])));
-  set.decls.push(Box::new(Decl::new_asm("id",vec![Opcode::Pushid])));
-  set.decls.push(Box::new(Decl::new_asm("pc",vec![Opcode::Pushpc])));
-  set.decls.push(Box::new(Decl::new_asm("fp",vec![Opcode::Pushfp])));
-  set.decls.push(Box::new(Decl::new_asm("sp",vec![Opcode::Pushsp])));
-  set.decls.push(Box::new(Decl::new_asm("input",vec![Opcode::Pushinput])));
-  set.decls.push(Box::new(Decl::new_asm("timer",vec![Opcode::Pushtimer])));
-
-  set
-}
-
-
-pub fn
 get_parent(&self)-> Option<&Self>
 {
     if self.parent_ptr != std::ptr::null_mut()
@@ -1330,10 +1243,6 @@ read(s: &str)-> Result<Box<Self>,Error>
             }
         }
 
-
-      let  sys = Decl::new_sys();
-
-      set.decls.push(Box::new(sys));
 
       Ok(Box::new(set))
     }
@@ -1993,7 +1902,7 @@ add_ex_img(&mut self, name: &str, w: u32, h: u32, data: &Vec<u8>)
 
   let  mut inf = StorageInfo::new();
 
-  inf.length = if new_data.len() == 0{0} else{new_data.len()/WORD_SIZE};
+  inf.length = (new_data.len()+(WORD_SIZE-1))/WORD_SIZE;
   inf.content = new_data;
 
   decl.name = name.to_string();

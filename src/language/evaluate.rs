@@ -17,12 +17,16 @@ use super::asm::*;
 
 
 
+enum UseArgs
+{No, Yes}
+
+
 pub enum
 Operation
 {
   Nop,
 
-  Opcode(Opcode),
+  Opcodes(Vec<Opcode>),
 
   Binary(Operand,Operand,Opcode),
    Unary(Operand,Opcode),
@@ -30,7 +34,8 @@ Operation
   LoadInt(i64),
   LoadValue(Operand),
 
-  Call(Operand,Vec<Operand>),
+     Call(Operand,Vec<Operand>),
+  SymCall(SourceInfo,&'static str,Vec<Operand>),
 
   Subsc(Operand,Operand),
 
@@ -72,7 +77,7 @@ try_get_const(&self)-> Result<i64,Error>
     match self
     {
   Self::Nop=>{Err(Error::new(format!("try_get_const error: nop")))}
-  Self::Opcode(op)=>{Err(Error::new(format!("try_get_const error: opcode")))}
+  Self::Opcodes(_)=>{Err(Error::new(format!("try_get_const error: opcode")))}
   Self::Binary(lo,ro,op)=>
     {
       let  (l,r) = Self::try_get_const2(lo,ro)?;
@@ -115,8 +120,23 @@ try_get_const(&self)-> Result<i64,Error>
   Self::LoadInt(i)=>{Ok(*i)}
   Self::LoadValue(o)=>{Err(o.source_info.to_error(format!("try_get_const error: load_value")))}
   Self::Call(f,_) =>{Err(f.source_info.to_error(format!("try_get_const error: call")))}
+  Self::SymCall(srcinf,_,_) =>{Err(srcinf.to_error(format!("try_get_const error: sym call")))}
   Self::Subsc(ref_o,_)=>{Err(ref_o.source_info.to_error(format!("try_get_const error: subsc")))}
     }
+}
+
+
+fn
+check_symbol(s: &'static str)-> Result<(UseArgs,Opcode),()>
+{
+       if s == "spawn"{Ok((UseArgs::Yes,Opcode::Spw))}
+  else if s ==    "id"{Ok((UseArgs::No,Opcode::Pushid))}
+  else if s ==    "fp"{Ok((UseArgs::No,Opcode::Pushfp))}
+  else if s ==    "sp"{Ok((UseArgs::No,Opcode::Pushsp))}
+  else if s ==    "pc"{Ok((UseArgs::No,Opcode::Pushpc))}
+  else if s == "input"{Ok((UseArgs::No,Opcode::Pushinput))}
+  else if s == "timer"{Ok((UseArgs::No,Opcode::Pushtimer))}
+  else{Err(())}
 }
 
 
@@ -126,7 +146,13 @@ write_to(&self, txt: &mut AsmText)-> Result<(),Error>
     match self
     {
   Self::Nop=>{return Err(Error::new(format!("nop")));}
-  Self::Opcode(op)=>{txt.push_opcode(*op);}
+  Self::Opcodes(ops)=>
+    {
+        for op in ops
+        {
+          txt.push_opcode(*op);
+        }
+    }
   Self::Binary(l,r,op)=>
     {
       l.write_to(true,txt)?;
@@ -157,6 +183,34 @@ write_to(&self, txt: &mut AsmText)-> Result<(),Error>
       txt.push_i64(arg_n as i64);
 
       txt.push_opcode(Opcode::Cal);
+    }
+  Self::SymCall(srcinf,s,args)=>
+    {
+        match Self::check_symbol(s)
+        {
+      Ok((use_args,op))=>
+        {
+            if let UseArgs = use_args
+            {
+              let  arg_n = args.len();
+
+                for a in args
+                {
+                  a.write_to(true,txt)?;
+                }
+
+
+              txt.push_i64(arg_n as i64);
+            }
+
+
+          txt.push_opcode(op);
+        }
+      Err(())=>
+        {
+          return Err(srcinf.to_error(format!("write_to error: symcall {}",s)));
+        }
+        }
     }
   Self::Subsc(ref_o,idx_o)=>
     {
@@ -189,7 +243,15 @@ print(&self)
     match self
     {
   Self::Nop=>{print!("nop");}
-  Self::Opcode(op)=>{op.print();}
+  Self::Opcodes(ops)=>
+    {
+        for op in ops
+        {
+          op.print();
+
+          print!(", ");
+        }
+    }
   Self::Binary(l,r,op)=>
     {
       l.print();
@@ -235,6 +297,22 @@ print(&self)
 
       print!(")");
     }
+  Self::SymCall(_,s,args)=>
+    {
+      print!("{}(",s);
+
+      let  arg_n = args.len();
+
+        for a in args
+        {
+          a.print();
+
+          print!(", ");
+        }
+
+
+      print!(")");
+    }
   Self::Subsc(ref_o,idx_o)=>
     {
       ref_o.print();
@@ -257,7 +335,8 @@ print(&self)
 pub enum
 OperandKind
 {
-  Undef(&'static str),
+   Undef(&'static str),
+  Symbol(&'static str),
 
   Value(Box<Operation>),
   Deref(Box<Operation>,TyKind),
@@ -312,7 +391,7 @@ from_int(source_info: SourceInfo, i: i64)-> Self
 pub fn
 from_opcode(source_info: SourceInfo, op: Opcode)-> Self
 {
-  let  op = Operation::Opcode(op);
+  let  op = Operation::Opcodes(vec![op]);
 
   Operand{source_info, kind: OperandKind::Value(Box::new(op))}
 }
@@ -330,7 +409,7 @@ make_load_global(source_info: SourceInfo, offset: usize)-> Self
 pub fn
 make_load_local(source_info: SourceInfo, offset: isize)-> Self
 {
-  let  l = Operation::Opcode(Opcode::Pushfp);
+  let  l = Operation::Opcodes(vec![Opcode::Pushfp]);
   let  r = Operation::LoadInt(offset as i64);
 
   let  lo = Operand{source_info: SourceInfo::new(), kind: OperandKind::Value(Box::new(l))};
@@ -388,6 +467,7 @@ try_get_const(&self)-> Result<i64,Error>
     match &self.kind
     {
   OperandKind::Undef(s)=>{Err(self.source_info.to_error(format!("{}",s)))}
+  OperandKind::Symbol(s)=>{Err(self.source_info.to_error(format!("{}",s)))}
   OperandKind::Value(o)=>{o.try_get_const()}
   OperandKind::Deref(_,_)=>{Err(self.source_info.to_error(format!("")))}
     }
@@ -430,6 +510,7 @@ write_to(&self, loading: bool, txt: &mut AsmText)-> Result<(),Error>
     match &self.kind
     {
   OperandKind::Undef(s)=>{return Err(self.source_info.to_error(format!("write_to error: undef {}",s)));}
+  OperandKind::Symbol(s)=>{return Err(self.source_info.to_error(format!("write_to error: symbol {}",s)));}
   OperandKind::Value(o)=>{o.write_to(txt)?}
   OperandKind::Deref(o,k)=>
     {
@@ -457,6 +538,7 @@ print(&self)
     match &self.kind
     {
   OperandKind::Undef(s)=>{print!("undef {}",s);}
+  OperandKind::Symbol(s)=>{print!("symbol {}",s);}
   OperandKind::Value(o)=>
     {
       print!("(");
@@ -494,7 +576,18 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>
     }
 
 
-  let  opr = Operation::Call(o,buf);
+  let  opr = 
+    if let OperandKind::Symbol(s) = &o.kind
+    {
+      Operation::SymCall(source_info.clone(),s,buf)
+    }
+
+  else
+    {
+      Operation::Call(o,buf)
+    }
+  ;
+
 
   Operand{source_info, kind: OperandKind::Value(Box::new(opr))}
 }
@@ -510,6 +603,22 @@ evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operan
     match o.kind
     {
   OperandKind::Undef(_)=>{o}
+  OperandKind::Symbol(sym_s)=>
+    {
+        if sym_s == "sys"
+        {
+               if s == "spawn"{return Operand{source_info, kind: OperandKind::Symbol("spawn")};}
+          else if s ==    "id"{return Operand{source_info, kind: OperandKind::Symbol("id")};}
+          else if s ==    "fp"{return Operand{source_info, kind: OperandKind::Symbol("fp")};}
+          else if s ==    "sp"{return Operand{source_info, kind: OperandKind::Symbol("sp")};}
+          else if s ==    "pc"{return Operand{source_info, kind: OperandKind::Symbol("pc")};}
+          else if s == "input"{return Operand{source_info, kind: OperandKind::Symbol("input")};}
+          else if s == "timer"{return Operand{source_info, kind: OperandKind::Symbol("timer")};}
+        }
+
+
+      Operand{source_info, kind: OperandKind::Undef("evaluate_dot case symbol")}
+    }
   OperandKind::Value(op)=>
     {
            if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I8 )}}
@@ -521,7 +630,7 @@ evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operan
       else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U32)}}
       else
         {
-          Operand{source_info, kind: OperandKind::Undef("evaluate_reint case Value")}
+          Operand{source_info, kind: OperandKind::Undef("evaluate_dot case Value")}
         }
     }
   OperandKind::Deref(op,k)=>
@@ -529,19 +638,16 @@ evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operan
         if s == "ptr"{Operand{source_info, kind: OperandKind::Value(op)}}
       else
         {
-          let   new_o = Operand{source_info: source_info.clone(), kind: OperandKind::Deref(op,k)};
-          let  new_op = Box::new(Operation::LoadValue(new_o));
-
-               if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I8 )}}
-          else if s == "i16ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I16)}}
-          else if s == "i32ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I32)}}
-          else if s == "i64ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I64)}}
-          else if s ==  "u8ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U8 )}}
-          else if s == "u16ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U16)}}
-          else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U32)}}
+               if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I8 )}}
+          else if s == "i16ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I16)}}
+          else if s == "i32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I32)}}
+          else if s == "i64ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I64)}}
+          else if s ==  "u8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U8 )}}
+          else if s == "u16ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U16)}}
+          else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U32)}}
           else
             {
-              Operand{source_info, kind: OperandKind::Undef("evaluate_reint case deref")}
+              Operand{source_info, kind: OperandKind::Undef("evaluate_dot case deref")}
             }
         }
     }
@@ -568,6 +674,24 @@ evaluate_subsc(ref_e: &Expr, idx_e: &Expr, set: &DeclSet, scp_opt: Option<&Scope
 pub fn
 evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
 {
+    if name == "false"
+    {
+      return Operand::from_int(source_info,0);
+    }
+
+  else
+    if name == "true"
+    {
+      return Operand::from_int(source_info,1);
+    }
+
+  else
+    if name == "sys"
+    {
+      return Operand{source_info, kind: OperandKind::Symbol("sys")};
+    }
+
+
     if let Some(scp) = scp_opt
     {
         if let Some(sym) = scp.find(name)
