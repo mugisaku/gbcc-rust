@@ -397,7 +397,7 @@ object_proc()
 
       if input&Z_KEY
       {
-        sys::spawn(test,g_x,g_y);
+        sys.spawn(test,g_x,g_y);
       }
 
 
@@ -434,7 +434,7 @@ main()
   video = video_field.ptr;
 
   sys.spawn(video_proc);
-  sys.spawn(object_proc);
+  sys.spawn(object_pro);
 
 }
 

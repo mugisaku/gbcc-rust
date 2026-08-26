@@ -160,7 +160,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
       blh.increment();
 
-      o.write_to(true,output);
+      o.write_to(true,output)?;
 
       output.push_brz(blh.get_label());
 
@@ -222,7 +222,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
     {
       let  o = Operand::make_load_local(srcinf.clone(),count_cur_off);
 
-      o.write_to(false,output);
+      o.write_to(false,output)?;
 
       output.push_i64(0);
       output.push_opcode(Opcode::St_i64);
@@ -237,7 +237,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
     {
       let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off);
 
-      lo.write_to(false,output);
+      lo.write_to(false,output)?;
 
       output.push_opcode(Opcode::Dup);
       output.push_opcode(Opcode::Ld_i64);
@@ -253,8 +253,8 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
       let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off);
       let  ro = Operand::make_load_local(srcinf.clone(),count_max_off);
 
-      lo.write_to(true,output);
-      ro.write_to(true,output);
+      lo.write_to(true,output)?;
+      ro.write_to(true,output)?;
 
       output.push_opcode(Opcode::Lt);
     }
@@ -376,7 +376,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     {
       let  o = evaluate(e,set,Some(scp));
 
-      o.write_to(false,output);
+      o.write_to(false,output)?;
 
       output.push_opcode(Opcode::Pop);
 
@@ -411,7 +411,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
       let  o = evaluate(e,set,Some(scp));
 
-      o.write_to(true,output);
+      o.write_to(true,output)?;
 
       output.push_brz(&clh.on_break);
 
@@ -435,7 +435,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
         {
           let  o = evaluate(e,set,Some(scp));
 
-          o.write_to(true,output);
+          o.write_to(true,output)?;
         }
 
       else
@@ -497,7 +497,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     {
       let  o = evaluate(e,set,Some(scp));
 
-      o.write_to(true,output);
+      o.write_to(true,output)?;
 
       output.push_opcode(Opcode::Pri);
 

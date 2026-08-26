@@ -24,14 +24,11 @@ enum UseArgs
 pub enum
 Operation
 {
-  Nop,
-
-  Opcodes(Vec<Opcode>),
-
   Binary(Operand,Operand,Opcode),
    Unary(Operand,Opcode),
 
   LoadInt(i64),
+  LoadPosFromFp(i64),
   LoadValue(Operand),
 
      Call(Operand,Vec<Operand>),
@@ -76,8 +73,6 @@ try_get_const(&self)-> Result<i64,Error>
 {
     match self
     {
-  Self::Nop=>{Err(Error::new(format!("try_get_const error: nop")))}
-  Self::Opcodes(_)=>{Err(Error::new(format!("try_get_const error: opcode")))}
   Self::Binary(lo,ro,op)=>
     {
       let  (l,r) = Self::try_get_const2(lo,ro)?;
@@ -118,6 +113,7 @@ try_get_const(&self)-> Result<i64,Error>
         }
     }
   Self::LoadInt(i)=>{Ok(*i)}
+  Self::LoadPosFromFp(_)=>{Err(Error::new(format!("try_get_const error: load_pos_from_fp")))}
   Self::LoadValue(o)=>{Err(o.source_info.to_error(format!("try_get_const error: load_value")))}
   Self::Call(f,_) =>{Err(f.source_info.to_error(format!("try_get_const error: call")))}
   Self::SymCall(srcinf,_,_) =>{Err(srcinf.to_error(format!("try_get_const error: sym call")))}
@@ -145,14 +141,6 @@ write_to(&self, txt: &mut AsmText)-> Result<(),Error>
 {
     match self
     {
-  Self::Nop=>{return Err(Error::new(format!("nop")));}
-  Self::Opcodes(ops)=>
-    {
-        for op in ops
-        {
-          txt.push_opcode(*op);
-        }
-    }
   Self::Binary(l,r,op)=>
     {
       l.write_to(true,txt)?;
@@ -167,6 +155,12 @@ write_to(&self, txt: &mut AsmText)-> Result<(),Error>
       txt.push_opcode(*op);
     }
   Self::LoadInt(i)=>{txt.push_i64(*i)}
+  Self::LoadPosFromFp(i)=>
+    {
+      txt.push_opcode(Opcode::Pushfp);
+      txt.push_i64(*i);
+      txt.push_opcode(Opcode::Add);
+    }
   Self::LoadValue(o)=>{o.write_to(true,txt)?;}
   Self::Call(f,args)=>
     {
@@ -242,16 +236,6 @@ print(&self)
 {
     match self
     {
-  Self::Nop=>{print!("nop");}
-  Self::Opcodes(ops)=>
-    {
-        for op in ops
-        {
-          op.print();
-
-          print!(", ");
-        }
-    }
   Self::Binary(l,r,op)=>
     {
       l.print();
@@ -273,6 +257,7 @@ print(&self)
       o.print();
     }
   Self::LoadInt(i)=>{print!("{}",*i)}
+  Self::LoadPosFromFp(i)=>{print!("load_pos_from_fp{}",*i)}
   Self::LoadValue(o)=>
     {
       print!("ld(");
@@ -335,7 +320,7 @@ print(&self)
 pub enum
 OperandKind
 {
-   Undef(&'static str),
+   Undef(String),
   Symbol(&'static str),
 
   Value(Box<Operation>),
@@ -360,12 +345,12 @@ Operand
 
 
 pub fn
-from_source_info(srcinf: &SourceInfo)-> Self
+make_undef(source_info: SourceInfo, msg: String)-> Self
 {
   Self{
-    source_info: srcinf.clone(),
+    source_info,
 
-    kind: OperandKind::Undef("from_source_info"),
+    kind: OperandKind::Undef(msg),
   }
 }
 
@@ -389,15 +374,6 @@ from_int(source_info: SourceInfo, i: i64)-> Self
 
 
 pub fn
-from_opcode(source_info: SourceInfo, op: Opcode)-> Self
-{
-  let  op = Operation::Opcodes(vec![op]);
-
-  Operand{source_info, kind: OperandKind::Value(Box::new(op))}
-}
-
-
-pub fn
 make_load_global(source_info: SourceInfo, offset: usize)-> Self
 {
   let  op = Operation::LoadInt(offset as i64);
@@ -409,15 +385,9 @@ make_load_global(source_info: SourceInfo, offset: usize)-> Self
 pub fn
 make_load_local(source_info: SourceInfo, offset: isize)-> Self
 {
-  let  l = Operation::Opcodes(vec![Opcode::Pushfp]);
-  let  r = Operation::LoadInt(offset as i64);
+  let  op = Operation::LoadPosFromFp(offset as i64);
 
-  let  lo = Operand{source_info: SourceInfo::new(), kind: OperandKind::Value(Box::new(l))};
-  let  ro = Operand{source_info: SourceInfo::new(), kind: OperandKind::Value(Box::new(r))};
-
-  let  bin = Operation::Binary(lo,ro,Opcode::Add);
-
-  Operand{source_info, kind: OperandKind::Deref(Box::new(bin),TyKind::I64)}
+  Operand{source_info, kind: OperandKind::Deref(Box::new(op),TyKind::I64)}
 }
 
 
@@ -429,17 +399,6 @@ make_load_fn(source_info: SourceInfo, offset: usize)-> Self
   let  un = Operation::Unary(o,Opcode::Ld_i64);
 
   Operand{source_info, kind: OperandKind::Value(Box::new(un))}
-}
-
-
-pub fn
-make_load_value(source_info: SourceInfo, op: Box<Operation>, k: TyKind)-> Self
-{
-  let  o = Operand{source_info: source_info.clone(), kind: OperandKind::Deref(op,k)};
-
-  let  ld = Operation::LoadValue(o);
-
-  Operand{source_info, kind: OperandKind::Value(Box::new(ld))}
 }
 
 
@@ -617,7 +576,7 @@ evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operan
         }
 
 
-      Operand{source_info, kind: OperandKind::Undef("evaluate_dot case symbol")}
+      Operand::make_undef(source_info,format!("evaluate_dot case symbol: {} {}",sym_s,s))
     }
   OperandKind::Value(op)=>
     {
@@ -630,7 +589,7 @@ evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operan
       else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U32)}}
       else
         {
-          Operand{source_info, kind: OperandKind::Undef("evaluate_dot case Value")}
+          Operand::make_undef(source_info,format!("evaluate_dot case Value: {}",s))
         }
     }
   OperandKind::Deref(op,k)=>
@@ -647,7 +606,7 @@ evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operan
           else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U32)}}
           else
             {
-              Operand{source_info, kind: OperandKind::Undef("evaluate_dot case deref")}
+              Operand::make_undef(source_info,format!("evaluate_dot case deref: {}",s))
             }
         }
     }
@@ -710,7 +669,7 @@ evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt:
             {
               Operand::make_load_local(source_info,sym.get_offset())
             }
-          _=>{Operand{source_info, kind: OperandKind::Undef("evaluate_identifier case local")}}
+          _=>{Operand::make_undef(source_info,format!("evaluate_identifier case local: {} is found in scope, but invalid",name))}
             };
         }
     }
@@ -736,13 +695,13 @@ evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt:
         {
           Operand::make_load_fn(source_info,decl.get_offset())
         }
-      _=>{Operand{source_info, kind: OperandKind::Undef("evaluate_identifier case global")}}
+      _=>{Operand::make_undef(source_info,format!("evaluate_identifier case global: {} is found in global, but invalid",name))}
         }
     }
 
   else
     {
-      Operand{source_info, kind: OperandKind::Undef("evaluate_identifier")}
+      Operand::make_undef(source_info,format!("evaluate_identifier error: {} is not found",name))
     }
 }
 
@@ -759,7 +718,7 @@ evaluate_unary(e: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Ope
   (s) if s == "-" =>{Operand::make_unary(source_info,o,Opcode::Neg)}
   (s) if s == "!" =>{Operand::make_unary(source_info,o,Opcode::Lnot)}
   (s) if s == "~" =>{Operand::make_unary(source_info,o,Opcode::Not)}
-  _=>{Operand{source_info, kind: OperandKind::Undef("evaluate_unary")}}
+  _=>{Operand::make_undef(source_info,format!("evaluate_unary: {} is invalid operator",op))}
     }
 }
 
@@ -792,7 +751,7 @@ evaluate_binary(l: &Expr, r: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Sc
   (s) if s == ">="=>{Operand::make_binary(source_info,lo,ro,Opcode::Gteq)}
   (s) if s == "&&"=>{Operand::make_binary(source_info,lo,ro,Opcode::Land)}
   (s) if s == "||"=>{Operand::make_binary(source_info,lo,ro,Opcode::Lor)}
-  _=>{Operand{source_info, kind: OperandKind::Undef("evaluate_binary")}}
+  _=>{Operand::make_undef(source_info,format!("evaluate_binary: {} is invalid operator",op))}
     }
 }
 
@@ -821,7 +780,7 @@ todo!();
 
       else
         {
-          Operand{source_info, kind: OperandKind::Undef("evaluate case string")}
+          Operand::make_undef(source_info,format!("evaluate case string"))
         }
     }
   ExprKind::CallOp(f,args)=>
