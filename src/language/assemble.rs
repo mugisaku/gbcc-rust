@@ -10,7 +10,7 @@ use super::evaluate::*;
 
 use crate::source_file::{
   SourceInfo,
-  Error,
+  Message,
 
 };
 
@@ -146,7 +146,7 @@ new(id: usize)-> Self
 
 
 fn
-process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
+process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  mut blh = lid.make_br_label_holder();
 
@@ -164,11 +164,9 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
       output.push_brz(blh.get_label());
 
-        match process_block(blk,set,lid,clh_opt,scp,output)
-        {
-      Ok(())=>{output.push_jmp(&end_label);}
-      Err(e)=>{return Err(e);}
-        }
+      process_block(blk,set,lid,clh_opt,scp,output)?;
+
+      output.push_jmp(&end_label);
     }
 
 
@@ -176,11 +174,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
     if let Some(blk) = ifstmt.get_else_block_opt()
     {
-        match process_block(blk,set,lid,clh_opt,scp,output)
-        {
-      Ok(())=>{}
-      Err(e)=>{return Err(e);}
-        }
+      process_block(blk,set,lid,clh_opt,scp,output)?;
     }
 
 
@@ -191,7 +185,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
 
 fn
-process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
+process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  clh = lid.make_ctrl_label_holder();
 
@@ -209,11 +203,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
 
       let  r = evaluate(forstmt.get_expr(),set,Some(scp));
 
-        match output.try_push_assign(srcinf,l,r,"=")
-        {
-      Ok(())=>{}
-      Err(e)=>{return Err(e);}
-        }
+      output.try_push_assign(srcinf,l,r,"=")?;
     }
 
 
@@ -259,35 +249,27 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
       output.push_opcode(Opcode::Lt);
     }
 
+
   output.push_brz(&clh.on_break);
 
-    match process_block(forstmt.get_block(),set,lid,Some(&clh),&new_scp,output)
-    {
-  Ok(())=>
-    {
-      output.push_jmp(&clh.on_continue);
+  process_block(forstmt.get_block(),set,lid,Some(&clh),&new_scp,output)?;
 
-      output.push_label(&clh.on_break);
+  output.push_jmp(&clh.on_continue);
 
-      Ok(())
-    }
-  Err(e)=>{Err(e)}
-    }
+  output.push_label(&clh.on_break);
+
+  Ok(())
 }
 
 
 fn
-process_block(blk: &Block, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Error>
+process_block(blk: &Block, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  mut new_scp = Scope::new(scp);
 
     for stmt in blk.get_stmt_list()
     {
-        match process_stmt(stmt,set,lid,clh_opt,&mut new_scp,output)
-        {
-      Ok(())=>{}
-      Err(e)=>{return Err(e);}
-        }
+      process_stmt(stmt,set,lid,clh_opt,&mut new_scp,output)?;
     }
 
 
@@ -296,7 +278,7 @@ process_block(blk: &Block, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ct
 
 
 fn
-process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)-> Result<(),Error>
+process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  srcinf = stmt.get_source_info();
 
@@ -318,7 +300,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
               Ok(())
             }
-          None=>{Err(srcinf.to_error(format!("constの算出に失敗")))}
+          None=>{Err(srcinf.to_message()+"constの算出に失敗")}
             }
         }
       DeclKind::Var(inf)=>
@@ -330,7 +312,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
                 match evaluate_const(e,set,Some(scp))
                 {
               Some(i)=>{len = i as usize;}
-              None=>{return Err(srcinf.to_error(format!("varの要素数の算出に失敗")));}
+              None=>{return Err(srcinf.to_message()+"varの要素数の算出に失敗");}
                 }
             }
 
@@ -360,16 +342,16 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
               else
                 {
-                  Err(srcinf.to_error(format!("{} is not local static",name)))
+                  Err(srcinf.to_message()+format!("{} is not local static",name))
                 }
             }
 
           else
             {
-              Err(srcinf.to_error(format!("local static {} is not found",name)))
+              Err(srcinf.to_message()+format!("local static {} is not found",name))
             }
         }
-      _=>{Err(srcinf.to_error(format!("invalid decl")))}
+      _=>{Err(srcinf.to_message()+format!("invalid decl"))}
         }
     }
   StmtKind::Expr(e)=>
@@ -415,18 +397,13 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
       output.push_brz(&clh.on_break);
 
-        match process_block(blk,set,lid,Some(&clh),scp,output)
-        {
-      Ok(())=>
-        {
-          output.push_jmp(&clh.on_continue);
+      process_block(blk,set,lid,Some(&clh),scp,output)?;
 
-          output.push_label(&clh.on_break);
+      output.push_jmp(&clh.on_continue);
 
-          Ok(())
-        }
-      Err(e)=>{Err(e)}
-        }
+      output.push_label(&clh.on_break);
+
+      Ok(())
     }
   StmtKind::For(f)=>{process_for(srcinf,f,set,lid,clh_opt,scp,output)}
   StmtKind::Return(e_opt)=>
@@ -465,7 +442,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
           Ok(())
         }
-      None=>{Err(srcinf.to_error(format!("無効なbreak")))}
+      None=>{Err(srcinf.to_message()+"無効なbreak")}
         }
     }
   StmtKind::Continue=>
@@ -478,7 +455,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
           Ok(())
         }
-      None=>{Err(srcinf.to_error(format!("無効なcontinue")))}
+      None=>{Err(srcinf.to_message()+"無効なcontinue")}
         }
     }
   StmtKind::Halt=>
@@ -510,24 +487,19 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
 
 pub fn
-assemble(srcinf: &SourceInfo, decl: &FnDecl, set: &DeclSet)-> Result<AsmText,Error>
+assemble(srcinf: &SourceInfo, decl: &FnDecl, set: &DeclSet)-> Result<AsmText,Message>
 {
   let  mut text = AsmText::new();
   let   mut lid = LabelID::new();
 
   let  scp = Scope::new_root(decl);
 
-    match process_block(decl.get_block(),set,&mut lid,None,&scp,&mut text)
-    {
-  Ok(())=>
-    {
-      text.set_xs(scp.get_offset_max());
-      text.terminate();
+  process_block(decl.get_block(),set,&mut lid,None,&scp,&mut text)?;
 
-      Ok(text)
-    }
-  Err(e)=>{Err(e)}
-    }
+  text.set_xs(scp.get_offset_max());
+  text.terminate();
+
+  Ok(text)
 }
 
 

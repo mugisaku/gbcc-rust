@@ -202,13 +202,6 @@ get_file(&self)-> &Rc<SourceFile>
 
 
 pub fn
-to_error(&self, msg: String)-> Error
-{
-  Error::new_with_source_info(self,msg)
-}
-
-
-pub fn
 to_string(&self)-> String
 {
   let  mut s = format!("[file: \"{}\" x: {} y: {}]\n",self.file.get_path(),1+self.x,1+self.y);
@@ -222,6 +215,13 @@ to_string(&self)-> String
   self.file.print_line_to(self.y+2,None        ,&mut s);
 
   s
+}
+
+
+pub fn
+to_message(&self)-> Message
+{
+  Message::new(self.to_string())
 }
 
 
@@ -299,7 +299,7 @@ is_space(c: char)-> bool
 
 
 pub fn
-skip_until_appears_newline(&mut self)-> Result<(),String>
+skip_until_appears_newline(&mut self)-> Result<(),Message>
 {
     while let Some(c) = self.get_character()
     {
@@ -314,12 +314,12 @@ skip_until_appears_newline(&mut self)-> Result<(),String>
     }
 
 
-  Err(format!("コメントラインが正しく終了していない"))
+  Err(self.info.to_message()+"コメントラインが正しく終了していない")
 }
 
 
 pub fn
-skip_until_appears_end_of_comment_block(&mut self)-> Result<(),String>
+skip_until_appears_end_of_comment_block(&mut self)-> Result<(),Message>
 {
     while let Some(first) = self.get_character()
     {
@@ -346,7 +346,7 @@ skip_until_appears_end_of_comment_block(&mut self)-> Result<(),String>
     }
 
 
-  Err(format!("コメントブロックが正しく終了していない"))
+  Err(self.info.to_message()+"コメントブロックが正しく終了していない")
 }
 
 
@@ -376,13 +376,6 @@ skip_spaces(&mut self)
 }
 
 
-pub fn
-to_error(&self, msg: String)-> Error
-{
-  self.info.to_error(msg)
-}
-
-
 }
 
 
@@ -390,88 +383,103 @@ to_error(&self, msg: String)-> Error
 
 #[derive(Clone)]
 pub struct
-Error
+Message
 {
-  source_info_opt: Option<SourceInfo>,
-
-  message: String,
-
-  child_opt: Option<Box<Self>>,
+  strings: Vec<String>,
 
 }
 
 
 impl
-Error
+Message
 {
 
 
 pub fn
-new(message: String)-> Self
+new(s: String)-> Self
 {
   Self{
-    source_info_opt: None,
-    message,
-    child_opt: None,
+    strings: vec![s],
   }
-}
-
-
-pub fn
-new_with_source_info(source_info: &SourceInfo, message: String)-> Self
-{
-  Self{
-    source_info_opt: Some(source_info.clone()),
-    message,
-    child_opt: None,
-  }
-}
-
-
-pub fn
-wrap(mut self, child: Self)-> Self
-{
-  self.child_opt = Some(Box::new(child));
-
-  self
 }
 
 
 pub fn
 to_string(&self)-> String
 {
-  let  mut s = String::new();
+  let  mut buf = String::new();
 
-    if let Some(info) = &self.source_info_opt
+    for s in &self.strings
     {
-      s.push_str(&info.to_string());
-
-      s.push_str("\n");
+      buf.push_str(s);
+      buf.push('\n');
     }
 
 
-  s.push_str(&self.message);
-
-  s.push_str("\n");
-
-    if let Some(child) = &self.child_opt
-    {
-      s.push_str(&child.to_string());
-
-      s.push_str("\n");
-    }
-
-
-  s
+  buf
 }
 
 
 pub fn
 print(&self)
 {
-  let  s = self.to_string();
+    for s in &self.strings
+    {
+      println!("{}",s);
+    }
+}
 
-  println!("{}",&s);
+
+}
+
+
+impl
+std::ops::Add<String> for Message
+{
+
+
+type Output = Message;
+
+fn
+add(mut self, s: String)-> Self::Output
+{
+  self.strings.push(s);
+
+  self
+}
+
+
+}
+
+
+impl
+std::ops::Add<&str> for Message
+{
+
+
+type Output = Message;
+
+fn
+add(mut self, s: &str)-> Self::Output
+{
+  self.strings.push(s.to_string());
+
+  self
+}
+
+
+}
+
+
+impl
+std::convert::From<&str> for Message
+{
+
+
+fn
+from(s: &str)-> Self
+{
+  Self::new(s.to_string())
 }
 
 

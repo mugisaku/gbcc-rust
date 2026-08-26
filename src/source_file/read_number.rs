@@ -4,7 +4,7 @@ use crate::source_file::{
   SourceFile,
   SourceInfo,
   SourceReader,
-  Error,
+  Message,
 
 };
 

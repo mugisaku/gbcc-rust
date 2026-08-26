@@ -35,7 +35,7 @@ use crate::source_file::{
   SourceFile,
   SourceInfo,
   SourceReader,
-  Error,
+  Message,
 
 };
 
@@ -45,7 +45,7 @@ ParseResult
 {
   Some(Vec<Value>),
   None,
-  Err(Error),
+  Err(Message),
 
 }
 
@@ -101,7 +101,7 @@ read_repetition(&mut self, e: &Expression)-> ParseResult
             {
           ParseResult::Some(mut vals)=>{first_vals.append(&mut vals);}
           ParseResult::None=>{break;}
-          ParseResult::Err(e)=>{return ParseResult::Err(e);}
+          ParseResult::Err(msg)=>{return ParseResult::Err(msg);}
             }
         }
 
@@ -109,7 +109,7 @@ read_repetition(&mut self, e: &Expression)-> ParseResult
       ParseResult::Some(first_vals)
     }
   ParseResult::None=>{ParseResult::None}
-  ParseResult::Err(e)=>{ParseResult::Err(e)}
+  ParseResult::Err(msg)=>{ParseResult::Err(msg)}
     }
 }
 
@@ -167,7 +167,7 @@ read_number_literal(&mut self)-> ParseResult
 
               ParseResult::Some(vec![Value::new(info,kind)])
             }
-          Err(_)=>{ParseResult::Err(info.to_error(format!("整数が不正")))}
+          Err(_)=>{ParseResult::Err(info.to_message()+"整数が不正")}
             }
         }
 
@@ -181,7 +181,7 @@ read_number_literal(&mut self)-> ParseResult
 
               ParseResult::Some(vec![Value::new(info,kind)])
             }
-          Err(_)=>{ParseResult::Err(info.to_error(format!("浮動小数点数が不正")))}
+          Err(_)=>{ParseResult::Err(info.to_message()+"浮動小数点数が不正")}
             }
         }
     }
@@ -220,7 +220,7 @@ read_by_identifier(&mut self, s: &str)-> ParseResult
     {
         if self.depth >= 800
         {
-          return ParseResult::Err(Error::new(format!("read_by_identifier: depth limit is over")));
+          return ParseResult::Err(Message::from("read_by_identifier: depth limit is over"));
         }
 
 
@@ -228,7 +228,7 @@ read_by_identifier(&mut self, s: &str)-> ParseResult
     }
 
   else
-    {ParseResult::Err(Error::new(format!("read_by_identifier: {}という定義はない",s)))}
+    {ParseResult::Err(Message::new(format!("read_by_identifier: {}という定義はない",s)))}
 }
 
 
@@ -310,12 +310,12 @@ read_arrow(&mut self, l: &Expression, r: &Expression)-> ParseResult
 
           ParseResult::Some(l_vals)
         }
-      ParseResult::None=>{ParseResult::Err(Error::new(format!("解析失敗を確定")))}
-      ParseResult::Err(e)=>{ParseResult::Err(e)}
+      ParseResult::None=>{ParseResult::Err(Message::from("解析失敗を確定"))}
+      ParseResult::Err(msg)=>{ParseResult::Err(msg)}
         }
     }
   ParseResult::None=>{ParseResult::None}
-  ParseResult::Err(e)=>{ParseResult::Err(e)}
+  ParseResult::Err(msg)=>{ParseResult::Err(msg)}
     }
 }
 
@@ -328,7 +328,7 @@ read_by_binary_operation(&mut self, l: &Expression, r: &Expression, op: &str)-> 
   (s) if s == "&" =>{self.read_and(  l,r)}
   (s) if s == "|" =>{self.read_or(   l,r)}
   (s) if s == "->"=>{self.read_arrow(l,r)}
-  _=>{ParseResult::Err(Error::new(format!("不明な演算子 {}",op)))}
+  _=>{ParseResult::Err(Message::new(format!("不明な演算子 {}",op)))}
     }
 }
 
@@ -472,7 +472,7 @@ read_by_definition(&mut self, def: &Definition)-> ParseResult
 
 
 pub fn
-parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<Node,Error>
+parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<Node,Message>
 {
   let  mut nd = Node::new(SourceInfo::new(),"");
 
@@ -527,34 +527,24 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<
 
       buf.push_str("\n --\n");
 
-      Err(tok.get_source_info().to_error(buf))
+      Err(tok.get_source_info().to_message()+buf)
     }
 }
 
 
 pub fn
-parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str)-> Result<Node,Error>
+parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str)-> Result<Node,Message>
 {
   let  file = std::rc::Rc::new(SourceFile::from_string(s));
 
   let  mut r = SourceReader::new(&file);
 
-    match r.read_token_string()
-    {
-  Ok(toks)=>
-    {
+  let  toks = r.read_token_string()?;
+
 //crate::token::print_token_string(&toks);
-      let  stripped = strip_spaces(toks);
+  let  stripped = strip_spaces(toks);
 
-      parse(&stripped,dic,main_def_name)
-    }
-  Err(e)=>
-    {
-      let  message = format!("字句解析エラー: {}",&e.to_string());
-
-      Err(Error::new(message))
-    }
-    }
+  parse(&stripped,dic,main_def_name)
 }
 
 

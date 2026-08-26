@@ -12,7 +12,7 @@ use super::decl::{
 
 use crate::source_file::{
   SourceInfo,
-  Error,
+  Message,
 
 };
 
@@ -664,7 +664,7 @@ push_brnz(&mut self, s: &str)
 
 
 pub fn
-try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str)-> Result<(),Error>
+try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str)-> Result<(),Message>
 {
   let  k = l.clone_ty_kind();
 
@@ -685,7 +685,7 @@ try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str
       TyKind::I64=>{self.push_opcode(Opcode::Ld_i64);}
       _=>
         {
-          return Err(srcinf.to_error(format!("push_assign error: invalid type load")));
+          return Err(srcinf.to_message()+"push_assign error: invalid type load");
         }
         }
     }
@@ -715,7 +715,7 @@ try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str
    TyKind::I64=>{self.push_opcode(Opcode::St_i64);}
   _=>
     {
-      return Err(srcinf.to_error(format!("push_assign error: invalid type store")));
+      return Err(srcinf.to_message()+"push_assign error: invalid type store");
     }
     }
 

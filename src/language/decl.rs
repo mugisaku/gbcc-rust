@@ -4,7 +4,7 @@ use crate::node::*;
 
 use crate::source_file::{
   SourceInfo,
-  Error,
+  Message,
 
 };
 
@@ -606,7 +606,7 @@ collect_static(&mut self, ss: &mut StaticSet)
 
 
 pub fn
-initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, set: &DeclSet)-> Result<(),Error>
+initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, set: &DeclSet)-> Result<(),Message>
 {
   let  mut ptr = dst.as_mut_ptr() as *mut i64;
 
@@ -626,7 +626,7 @@ initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, set: &DeclSet)-
 
           ptr = unsafe{ptr.add(1)};
         }
-      None=>{return Err(e.get_source_info().to_error(format!("initialize_content error: const value eval is failed")))}
+      None=>{return Err(e.get_source_info().to_message()+"initialize_content error: const value eval is failed")}
         }
 
 
@@ -639,7 +639,7 @@ initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, set: &DeclSet)-
 
 
 pub fn
-build_const_data(&mut self)-> Result<(),Error>
+build_const_data(&mut self)-> Result<(),Message>
 {
   let  srcinf = &self.source_info;
   let     set = unsafe{&*self.set_ptr};
@@ -651,7 +651,7 @@ build_const_data(&mut self)-> Result<(),Error>
         match evaluate_const(&e,set,None)
         {
       Some(i)=>{*v = i;}
-      None=>{return Err(srcinf.to_error(format!("constの初期化に失敗")));}
+      None=>{return Err(srcinf.to_message()+"constの初期化に失敗");}
         }
     }
   DeclKind::Static(inf)=>
@@ -661,7 +661,7 @@ build_const_data(&mut self)-> Result<(),Error>
             match evaluate_const(&e,set,None)
             {
           Some(i)=>{inf.length = i as usize;}
-          None=>{return Err(srcinf.to_error(format!("staticの要素数の算出に失敗")));}
+          None=>{return Err(srcinf.to_message()+"staticの要素数の算出に失敗");}
             }
         }
 
@@ -680,7 +680,7 @@ build_const_data(&mut self)-> Result<(),Error>
     }
   DeclKind::Var(_)=>
     {
-      return Err(srcinf.to_error(format!("グローバル変数の宣言はvarではなくstaticを使ってください")));
+      return Err(srcinf.to_message()+"グローバル変数の宣言はvarではなくstaticを使ってください");
     }
   _=>{}
     }
@@ -691,28 +691,23 @@ build_const_data(&mut self)-> Result<(),Error>
 
 
 pub fn
-read(s: &str)-> Result<Self,Error>
+read(s: &str)-> Result<Self,Message>
 {
   use crate::syntax::dictionary::Dictionary;
 
   let  dic = super::dictionary::get_dictionary();
 
-    match crate::syntax::parse::parse_from_string(s,dic,"declaration")
-    {
-   Ok(nd)=>
-    {
-      let  mut cur = nd.cursor();
+  let  nd = crate::syntax::parse::parse_from_string(s,dic,"declaration")?;
 
-        if let Some(decl_nd) = cur.select_node("declaration")
-        {
-          read_decl(decl_nd)
-        }
+  let  mut cur = nd.cursor();
 
-      else
-        {Err(Error::new(format!("no decl")))}
+    if let Some(decl_nd) = cur.select_node("declaration")
+    {
+      read_decl(decl_nd)
     }
-  Err(e)=>{Err(e)}
-    }
+
+  else
+    {Err(Message::new(format!("no decl")))}
 }
 
 
@@ -971,7 +966,7 @@ read_fn_decl(start_nd: &Node)-> (String,FnDecl)
 
 
 pub fn
-read_mod(start_nd: &Node)-> Result<(String,DeclSet),Error>
+read_mod(start_nd: &Node)-> Result<(String,DeclSet),Message>
 {
   let  source_info = start_nd.get_source_info().clone();
 
@@ -989,18 +984,11 @@ read_mod(start_nd: &Node)-> Result<(String,DeclSet),Error>
 
         while let Some(nd) = cur.select_node("declaration")
         {
-            match read_decl(nd)
-            {
-          Ok(decl)=>
-            {
-                match set.insert(decl)
-                {
-              Ok(())=>{cur.advance(1);}
-              Err(e)=>{return Err(e);}
-                }
-            }
-          Err(e)=>{return Err(e);}
-            }
+          let  decl = read_decl(nd)?;
+
+          set.insert(decl)?;
+
+          cur.advance(1);
         }
 
 
@@ -1014,7 +1002,7 @@ read_mod(start_nd: &Node)-> Result<(String,DeclSet),Error>
 
 
 pub fn
-read_decl(start_nd: &Node)-> Result<Decl,Error>
+read_decl(start_nd: &Node)-> Result<Decl,Message>
 {
   let  mut decl = Decl::new();
 
@@ -1077,20 +1065,15 @@ read_decl(start_nd: &Node)-> Result<Decl,Error>
       else
         if nd_name == "mod"
         {
-            match read_mod(nd)
-            {
-          Ok((name,set))=>
-            {
-              decl.name = name;
-              decl.kind = DeclKind::Mod(Box::new(set));
-            }
-          Err(e)=>{return Err(e);}
-            }
+          let  (name,set) = read_mod(nd)?;
+
+          decl.name = name;
+          decl.kind = DeclKind::Mod(Box::new(set));
         }
 
       else
         {
-          return Err(decl.source_info.to_error(format!("{} is unknown decl",nd_name)));
+          return Err(decl.source_info.to_message()+format!("{} is unknown decl",nd_name));
         }
 
 
@@ -1098,7 +1081,7 @@ read_decl(start_nd: &Node)-> Result<Decl,Error>
     }
 
 
-  Err(decl.source_info.to_error(format!("read_decl error")))
+  Err(decl.source_info.to_message()+"read_decl error")
 }
 
 
@@ -1213,7 +1196,7 @@ as_decl(&self)-> &Decl
 
 
 pub fn
-read(s: &str)-> Result<Box<Self>,Error>
+read(s: &str)-> Result<Box<Self>,Message>
 {
   use crate::syntax::dictionary::Dictionary;
 
@@ -1395,7 +1378,7 @@ add_const(&mut self, name: &str, v: i64)
 
 
 pub fn
-insert(&mut self, mut decl: Decl)-> Result<(),Error>
+insert(&mut self, mut decl: Decl)-> Result<(),Message>
 {
     if let DeclKind::Undef = &decl.kind
     {
@@ -1430,7 +1413,7 @@ insert(&mut self, mut decl: Decl)-> Result<(),Error>
   else
    if self.find(&decl.name).is_some()
     {
-      Err(decl.source_info.to_error(format!("{}という名前は既に存在している",&decl.name)))
+      Err(decl.source_info.to_message()+format!("{}という名前は既に存在している",&decl.name))
     }
 
   else
@@ -1511,7 +1494,7 @@ canonicalize(&mut self, parent_ptr: *mut Self, decl_ptr: *mut Decl)
 
 
 fn
-process_deps_relationship(&mut self)-> Result<(),Error>
+process_deps_relationship(&mut self)-> Result<(),Message>
 {
     for i in 0..self.decls.len()
     {
@@ -1529,7 +1512,7 @@ process_deps_relationship(&mut self)-> Result<(),Error>
             }
 
 
-          return Err(Error::new(msg));
+          return Err(Message::new(msg));
         }
 
 
@@ -1695,7 +1678,7 @@ get_const_or(&mut self, s: &str, defval: usize)-> usize
 
 
 pub fn
-finalize(&mut self)-> Result<(),Error>
+finalize(&mut self)-> Result<(),Message>
 {
   let  mut ss = StaticSet::new();
 
@@ -1754,7 +1737,7 @@ finalize(&mut self)-> Result<(),Error>
 
 
 fn
-write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
+write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Message>
 {
     for decl in &self.decls
     {
@@ -1788,7 +1771,7 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
 
                 if ((*pos)+bytes.len()) > Exec::MEMORY_SIZE
                 {
-                  return Err(Error::new(format!("プログラムおよびデータが、容量を超えている")));
+                  return Err(Message::from("プログラムおよびデータが、容量を超えている"));
                 }
 
 
@@ -1802,7 +1785,7 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
 
               *pos += bytes.len();
             }
-          Err(e)=>{return Err(Error::new(format!("関数{}のアセンブルに失敗",&q_name)).wrap(e));}
+          Err(msg)=>{return Err(msg+format!("関数{}のアセンブルに失敗",&q_name));}
             }
         }
       DeclKind::Const(_,v)=>
@@ -1829,7 +1812,7 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Error>
 
 
 pub fn
-generate_exec(&mut self)-> Result<Exec,Error>
+generate_exec(&mut self)-> Result<Exec,Message>
 {
   let  mut exec = Exec::new_with_memory();
 

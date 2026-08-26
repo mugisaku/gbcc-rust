@@ -4,7 +4,7 @@ use std::convert::{From, TryFrom};
 
 use crate::source_file::{
   SourceInfo,
-  Error,
+  Message,
 
 };
 
@@ -45,7 +45,7 @@ Operation
 
 
 fn
-try_get_const2(l: &Operand, r: &Operand)-> Result<(i64,i64),Error>
+try_get_const2(l: &Operand, r: &Operand)-> Result<(i64,i64),Message>
 {
   let  l = l.try_get_const()?;
   let  r = r.try_get_const()?;
@@ -69,7 +69,7 @@ to_bool(i: i64)-> bool
 
 
 pub fn
-try_get_const(&self)-> Result<i64,Error>
+try_get_const(&self)-> Result<i64,Message>
 {
     match self
     {
@@ -97,7 +97,7 @@ try_get_const(&self)-> Result<i64,Error>
       Opcode::Gteq=>{Ok(Self::to_i64(l >= r))}
       Opcode::Land=>{Ok(Self::to_i64(Self::to_bool(l) && Self::to_bool(r)))}
       Opcode::Lor =>{Ok(Self::to_i64(Self::to_bool(l) || Self::to_bool(r)))}
-      _=>{Err(lo.source_info.to_error(format!("try_get_const error: invalid binary opcode")))}
+      _=>{Err(lo.source_info.to_message()+"try_get_const error: invalid binary opcode")}
         }
     }
   Self::Unary(o,op)=>
@@ -109,15 +109,15 @@ try_get_const(&self)-> Result<i64,Error>
       Opcode::Not=>{Ok(!i)}
       Opcode::Lnot=>{Ok(Self::to_i64(i == 0))}
       Opcode::Neg=>{Ok(-i)}
-      _=>{Err(o.source_info.to_error(format!("try_get_const error: invalid unary opcode")))}
+      _=>{Err(o.source_info.to_message()+"try_get_const error: invalid unary opcode")}
         }
     }
   Self::LoadInt(i)=>{Ok(*i)}
-  Self::LoadPosFromFp(_)=>{Err(Error::new(format!("try_get_const error: load_pos_from_fp")))}
-  Self::LoadValue(o)=>{Err(o.source_info.to_error(format!("try_get_const error: load_value")))}
-  Self::Call(f,_) =>{Err(f.source_info.to_error(format!("try_get_const error: call")))}
-  Self::SymCall(srcinf,_,_) =>{Err(srcinf.to_error(format!("try_get_const error: sym call")))}
-  Self::Subsc(ref_o,_)=>{Err(ref_o.source_info.to_error(format!("try_get_const error: subsc")))}
+  Self::LoadPosFromFp(_)=>{Err(Message::from("try_get_const error: load_pos_from_fp"))}
+  Self::LoadValue(o)=>{Err(o.source_info.to_message()+"try_get_const error: load_value")}
+  Self::Call(f,_) =>{Err(f.source_info.to_message()+"try_get_const error: call")}
+  Self::SymCall(srcinf,_,_) =>{Err(srcinf.to_message()+"try_get_const error: sym call")}
+  Self::Subsc(ref_o,_)=>{Err(ref_o.source_info.to_message()+"try_get_const error: subsc")}
     }
 }
 
@@ -137,7 +137,7 @@ check_symbol(s: &'static str)-> Result<(UseArgs,Opcode),()>
 
 
 pub fn
-write_to(&self, txt: &mut AsmText)-> Result<(),Error>
+write_to(&self, txt: &mut AsmText)-> Result<(),Message>
 {
     match self
     {
@@ -202,7 +202,7 @@ write_to(&self, txt: &mut AsmText)-> Result<(),Error>
         }
       Err(())=>
         {
-          return Err(srcinf.to_error(format!("write_to error: symcall {}",s)));
+          return Err(srcinf.to_message()+format!("write_to error: symcall {}",s));
         }
         }
     }
@@ -222,7 +222,7 @@ write_to(&self, txt: &mut AsmText)-> Result<(),Error>
         }
 
       else
-        {return Err(ref_o.source_info.to_error(format!("write_to error: subsc for non deref")));}
+        {return Err(ref_o.source_info.to_message()+"write_to error: subsc for non deref")}
     }
     }
 
@@ -421,14 +421,14 @@ make_unary(source_info: SourceInfo, o: Self, op: Opcode)-> Self
 
 
 pub fn
-try_get_const(&self)-> Result<i64,Error>
+try_get_const(&self)-> Result<i64,Message>
 {
     match &self.kind
     {
-  OperandKind::Undef(s)=>{Err(self.source_info.to_error(format!("{}",s)))}
-  OperandKind::Symbol(s)=>{Err(self.source_info.to_error(format!("{}",s)))}
+  OperandKind::Undef(s)=>{Err(self.source_info.to_message()+format!("{}",s))}
+  OperandKind::Symbol(s)=>{Err(self.source_info.to_message()+format!("{}",s))}
   OperandKind::Value(o)=>{o.try_get_const()}
-  OperandKind::Deref(_,_)=>{Err(self.source_info.to_error(format!("")))}
+  OperandKind::Deref(_,_)=>{Err(self.source_info.to_message()+"deref")}
     }
 }
 
@@ -464,12 +464,12 @@ try_get_load_op(k: &TyKind)-> Result<Opcode,()>
 
 
 pub fn
-write_to(&self, loading: bool, txt: &mut AsmText)-> Result<(),Error>
+write_to(&self, loading: bool, txt: &mut AsmText)-> Result<(),Message>
 {
     match &self.kind
     {
-  OperandKind::Undef(s)=>{return Err(self.source_info.to_error(format!("write_to error: undef {}",s)));}
-  OperandKind::Symbol(s)=>{return Err(self.source_info.to_error(format!("write_to error: symbol {}",s)));}
+  OperandKind::Undef(s)=>{return Err(self.source_info.to_message()+format!("write_to error: undef {}",s));}
+  OperandKind::Symbol(s)=>{return Err(self.source_info.to_message()+format!("write_to error: symbol {}",s));}
   OperandKind::Value(o)=>{o.write_to(txt)?}
   OperandKind::Deref(o,k)=>
     {
@@ -480,7 +480,7 @@ write_to(&self, loading: bool, txt: &mut AsmText)-> Result<(),Error>
             match Self::try_get_load_op(k)
             {
           Ok(op)=>{txt.push_opcode(op);}
-          Err(())=>{return Err(self.source_info.to_error(format!("write_to error: deref")));}
+          Err(())=>{return Err(self.source_info.to_message()+"write_to error: deref");}
             }
         }
     }

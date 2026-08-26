@@ -15,7 +15,7 @@ use crate::source_file::{
   SourceFile,
   SourceInfo,
   SourceReader,
-  Error,
+  Message,
   read_number,
   read_string,
 
@@ -75,7 +75,7 @@ is_id_body(c: char)-> bool
 
 
 fn
-read_data_that_begins_from_id_head(&mut self, first_c: char)-> Result<TokenKind,Error>
+read_data_that_begins_from_id_head(&mut self, first_c: char)-> Result<TokenKind,Message>
 {
   let  mut s = String::new();
 
@@ -126,13 +126,13 @@ read_data_that_begins_from_id_head(&mut self, first_c: char)-> Result<TokenKind,
 
 
 fn
-read_data_that_begins_from_single_quote(&mut self)-> Result<TokenKind,Error>
+read_data_that_begins_from_single_quote(&mut self)-> Result<TokenKind,Message>
 {
     if let Some(mut first_c) = self.get_character()
     {
         if first_c == '\''
         {
-          return Err(self.to_error(format!("空の文字リテラル")));
+          return Err(self.info.to_message()+"空の文字リテラル");
         }
 
 
@@ -190,7 +190,7 @@ read_data_that_begins_from_single_quote(&mut self)-> Result<TokenKind,Error>
 
           else
             {
-              Err(self.to_error(format!("不正な、アポトロフィー付き識別子: {} {}",first_c,second_c)))
+              Err(self.info.to_message()+format!("不正な、アポトロフィー付き識別子: {} {}",first_c,second_c))
             }
         }
 
@@ -206,19 +206,19 @@ read_data_that_begins_from_single_quote(&mut self)-> Result<TokenKind,Error>
 
       else
         {
-          Err(self.to_error(format!("不正な、アポトロフィー付き識別子: {}",first_c)))
+          Err(self.info.to_message()+format!("不正な、アポトロフィー付き識別子: {}",first_c))
         }
     }
 
   else
     {
-      Err(self.to_error(format!("シングルクオート後に何もない")))
+      Err(self.info.to_message()+"シングルクオート後に何もない")
     }
 }
 
 
 fn
-read_data_that_begins_from_slash(&mut self)-> Result<TokenKind,Error>
+read_data_that_begins_from_slash(&mut self)-> Result<TokenKind,Message>
 {
     if let Some(c) = self.get_character()
     {
@@ -228,11 +228,7 @@ read_data_that_begins_from_slash(&mut self)-> Result<TokenKind,Error>
 
           let  old_y = self.get_y();
 
-            if let Err(s) = self.skip_until_appears_end_of_comment_block()
-            {
-              return Err(self.to_error(s));
-            }
-
+          self.skip_until_appears_end_of_comment_block()?;
 
           return if old_y != self.get_y()
                  {
@@ -250,11 +246,7 @@ read_data_that_begins_from_slash(&mut self)-> Result<TokenKind,Error>
         {
           self.advance();
 
-            if let Err(s) = self.skip_until_appears_newline()
-            {
-              return Err(self.to_error(s));
-            }
-
+          self.skip_until_appears_newline()?;
 
           return Ok(TokenKind::Newline);
         }
@@ -266,7 +258,7 @@ read_data_that_begins_from_slash(&mut self)-> Result<TokenKind,Error>
 
 
 fn
-read_token_kind(&mut self)-> Result<TokenKind,Error>
+read_token_kind(&mut self)-> Result<TokenKind,Message>
 {
     if let Some(c) = self.get_character()
     {
@@ -336,11 +328,7 @@ read_token_kind(&mut self)-> Result<TokenKind,Error>
         {
           self.advance();
 
-            match self.read_data_that_begins_from_single_quote()
-            {
-          Ok(k)=>{Ok(k)}
-          Err(e)=>{Err(e)}
-            }
+          Ok(self.read_data_that_begins_from_single_quote()?)
         }
 
       else
@@ -353,7 +341,7 @@ read_token_kind(&mut self)-> Result<TokenKind,Error>
 
       else
         {
-          Err(self.to_error(format!("処理不能な文字 {}",c as u8)))
+          Err(self.info.to_message()+format!("処理不能な文字 {}",c as u8))
         }
     }
 
@@ -365,7 +353,7 @@ read_token_kind(&mut self)-> Result<TokenKind,Error>
 
 
 pub fn
-read_token(&mut self)-> Result<Token,Error>
+read_token(&mut self)-> Result<Token,Message>
 {
   let  info = self.info.clone();
 
@@ -378,27 +366,22 @@ read_token(&mut self)-> Result<Token,Error>
 
 
 pub fn
-read_token_string(&mut self)-> Result<TokenString,Error>
+read_token_string(&mut self)-> Result<TokenString,Message>
 {
   let  mut buf = TokenString::new();
 
     loop
     {
-        match self.read_token()
-        {
-     Ok(tok)=>
-        {
-            if let TokenKind::Null = tok.get_kind()
-            {
-              break;
-            }
+      let  tok = self.read_token()?;
 
-          else
-            {
-              buf.push(tok);
-            }
+        if let TokenKind::Null = tok.get_kind()
+        {
+          break;
         }
-     Err(e)=>{return Err(e);}
+
+      else
+        {
+          buf.push(tok);
         }
     }
 

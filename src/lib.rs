@@ -129,17 +129,17 @@ compile(s: &str)-> bool
 
                   true
                 }
-              Err(e)=>
+              Err(msg)=>
                 {
-                  ERR_MSG = e.to_string();
+                  ERR_MSG = msg.to_string();
 
                   false
                 }
                 }
             }
-          Err(e)=>
+          Err(msg)=>
             {
-              ERR_MSG = e.to_string();
+              ERR_MSG = msg.to_string();
 
               false
             }

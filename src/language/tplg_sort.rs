@@ -2,7 +2,7 @@
 
 use crate::source_file::{
   SourceInfo,
-  Error,
+  Message,
 
 };
 
@@ -91,7 +91,7 @@ step(nodes: &mut Vec<TplgNode>, remains: &mut Vec<TplgNode>)-> Vec<TplgNode>
 
 
 pub fn
-tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<usize>,Error>
+tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<usize>,Message>
 {
   let  mut remains = Vec::<TplgNode>::new();
   let  mut  output = Vec::<usize>::new();
@@ -115,7 +115,7 @@ tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<usize>,Error>
 
           s.push_str("\nが残った");
 
-          return Err(Error::new(s));
+          return Err(Message::new(s));
         }
 
 

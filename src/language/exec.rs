@@ -10,7 +10,7 @@ use super::evaluate::*;
 
 use crate::source_file::{
   SourceInfo,
-  Error,
+  Message,
 
 };
 

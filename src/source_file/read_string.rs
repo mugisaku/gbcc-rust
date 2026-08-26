@@ -10,7 +10,7 @@ use crate::source_file::{
   SourceFile,
   SourceInfo,
   SourceReader,
-  Error,
+  Message,
 
 };
 
@@ -23,7 +23,7 @@ SourceReader
 
 
 pub fn
-read_raw_string(&mut self)-> Result<String,Error>
+read_raw_string(&mut self)-> Result<String,Message>
 {
   let  begin_n = self.read_sharps();
 
@@ -69,12 +69,12 @@ read_raw_string(&mut self)-> Result<String,Error>
             }
 
 
-          return Err(self.info.to_error(format!("生文字列が閉じられていない")));
+          return Err(self.info.to_message()+"生文字列が閉じられていない");
         }
     }
 
 
-  Err(self.info.to_error(format!("生文字列の始まりが不正")))
+  Err(self.info.to_message()+"生文字列の始まりが不正")
 }
 
 
@@ -137,7 +137,7 @@ to_hexadecimal(c: char)-> Result<u32,()>
 
 
 fn
-to_unicode(a: char, b: char, c: char, d: char)-> Result<char,String>
+to_unicode(a: char, b: char, c: char, d: char)-> Result<char,Message>
 {
     if let Ok(aa) = Self::to_hexadecimal(a){
     if let Ok(bb) = Self::to_hexadecimal(b){
@@ -156,12 +156,12 @@ to_unicode(a: char, b: char, c: char, d: char)-> Result<char,String>
     }}}}
 
 
-  Err(format!("１６進数ではない文字"))
+  Err(Message::new(format!("１６進数ではない文字")))
 }
 
 
 fn
-read_unicode_escape_sequence(&mut self)-> Result<char,Error>
+read_unicode_escape_sequence(&mut self)-> Result<char,Message>
 {
     if let Some(a) = self.get_character()
     {
@@ -179,23 +179,19 @@ read_unicode_escape_sequence(&mut self)-> Result<char,Error>
                 {
                   self.advance();
 
-                    match Self::to_unicode(a,b,c,d)
-                    {
-                  Ok(c)=>{return Ok(c);}
-                  Err(s)=>{return Err(self.info.to_error(s));}
-                    }
+                  Self::to_unicode(a,b,c,d)?;
                 }
             }
         }
     }
 
 
-  Err(self.info.to_error(format!("処理すべき文字が足りなし")))
+  Err(self.info.to_message()+"処理すべき文字が足りなし")
 }
 
 
 pub fn
-read_escape_sequence(&mut self)-> Result<char,Error>
+read_escape_sequence(&mut self)-> Result<char,Message>
 {
     if let Some(c) = self.get_character()
     {
@@ -224,21 +220,21 @@ read_escape_sequence(&mut self)-> Result<char,Error>
     }
 
 
-  Err(self.info.to_error(format!("処理すべき文字がない")))
+  Err(self.info.to_message()+"処理すべき文字がない")
 }
 
 
 pub fn
-read_character(&mut self)-> Result<char,Error>
+read_character(&mut self)-> Result<char,Message>
 {
     if let Some(c) = self.get_character()
     {
         match c
         {
-      '\0'=> {return Err(self.info.to_error(format!("Null文字が出現")));},
-      '\r'=> {return Err(self.info.to_error(format!("復帰文字が出現")));},
-      '\t'=> {return Err(self.info.to_error(format!("タブ文字が出現")));},
-      '\n'=> {return Err(self.info.to_error(format!("改行文字が出現")));},
+      '\0'=> {return Err(self.info.to_message()+"Null文字が出現");},
+      '\r'=> {return Err(self.info.to_message()+"復帰文字が出現");},
+      '\t'=> {return Err(self.info.to_message()+"タブ文字が出現");},
+      '\n'=> {return Err(self.info.to_message()+"改行文字が出現");},
       '\\'=>
         {
           self.advance();
@@ -256,13 +252,13 @@ read_character(&mut self)-> Result<char,Error>
 
   else
     {
-      Err(self.to_error(format!("処理すべき文字がない")))
+      Err(self.info.to_message()+"処理すべき文字がない")
     }
 }
 
 
 pub fn
-read_string(&mut self)-> Result<String,Error>
+read_string(&mut self)-> Result<String,Message>
 {
   let  mut s = String::new();
 

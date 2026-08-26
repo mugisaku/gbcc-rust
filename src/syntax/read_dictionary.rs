@@ -6,7 +6,7 @@ use crate::source_file::{
   SourceFile,
   SourceInfo,
   SourceReader,
-  Error,
+  Message,
 
 };
 
@@ -31,45 +31,39 @@ use super::dictionary::{
 
 
 fn
-to_literal(s: &str)-> Result<Expression,String>
+to_literal(s: &str)-> Result<Expression,Message>
 {
        if s == "Identifier"{Ok(Expression::IdentifierLiteral)}
   else if s ==     "Number"{Ok(Expression::NumberLiteral    )}
   else if s ==  "Character"{Ok(Expression::CharacterLiteral )}
   else if s ==     "String"{Ok(Expression::StringLiteral    )}
   else
-    {Err(format!("{} is unknown literal keyword",s))}
+    {Err(Message::new(format!("{} is unknown literal keyword",s)))}
 }
 
 
 fn
-read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: char)-> Result<Expression,String>
+read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: char)-> Result<Expression,Message>
 {
     match c
     {
   '('=>
     {
-        match read_binary_string(toks,pos,")")
-        {
-      Ok(e)=>{Ok(Expression::Expression(Box::new(e)))}
-      Err(s)=>{Err(s)}
-        }
+      let  e = read_binary_string(toks,pos,")")?;
+
+      Ok(Expression::Expression(Box::new(e)))
     }
   '['=>
     {
-        match read_binary_string(toks,pos,"]")
-        {
-      Ok(e)=>{Ok(Expression::Option(Box::new(e)))}
-      Err(s)=>{Err(s)}
-        }
+      let  e = read_binary_string(toks,pos,"]")?;
+
+      Ok(Expression::Option(Box::new(e)))
     }
   '{'=>
     {
-        match read_binary_string(toks,pos,"}")
-        {
-      Ok(e)=>{Ok(Expression::Repetition(Box::new(e)))}
-      Err(s)=>{Err(s)}
-        }
+      let  e = read_binary_string(toks,pos,"}")?;
+
+      Ok(Expression::Repetition(Box::new(e)))
     }
   '.'=>
     {
@@ -81,15 +75,15 @@ read_operand_that_begins_others_token(toks: &Vec<Token>, pos: &mut usize, c: cha
         }
 
       else
-        {Err(format!("literal keyword is missing"))}
+        {Err(Message::from("literal keyword is missing"))}
     }
-  _=>{Err(format!("unknown others element"))}
+  _=>{Err(Message::from("unknown others element"))}
     }
 }
 
 
 fn
-read_operand(toks: &Vec<Token>, pos: &mut usize)-> Result<Expression,String>
+read_operand(toks: &Vec<Token>, pos: &mut usize)-> Result<Expression,Message>
 {
     if let Some(tok) = get_token(toks,*pos)
     {
@@ -123,23 +117,19 @@ read_operand(toks: &Vec<Token>, pos: &mut usize)-> Result<Expression,String>
         {
           advance(pos);
 
-            match read_operand_that_begins_others_token(toks,pos,*c)
-            {
-          Ok(o)=>{Ok(o)}
-          Err(s)=>{Err(s)}
-            }
+          Ok(read_operand_that_begins_others_token(toks,pos,*c)?)
         }
-      _=>{Err(format!("unknown operand element"))}
+      _=>{Err(Message::from("unknown operand element"))}
         }
     }
 
   else
-    {Err(format!("オペランドがない"))}
+    {Err(Message::from("オペランドがない"))}
 }
 
 
 fn
-read_operator(toks: &Vec<Token>, pos: &mut usize)-> Result<&'static str,String>
+read_operator(toks: &Vec<Token>, pos: &mut usize)-> Result<&'static str,Message>
 {
        if read_string_of_others(toks,pos, "&"){Ok("&")}
   else if read_string_of_others(toks,pos, "|"){Ok("|")}
@@ -149,12 +139,12 @@ read_operator(toks: &Vec<Token>, pos: &mut usize)-> Result<&'static str,String>
   else if read_string_of_others(toks,pos, "}"){Ok("}")}
   else if read_string_of_others(toks,pos, ";"){Ok(";")}
   else
-    {Err(format!("不明な演算子"))}
+    {Err(Message::from("不明な演算子"))}
 }
 
 
 pub fn
-read_binary_string(toks: &Vec<Token>, pos: &mut usize, closer: &'static str)-> Result<Expression,String>
+read_binary_string(toks: &Vec<Token>, pos: &mut usize, closer: &'static str)-> Result<Expression,Message>
 {
     match read_operand(toks,pos)
     {
@@ -162,47 +152,42 @@ read_binary_string(toks: &Vec<Token>, pos: &mut usize, closer: &'static str)-> R
     {
         loop
         {
-            match read_operator(toks,pos)
-            {
-          Ok(op)=>
-            {
-                if op == closer
-                {
-                  return Ok(left_o);
-                }
+          let  op = read_operator(toks,pos)?;
 
-              else
-                if (op == ")") || (op == "]") || (op == "}") || (op == ";")
-                {
-                  return Err(format!("wrong closer {}",closer));
-                }
-
-              else
-                {
-                    match read_operand(toks,pos)
-                    {
-                  Ok(right_o)=>
-                    {
-                      left_o = Expression::BinaryOperation(Box::new(left_o),Box::new(right_o),op.to_string());
-                    }
-                  Err(e)=>
-                    {
-                      return Err(format!("right operand is missing"));
-                    }
-                    }
-                }
+            if op == closer
+            {
+              return Ok(left_o);
             }
-          Err(s)=>{return Err(s);}
+
+          else
+            if (op == ")") || (op == "]") || (op == "}") || (op == ";")
+            {
+              return Err(Message::new(format!("wrong closer {}",closer)));
+            }
+
+          else
+            {
+                match read_operand(toks,pos)
+                {
+              Ok(right_o)=>
+                {
+                  left_o = Expression::BinaryOperation(Box::new(left_o),Box::new(right_o),op.to_string());
+                }
+              Err(msg)=>
+                {
+                  return Err(msg+"right operand is missing");
+                }
+                }
             }
         }
     }
-  Err(e)=>{Err(format!("{}\nオペランドが一つもない",&e))}
+  Err(msg)=>{Err(msg+"オペランドが一つもない")}
     }
 }
 
 
 pub fn
-read_definition(toks: &Vec<Token>, pos: &mut usize)-> Result<Option<Definition>,String>
+read_definition(toks: &Vec<Token>, pos: &mut usize)-> Result<Option<Definition>,Message>
 {
     if let Some(first_tok) = get_token(toks,*pos)
     {
@@ -229,12 +214,12 @@ read_definition(toks: &Vec<Token>, pos: &mut usize)-> Result<Option<Definition>,
 
               Ok(Some(def))
             }
-          Err(err_s)=>{Err(format!("{}の定義中のエラー: {}",s,err_s))}
+          Err(msg)=>{Err(msg+format!("{}の定義中のエラー",s))}
             }
         }
 
       else
-        {Err(format!("定義の開始が不正"))}
+        {Err(Message::from("定義の開始が不正"))}
     }
 
   else
@@ -243,40 +228,27 @@ read_definition(toks: &Vec<Token>, pos: &mut usize)-> Result<Option<Definition>,
 
 
 pub fn
-read_dictionary(file: &Rc<SourceFile>)-> Result<Dictionary,Error>
+read_dictionary(file: &Rc<SourceFile>)-> Result<Dictionary,Message>
 {
   let  mut dic = Dictionary::new();
 
   let  mut r = SourceReader::new(file);
 
-    match r.read_token_string()
-    {
-  Ok(toks)=> 
-    {
-      let  stripped = strip_spaces(toks);
+  let  toks = r.read_token_string()?;
 
-      let  mut pos: usize = 0;
+  let  stripped = strip_spaces(toks);
 
-        loop
+  let  mut pos: usize = 0;
+
+    loop
+    {
+      let  def_opt = read_definition(&stripped,&mut pos)?;
+
+        match def_opt
         {
-            match read_definition(&stripped,&mut pos)
-            {
-          Ok(def_opt)=>
-            {
-                match def_opt
-                {
-              Some(def)=>{dic.add(def);}
-              None=>{return Ok(dic);}
-                }
-            }
-          Err(s)=>{return Err(Error::new(s));}
-            }
+      Some(def)=>{dic.add(def);}
+      None=>{return Ok(dic);}
         }
-    }
-  Err(e)=>
-    {
-      Err(Error::new(format!("辞書字句解析エラー")).wrap(e))
-    }
     }
 }
 

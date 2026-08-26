@@ -3,7 +3,7 @@
 use crate::node::*;
 use crate::source_file::{
   SourceInfo,
-  Error,
+  Message,
 
 };
 
