@@ -392,17 +392,6 @@ make_load_local(source_info: SourceInfo, offset: isize)-> Self
 
 
 pub fn
-make_load_fn(source_info: SourceInfo, offset: usize)-> Self
-{
-  let  o = Operand::make_load_global(source_info.clone(),offset);
-
-  let  un = Operation::Unary(o,Opcode::Ld_i64);
-
-  Operand{source_info, kind: OperandKind::Value(Box::new(un))}
-}
-
-
-pub fn
 make_binary(source_info: SourceInfo, l: Self, r: Self, op: Opcode)-> Self
 {
   let  bin = Operation::Binary(l,r,op);
@@ -597,13 +586,16 @@ evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operan
         if s == "ptr"{Operand{source_info, kind: OperandKind::Value(op)}}
       else
         {
-               if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I8 )}}
-          else if s == "i16ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I16)}}
-          else if s == "i32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I32)}}
-          else if s == "i64ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I64)}}
-          else if s ==  "u8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U8 )}}
-          else if s == "u16ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U16)}}
-          else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U32)}}
+          let  new_o = Operand{source_info: source_info.clone(), kind: OperandKind::Deref(op,k)};
+          let  new_op = Box::new(Operation::LoadValue(new_o));
+
+               if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I8 )}}
+          else if s == "i16ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I16)}}
+          else if s == "i32ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I32)}}
+          else if s == "i64ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I64)}}
+          else if s ==  "u8ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U8 )}}
+          else if s == "u16ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U16)}}
+          else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U32)}}
           else
             {
               Operand::make_undef(source_info,format!("evaluate_dot case deref: {}",s))
@@ -693,7 +685,7 @@ evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt:
         }
       DeclKind::Fn(_)=>
         {
-          Operand::make_load_fn(source_info,decl.get_offset())
+          Operand::make_load_global(source_info,decl.get_offset())
         }
       _=>{Operand::make_undef(source_info,format!("evaluate_identifier case global: {} is found in global, but invalid",name))}
         }

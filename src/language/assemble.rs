@@ -317,15 +317,28 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
             }
 
 
-          let  off = scp.add_var(decl.get_name(),len);
+          let  mut off = scp.add_var(decl.get_name(),len);
 
-/*
-          let  l = evaluate(e,set,Some(scp));
+            if let Some(exprs) = inf.get_init_exprs_opt()
+            {
+                for e in exprs
+                {
+                    if len == 0
+                    {
+                      return Err(e.get_source_info().to_message()+"初期化式が多い");
+                    }
 
-          let  r = Operand::make_load_local(off,inf.get_ty_kind().clone());
 
-          output.try_push_assign(srcinf,l,r,"=")
-*/
+                  let  l = Operand::make_load_local(srcinf.clone(),off);
+                  let  r = evaluate(e,set,Some(scp));
+
+                  output.try_push_assign(srcinf,l,r,"=")?;
+
+                  off += WORD_SIZE as isize;
+                  len -= 1;
+                }
+            }
+
 
           Ok(())
         }

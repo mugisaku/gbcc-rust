@@ -40,11 +40,11 @@ const  CHR_H = 40;
 fn
 sleep(tm)
 {
-  var  base = sys::timer();
+  var  base = sys.timer();
 
     loop
     {
-        if (sys::timer()-base) >= tm
+        if (sys.timer()-base) >= tm
         {
           break;
         }
@@ -104,7 +104,7 @@ print_int(i,f,x,y,w,pixel)
 fn
 print8_unicode(u,x,y,pixel)
 {
-  var  ptr = FONT8_START.ptr+(8*u);
+  var  ptr = FONT8_START+(8*u);
 
     for y_off in 8
     {
@@ -128,7 +128,7 @@ print8_unicode(u,x,y,pixel)
 fn
 print14_unicode(u,x,y,pixel)
 {
-  var  ptr = FONT14_START.ptr+(2*14*u);
+  var  ptr = FONT14_START+(2*14*u);
 
     for y_off in 14
     {
@@ -289,11 +289,11 @@ object_proc()
 {
   loop
   {
-    var  input = sys::input();
+    var  input = sys.input();
 
       if input&Z_KEY
       {
-        sys::spawn(test,g_x,g_y);
+        sys.spawn(test,g_x,g_y);
       }
 
 
@@ -329,9 +329,8 @@ main()
 {
   video = video_field.ptr;
 
-  spawn(video_proc);
-  spawn(object_proc);
-
+  sys.spawn(video_proc);
+  sys.spawn(object_proc);
 }
 
 

@@ -373,6 +373,8 @@ spawn(&mut self, mut arg_n: u64)-> StepResult
 
     if ptr == std::ptr::null_mut()
     {
+      self.push(0);
+
       return StepResult::Ok;
     }
 
@@ -398,6 +400,8 @@ spawn(&mut self, mut arg_n: u64)-> StepResult
   baby.sp += WORD_SIZE*3;
 
   baby.fp = baby.sp;
+
+  self.push(1);
 
   StepResult::Spawned
 }
@@ -738,6 +742,11 @@ step(&mut self)-> StepResult
         if arg_n > 0
         {
           return self.spawn(arg_n);
+        }
+
+      else
+        {
+          self.push(0);
         }
     }
   (op) if op == Opcode::Die as u8=>

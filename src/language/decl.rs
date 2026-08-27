@@ -342,6 +342,13 @@ get_length_expr_opt(&self)-> &Option<Expr>
 
 
 pub fn
+get_init_exprs_opt(&self)-> &Option<Vec<Expr>>
+{
+  &self.init_exprs_opt
+}
+
+
+pub fn
 get_size(&self)-> usize
 {
   WORD_SIZE*self.length
