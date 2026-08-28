@@ -100,8 +100,7 @@ main()
 
   var  ptr = tmp.ptr;
 
-//  return (2753424+8).i64ref;
-  return ptr.i64ref;
+  return ptr.i64rf;
 }
 
 

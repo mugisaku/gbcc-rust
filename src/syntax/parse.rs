@@ -45,7 +45,7 @@ ParseResult
 {
   Some(Vec<Value>),
   None,
-  Err(Message),
+  Err(Message,usize),
 
 }
 
@@ -60,6 +60,8 @@ Status<'a,'b>
   position: usize,
      depth: usize,
 
+  max_position: usize,
+
 }
 
 
@@ -72,6 +74,8 @@ fn
 advance(&mut self)
 {
   self.position += 1;
+
+  self.max_position = std::cmp::max(self.max_position,self.position);
 }
 
 
@@ -101,7 +105,7 @@ read_repetition(&mut self, e: &Expression)-> ParseResult
             {
           ParseResult::Some(mut vals)=>{first_vals.append(&mut vals);}
           ParseResult::None=>{break;}
-          ParseResult::Err(msg)=>{return ParseResult::Err(msg);}
+          ParseResult::Err(msg,pos)=>{return ParseResult::Err(msg,pos);}
             }
         }
 
@@ -109,7 +113,7 @@ read_repetition(&mut self, e: &Expression)-> ParseResult
       ParseResult::Some(first_vals)
     }
   ParseResult::None=>{ParseResult::None}
-  ParseResult::Err(msg)=>{ParseResult::Err(msg)}
+  ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
     }
 }
 
@@ -167,7 +171,7 @@ read_number_literal(&mut self)-> ParseResult
 
               ParseResult::Some(vec![Value::new(info,kind)])
             }
-          Err(_)=>{ParseResult::Err(info.to_message()+"整数が不正")}
+          Err(_)=>{ParseResult::Err(info.to_message()+"整数が不正",self.position)}
             }
         }
 
@@ -181,7 +185,7 @@ read_number_literal(&mut self)-> ParseResult
 
               ParseResult::Some(vec![Value::new(info,kind)])
             }
-          Err(_)=>{ParseResult::Err(info.to_message()+"浮動小数点数が不正")}
+          Err(_)=>{ParseResult::Err(info.to_message()+"浮動小数点数が不正",self.position)}
             }
         }
     }
@@ -220,7 +224,7 @@ read_by_identifier(&mut self, s: &str)-> ParseResult
     {
         if self.depth >= 800
         {
-          return ParseResult::Err(Message::from("read_by_identifier: depth limit is over"));
+          return ParseResult::Err(Message::from("read_by_identifier: depth limit is over"),self.position);
         }
 
 
@@ -228,7 +232,7 @@ read_by_identifier(&mut self, s: &str)-> ParseResult
     }
 
   else
-    {ParseResult::Err(Message::new(format!("read_by_identifier: {}という定義はない",s)))}
+    {ParseResult::Err(Message::new(format!("read_by_identifier: {}という定義はない",s)),self.position)}
 }
 
 
@@ -255,11 +259,11 @@ read_and(&mut self, l: &Expression, r: &Expression)-> ParseResult
 
           ParseResult::None
         }
-      ParseResult::Err(e)=>{ParseResult::Err(e)}
+      ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
         }
     }
   ParseResult::None=>{ParseResult::None}
-  ParseResult::Err(e)=>{ParseResult::Err(e)}
+  ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
     }
 }
 
@@ -285,10 +289,10 @@ read_or(&mut self, l: &Expression, r: &Expression)-> ParseResult
 
           ParseResult::None
         }
-      ParseResult::Err(e)=>{ParseResult::Err(e)}
+      ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
         }
     }
-  ParseResult::Err(e)=>{ParseResult::Err(e)}
+  ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
     }
 }
 
@@ -310,12 +314,12 @@ read_arrow(&mut self, l: &Expression, r: &Expression)-> ParseResult
 
           ParseResult::Some(l_vals)
         }
-      ParseResult::None=>{ParseResult::Err(Message::from("解析失敗を確定"))}
-      ParseResult::Err(msg)=>{ParseResult::Err(msg)}
+      ParseResult::None=>{ParseResult::Err(Message::from("解析失敗を確定"),self.position)}
+      ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
         }
     }
   ParseResult::None=>{ParseResult::None}
-  ParseResult::Err(msg)=>{ParseResult::Err(msg)}
+  ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
     }
 }
 
@@ -328,7 +332,7 @@ read_by_binary_operation(&mut self, l: &Expression, r: &Expression, op: &str)-> 
   (s) if s == "&" =>{self.read_and(  l,r)}
   (s) if s == "|" =>{self.read_or(   l,r)}
   (s) if s == "->"=>{self.read_arrow(l,r)}
-  _=>{ParseResult::Err(Message::new(format!("不明な演算子 {}",op)))}
+  _=>{ParseResult::Err(Message::new(format!("不明な演算子 {}",op)),self.position)}
     }
 }
 
@@ -343,9 +347,9 @@ read_by_expression(&mut self, e: &Expression)-> ParseResult
     {
         match self.read_by_expression(op_e)
         {
-      ParseResult::Some(vals)=>{ParseResult::Some(vals)}
-      ParseResult::None      =>{ParseResult::Some(vec![])}
-      ParseResult::Err(e)    =>{ParseResult::Err(e)}
+      ParseResult::Some(vals)  =>{ParseResult::Some(vals)}
+      ParseResult::None        =>{ParseResult::Some(vec![])}
+      ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
         }
     }
   Expression::Repetition(rep_e)=>{self.read_repetition(rep_e)}
@@ -457,7 +461,7 @@ read_by_definition(&mut self, def: &Definition)-> ParseResult
 
           ParseResult::None
         }
-      ParseResult::Err(e)=>{ParseResult::Err(e)}
+      ParseResult::Err(msg,pos)=>{ParseResult::Err(msg,pos)}
         }
     }
 
@@ -481,6 +485,7 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<
                   token_string: toks,
                   position: 0,
                   depth: 0,
+                  max_position: 0,
                 };
 
 
@@ -499,9 +504,16 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<
 
 
           nd.add_value_list(vals);
+
+          st.max_position = st.position;
         }
       ParseResult::None=>{break;}
-      ParseResult::Err(e)=>{return Err(e);}
+      ParseResult::Err(msg,pos)=>
+        {
+          let  tok = &toks[pos];
+
+          return Err(msg+tok.get_source_info().to_string());
+        }
         }
 
 
@@ -518,7 +530,7 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<
     {
       let  mut buf = String::new();
 
-      let  tok = &toks[st.position];
+      let  tok = &toks[st.max_position];
 
       buf.push_str("解析途中で停止\n");
       buf.push_str(" --\n");

@@ -12,7 +12,7 @@ static noi_vol ;
 
 static report;
 
-static video_field[VIDEO_W*VIDEO_H/2];
+static video_field[VIDEO_W/2*VIDEO_H];
 
 const VIDEO_W = 400;
 const VIDEO_H = 200;
@@ -56,9 +56,16 @@ sleep(tm)
 
 
 fn
+dot2(x,y,pixel)
+{
+  video_field.u32ref[VIDEO_W*y][x] = pixel;
+}
+
+
+fn
 dot(x,y,pixel)
 {
-  video_field.u32ref[(VIDEO_W*y)+x] = pixel;
+  (video_field.ptr+(4*VIDEO_W*y)+(4*x)).u32ref = pixel;
 }
 
 
