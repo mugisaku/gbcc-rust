@@ -184,7 +184,7 @@ write_to(&self, txt: &mut AsmText)-> Result<(),Message>
         {
       Ok((use_args,op))=>
         {
-            if let UseArgs = use_args
+            if let UseArgs::Yes = use_args
             {
               let  arg_n = args.len();
 

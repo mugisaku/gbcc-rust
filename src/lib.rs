@@ -52,6 +52,11 @@ pub fn
 set_input(v: u32)
 {unsafe{MACHINE.set_input(v as u64);}}
 
+#[wasm_bindgen]
+pub fn
+get_input()-> u32
+{unsafe{MACHINE.get_input() as u32}}
+
 
 
 

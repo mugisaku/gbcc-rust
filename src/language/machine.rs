@@ -471,7 +471,9 @@ step(&mut self)-> StepResult
     }
   (op) if op == Opcode::Pushinput as u8=>
     {
-      self.push(unsafe{&*self.common_data_ptr}.input as u64);
+      let  v = unsafe{&*self.common_data_ptr}.input as u64;
+
+      self.push(v);
     }
   (op) if op == Opcode::Pushtimer as u8=>
     {
@@ -923,6 +925,13 @@ pub fn
 set_input(&mut self, v: u64)
 {
   self.common_data.input = v;
+}
+
+
+pub fn
+get_input(&self)->u64
+{
+  self.common_data.input
 }
 
 
