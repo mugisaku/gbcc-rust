@@ -197,9 +197,9 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
   let  mut count_max_off = 0isize;
 
     {
-      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>",1);
+      count_max_off = new_scp.add_var("<FOR_COUNT_MAX>",1,TyKind::I64);
 
-      let  l = Operand::make_load_local(srcinf.clone(),count_max_off);
+      let  l = Operand::make_load_local(srcinf.clone(),count_max_off,TyKind::I64);
 
       let  r = evaluate(forstmt.get_expr(),set,Some(scp));
 
@@ -207,10 +207,10 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
     }
 
 
-  let  count_cur_off = new_scp.add_var(forstmt.get_var_name(),1);
+  let  count_cur_off = new_scp.add_var(forstmt.get_var_name(),1,TyKind::I64);
 
     {
-      let  o = Operand::make_load_local(srcinf.clone(),count_cur_off);
+      let  o = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64);
 
       o.write_to(false,output)?;
 
@@ -225,7 +225,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
   output.push_label(&clh.on_continue);
 
     {
-      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off);
+      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64);
 
       lo.write_to(false,output)?;
 
@@ -240,8 +240,8 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
   output.push_label(&cmp_label);
 
     {
-      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off);
-      let  ro = Operand::make_load_local(srcinf.clone(),count_max_off);
+      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64);
+      let  ro = Operand::make_load_local(srcinf.clone(),count_max_off,TyKind::I64);
 
       lo.write_to(true,output)?;
       ro.write_to(true,output)?;
@@ -317,7 +317,9 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
             }
 
 
-          let  mut off = scp.add_var(decl.get_name(),len);
+          let  k = inf.get_ty_kind().clone();
+
+          let  mut off = scp.add_var(decl.get_name(),len,k.clone());
 
             if let Some(exprs) = inf.get_init_exprs_opt()
             {
@@ -329,12 +331,12 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
                     }
 
 
-                  let  l = Operand::make_load_local(srcinf.clone(),off);
+                  let  l = Operand::make_load_local(srcinf.clone(),off,k.clone());
                   let  r = evaluate(e,set,Some(scp));
 
                   output.try_push_assign(srcinf,l,r,"=")?;
 
-                  off += WORD_SIZE as isize;
+                  off += k.get_size() as isize;
                   len -= 1;
                 }
             }
@@ -348,7 +350,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
             {
                 if let DeclKind::Static(inf) = src_decl.get_kind()
                 {
-                  scp.add_static(decl.get_name(),src_decl.get_offset(),inf.get_length());
+                  scp.add_static(decl.get_name(),src_decl.get_offset(),inf.get_length(),inf.get_ty_kind().clone());
 
                   Ok(())
                 }

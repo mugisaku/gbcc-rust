@@ -262,6 +262,8 @@ StorageInfo
   length: usize,
   length_expr_opt: Option<Expr>,
 
+  ty_kind: TyKind,
+
   init_exprs_opt: Option<Vec<Expr>>,
 
   content: Vec<u8>,
@@ -282,6 +284,7 @@ new()-> Self
   Self{
     length: 0,
     length_expr_opt: None,
+    ty_kind: TyKind::Void,
     init_exprs_opt: None,
     content: Vec::new(),
     is_utf8: false,
@@ -342,6 +345,13 @@ get_length_expr_opt(&self)-> &Option<Expr>
 
 
 pub fn
+get_ty_kind(&self)-> &TyKind
+{
+  &self.ty_kind
+}
+
+
+pub fn
 get_init_exprs_opt(&self)-> &Option<Vec<Expr>>
 {
   &self.init_exprs_opt
@@ -351,7 +361,7 @@ get_init_exprs_opt(&self)-> &Option<Vec<Expr>>
 pub fn
 get_size(&self)-> usize
 {
-  WORD_SIZE*self.length
+  self.ty_kind.get_size()*self.length
 }
 
 
@@ -371,7 +381,9 @@ print(&self)
     }
 
 
-  print!("]");
+  print!("]: ");
+
+  self.ty_kind.print();
 
     if let Some(exprs) = &self.init_exprs_opt
     {
@@ -613,9 +625,11 @@ collect_static(&mut self, ss: &mut StaticSet)
 
 
 pub fn
-initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, set: &DeclSet)-> Result<(),Message>
+initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, k: &TyKind, set: &DeclSet)-> Result<(),Message>
 {
-  let  mut ptr = dst.as_mut_ptr() as *mut i64;
+  let  mut ptr = dst.as_mut_ptr();
+
+  let  sz = k.get_size();
 
     for e in exprs
     {
@@ -629,9 +643,23 @@ initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, set: &DeclSet)-
         {
       Some(i)=>
         {
-          *unsafe{&mut *ptr} = i;
+            match k
+            {
+          TyKind::I8 =>{*unsafe{&mut *(ptr as *mut  i8)} = i as  i8;}
+          TyKind::I16=>{*unsafe{&mut *(ptr as *mut i16)} = i as i16;}
+          TyKind::I32=>{*unsafe{&mut *(ptr as *mut i32)} = i as i32;}
+          TyKind::I64=>{*unsafe{&mut *(ptr as *mut i64)} = i       ;}
+          TyKind::U8 =>{*unsafe{&mut *(ptr as *mut  u8)} = i as  u8;}
+          TyKind::U16=>{*unsafe{&mut *(ptr as *mut u16)} = i as u16;}
+          TyKind::U32=>{*unsafe{&mut *(ptr as *mut u32)} = i as u32;}
+          _=>
+            {
+              return Err(Message::from("initialize_content error: maybe void"));
+            }
+            }
 
-          ptr = unsafe{ptr.add(1)};
+
+          ptr = unsafe{ptr.add(sz)};
         }
       None=>{return Err(e.get_source_info().to_message()+"initialize_content error: const value eval is failed")}
         }
@@ -681,7 +709,10 @@ build_const_data(&mut self)-> Result<(),Message>
 
             if let Some(exprs) = &inf.init_exprs_opt
             {
-              Self::initialize_content(&mut inf.content,exprs,inf.length,set)?;
+                if let Err(msg) = Self::initialize_content(&mut inf.content,exprs,inf.length,&inf.ty_kind,set)
+                {
+                  return Err(srcinf.to_message()+msg);
+                }
             }
         }
     }
@@ -837,13 +868,40 @@ read_storage_info(start_nd: &Node)-> StorageInfo
 
   else
     {
-      inf.length  = 1;
+      inf.length = 1;
     }
 
 
-    if let Some(nd) = cur.select_node("expression_list")
+    if let Some(_) = cur.get_semi_string()
     {
-      inf.init_exprs_opt = Some(read_expr_list(nd));
+      cur.advance(1);
+
+        if let Some(s) = cur.get_keyword()
+        {
+          inf.ty_kind =
+                 if s ==   "i8"{TyKind::I8  }
+            else if s ==  "i16"{TyKind::I16 }
+            else if s ==  "i32"{TyKind::I32 }
+            else if s ==  "i64"{TyKind::I64 }
+            else if s ==   "u8"{TyKind::U8  }
+            else if s ==  "u16"{TyKind::U16 }
+            else if s ==  "u32"{TyKind::U32 }
+            else{panic!();}
+          ;
+
+
+          cur.advance(1);
+
+            if let Some(nd) = cur.select_node("expression_list")
+            {
+              inf.init_exprs_opt = Some(read_expr_list(nd));
+            }
+        }
+    }
+
+  else
+    {
+      inf.ty_kind = TyKind::I64;
     }
 
 
@@ -875,7 +933,8 @@ read_var(start_nd: &Node)-> (String,StorageInfo)
         {
           let  mut inf = StorageInfo::new();
 
-          inf.length = 1;
+          inf.length  = 1;
+          inf.ty_kind = TyKind::I64;
 
             if cur.is_semi_string()
             {
@@ -1762,7 +1821,7 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Message>
         }
       DeclKind::Fn(fd)=>
         {
-          let   ptr_sym = Symbol::new_static(&q_name,decl.offset as isize,1);
+          let   ptr_sym = Symbol::new_static(&q_name,decl.offset as isize,1,TyKind::I64);
           let  text_sym = Symbol::new_text(&q_name,*pos as isize);
 
           exec.add_symbol( ptr_sym);
@@ -1803,7 +1862,9 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Message>
         {
           exec.put_bytes(decl.offset,&inf.content);
 
-          exec.add_symbol(Symbol::new_static(&q_name,decl.offset as isize,inf.length));
+          let  sym = Symbol::new_static(&q_name,decl.offset as isize,inf.length,inf.ty_kind.clone());
+
+          exec.add_symbol(sym);
         }
       DeclKind::Var(_)=>
         {

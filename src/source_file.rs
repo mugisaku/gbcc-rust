@@ -472,6 +472,25 @@ add(mut self, s: &str)-> Self::Output
 
 
 impl
+std::ops::Add<Message> for Message
+{
+
+
+type Output = Message;
+
+fn
+add(mut self, msg: Message)-> Self::Output
+{
+  self.strings.push(msg.to_string());
+
+  self
+}
+
+
+}
+
+
+impl
 std::convert::From<&str> for Message
 {
 

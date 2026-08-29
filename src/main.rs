@@ -96,11 +96,11 @@ static y_obj = Test::Grape;
 fn
 main()
 {
-  var  tmp[5]{0xFFFF,7,4,8};
+  var  tmp[5]: u8{0xFFFF};
 
   var  ptr = tmp.ptr;
 
-  return ptr.i64rf;
+  return tmp[0];
 }
 
 

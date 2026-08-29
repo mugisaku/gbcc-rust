@@ -374,20 +374,20 @@ from_int(source_info: SourceInfo, i: i64)-> Self
 
 
 pub fn
-make_load_global(source_info: SourceInfo, offset: usize)-> Self
+make_load_global(source_info: SourceInfo, offset: usize, k: TyKind)-> Self
 {
   let  op = Operation::LoadInt(offset as i64);
 
-  Operand{source_info, kind: OperandKind::Deref(Box::new(op),TyKind::I64)}
+  Operand{source_info, kind: OperandKind::Deref(Box::new(op),k)}
 }
 
 
 pub fn
-make_load_local(source_info: SourceInfo, offset: isize)-> Self
+make_load_local(source_info: SourceInfo, offset: isize, k: TyKind)-> Self
 {
   let  op = Operation::LoadPosFromFp(offset as i64);
 
-  Operand{source_info, kind: OperandKind::Deref(Box::new(op),TyKind::I64)}
+  Operand{source_info, kind: OperandKind::Deref(Box::new(op),k)}
 }
 
 
@@ -653,13 +653,13 @@ evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt:
             {
               Operand::from_int(source_info,*i)
             }
-          SymbolKind::Static(_)=>
+          SymbolKind::Static(_,k)=>
             {
-              Operand::make_load_global(source_info,sym.get_offset() as usize)
+              Operand::make_load_global(source_info,sym.get_offset() as usize,k.clone())
             }
-          SymbolKind::Var(_)=>
+          SymbolKind::Var(_,k)=>
             {
-              Operand::make_load_local(source_info,sym.get_offset())
+              Operand::make_load_local(source_info,sym.get_offset(),k.clone())
             }
           _=>{Operand::make_undef(source_info,format!("evaluate_identifier case local: {} is found in scope, but invalid",name))}
             };
@@ -677,7 +677,7 @@ evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt:
         }
       DeclKind::Static(inf)=>
         {
-          Operand::make_load_global(source_info,decl.get_offset())
+          Operand::make_load_global(source_info,decl.get_offset(),inf.get_ty_kind().clone())
         }
       DeclKind::Var(inf)=>
         {
@@ -685,7 +685,7 @@ evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt:
         }
       DeclKind::Fn(_)=>
         {
-          Operand::make_load_global(source_info,decl.get_offset())
+          Operand::make_load_global(source_info,decl.get_offset(),TyKind::I64)
         }
       _=>{Operand::make_undef(source_info,format!("evaluate_identifier case global: {} is found in global, but invalid",name))}
         }

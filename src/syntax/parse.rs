@@ -528,18 +528,9 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<
 
   else
     {
-      let  mut buf = String::new();
-
       let  tok = &toks[st.max_position];
 
-      buf.push_str("解析途中で停止\n");
-      buf.push_str(" --\n");
-
-      nd.print_to(&mut buf);
-
-      buf.push_str("\n --\n");
-
-      Err(tok.get_source_info().to_message()+buf)
+      Err(tok.get_source_info().to_message()+"不正な構文があったため停止")
     }
 }
 

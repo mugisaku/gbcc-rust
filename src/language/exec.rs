@@ -206,7 +206,7 @@ find_data_address(&self, name: &str)-> Option<usize>
 {
     for sym in &self.symbols
     {
-        if let SymbolKind::Static(_) = sym.get_kind()
+        if let SymbolKind::Static(_,_) = sym.get_kind()
         {
             if sym.get_name() == name
             {
@@ -269,9 +269,11 @@ print_memory_to(&self, buf: &mut String)
 
         match sym.get_kind()
         {
-      SymbolKind::Static(len)=>
+      SymbolKind::Static(len,k)=>
         {
-          buf.push_str(&format!("(addr: {})",off));
+          buf.push_str(&format!("(addr: {}): ",off));
+
+          k.print();
         }
       SymbolKind::Const(v)=>{buf.push_str(&format!(": {}",v));}
       _=>{}

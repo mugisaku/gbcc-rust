@@ -106,7 +106,7 @@ expression_list: "{" & [{expression & [","]}] & "}";
 
 number_of_elements: "[" & expression & "]";
 
-storage_info: number_of_elements & [expression_list];
+storage_info: number_of_elements -> [":" -> ('i8 | 'i16 | 'i32 | 'i64 | 'u8 | 'u16 | 'u32) & [expression_list]];
 
 
 empty : ";";
