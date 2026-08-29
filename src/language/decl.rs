@@ -1953,7 +1953,8 @@ add_ex_img(&mut self, name: &str, w: u32, h: u32, data: &Vec<u8>)
 
   let  mut inf = StorageInfo::new();
 
-  inf.length = (new_data.len()+(WORD_SIZE-1))/WORD_SIZE;
+  inf.length = new_data.len()/4;
+  inf.ty_kind = TyKind::U32;
   inf.content = new_data;
 
   decl.name = name.to_string();
