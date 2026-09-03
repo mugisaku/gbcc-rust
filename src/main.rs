@@ -41,13 +41,13 @@ compile_and_run(s: &str)
 
               m.set_verbose();
 
-              m.reset(32,&mut exec,"main");
+              m.reset(&mut exec,"main");
 
               println!("\n  ****");
 
               println!("machine runs");
 
-              m.keep_run();
+              m.keep_run(800);
 
               println!("machine is finished");
 

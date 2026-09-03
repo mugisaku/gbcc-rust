@@ -24,20 +24,32 @@
       display: flex;
       flex-direction: row;
     }
+    #freq{
+      width: 3em;
+    }
     </style>
   </head>
   <body>
-自作のプログラミング言語とコンパイラーと仮想機械を使って、<br>
-ゲーム機のようなものを再現しています。<br>
-ソースコードは<a href="https://github.com/mugisaku/gbcc-rust">https://github.com/mugisaku/gbcc-rust</a>
-  <hr>
-  <button id="run_btn">run</button>
-  <button id="audio_btn">audio on/off</button><p>
   <span class="root">
     <span class="console">
-      <span id="report"></span>
-      <canvas id="display" width="400" height="200">
+
+      <span>
+        <input id="freq" type="number" max="800" value="16"/>Mhz
+        <button id="run_btn">run</button>
+        <button id="stop_btn">stop</button>
+        <button id="resume_btn">resume</button>
+        <button id="audio_btn">audio on/off</button>
+      </span>
+
+      <span>
+        状態: <span id="status">stop</span>
+        、
+        REPORT: <span id="report"></span>
+      </span>
+
+      <canvas id="display" width="400" height="320">
       </canvas>
+
       <span class="input">
         <span class="cursor">
           <button id="up">↑</button>
@@ -54,11 +66,16 @@
           <button id="v">V</button>
         </span>
       </span>
+
+      <span>
+      <hr>
+ソースコードは<a href="https://github.com/mugisaku/gbcc-rust">https://github.com/mugisaku/gbcc-rust</a>
+      </span>
     </span>
   <span>
-    <textarea id="text" cols="48" rows="12">
+    <textarea id="text" cols="48" rows="10">
     </textarea>
-    <textarea id="asm_text" cols="48" rows="12">
+    <textarea id="asm_text" cols="48" rows="10">
     </textarea>
   </span>
 
@@ -84,6 +101,9 @@
 
       let  g_ready;
       let  g_timer_id;
+      let  g_freq;
+
+      const REFRESH_RATE = 24;
 
       let  g_cv;
       let  g_cvctx;
@@ -91,6 +111,7 @@
       let  g_ex_img;
       let  g_ex_img_cv;
       let  g_ex_img_ctx;
+      let  g_video_pitch;
 
       let  g_actx;
       let  g_sin_osc;
@@ -117,8 +138,6 @@
       let  g_v_key;
 
       const  g_volume_max = 0.1;
-
-      const  g_millisec = 1000/40;
 
       let  g_sin_freq_addr;
       let  g_sin_vol_addr ;
@@ -252,22 +271,29 @@
       {
         set_input(g_key_state|0);
 
-        process();
+        process(g_freq);
 
 
-        const  video_addr = get_data_address("video");
+        const  addr = get_data_address("screen_address");
 
-        const  base = get_word(video_addr);
+        const  base = get_word(addr);
 
-          for(let  i = 0|0;  i < (g_imgdat.width*g_imgdat.height);  ++i)
+        let  i = 0;
+
+          for(let  y = 0;  y < g_imgdat.height;  ++y)
           {
-            const  rgba_i = 4*i;
+              for(let  x = 0;  x < g_imgdat.width;  ++x)
+              {
+                const  offset = 4*((g_video_pitch*y)+x);
 
-            const  pixel = get_word(base+rgba_i);
+                const  pixel = get_word(base+offset);
 
-            g_imgdat.data[rgba_i  ] = (pixel>>24)&0xFF;
-            g_imgdat.data[rgba_i+1] = (pixel>>16)&0xFF;
-            g_imgdat.data[rgba_i+2] = (pixel>> 8)&0xFF;
+                g_imgdat.data[i  ] = (pixel>>24)&0xFF;
+                g_imgdat.data[i+1] = (pixel>>16)&0xFF;
+                g_imgdat.data[i+2] = (pixel>> 8)&0xFF;
+
+                i += 4;
+              }
           }
 
 
@@ -275,7 +301,7 @@
 
         update_audio();
 
-        g_report.innerText = "REPORT: "+get_word(g_report_addr);
+        g_report.innerText = ""+get_word(g_report_addr);
       }
 
 
@@ -286,7 +312,7 @@
       function
       run()
       {
-        clearInterval(g_timer_id);
+        stop();
 
           if(!g_ready)
           {
@@ -306,7 +332,7 @@
           }
 
 
-        g_asmtext.value = setup(1024*1024*32);
+        g_asmtext.value = setup();
 
 
         g_sin_freq_addr = get_data_address("sin_freq");
@@ -329,8 +355,9 @@
         g_c_key     = get_const("C_KEY");
         g_v_key     = get_const("V_KEY");
 
-        g_cv.width  = get_const("VIDEO_W");
-        g_cv.height = get_const("VIDEO_H");
+        g_cv.width  = get_const("SCREEN_W");
+        g_cv.height = get_const("SCREEN_H");
+        g_video_pitch = get_const("VIDEO_W");
 
         g_imgdat = g_cvctx.createImageData(g_cv.width,g_cv.height);
 
@@ -340,8 +367,36 @@
           }
 
 
-        g_timer_id = setInterval(refresh,g_millisec);
+        resume();
       }
+
+      function
+      stop()
+      {
+        clearInterval(g_timer_id)      ;
+                      g_timer_id = null;
+
+        document.getElementById("status").innerText = "stop";
+      }
+
+      function
+      resume()
+      {
+          if(!g_ready)
+          {
+            return;
+          }
+
+
+        document.getElementById("status").innerText = "running";
+
+        g_freq = parseInt(document.getElementById("freq").value,10)*1000*1000;
+
+        g_freq /= REFRESH_RATE;
+
+        g_timer_id = setInterval(refresh,1000/REFRESH_RATE);
+      }
+
 
       init().then(async () => {
         g_cv = document.getElementById("display");
@@ -358,6 +413,8 @@
         g_asmtext = document.getElementById("asm_text");
 
         document.getElementById("run_btn").addEventListener("click",run);
+        document.getElementById("stop_btn").addEventListener("click",stop);
+        document.getElementById("resume_btn").addEventListener("click",resume);
         document.getElementById("audio_btn").addEventListener("click",switch_audio);
 
         document.getElementById("up").addEventListener("mousedown",function(){g_key_state |=  g_up_key;});
@@ -425,7 +482,7 @@
         g_ex_img.src = "chr.png";
 
 
-        const  response = await fetch("gamebaby_sample.txt");
+        const  response = await fetch("./gamebaby_sample.txt");
         const  result = await response.text();
 
         g_text.value = result;

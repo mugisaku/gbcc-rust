@@ -1,4 +1,5 @@
-static video;
+static    screen_address;
+static offscreen_address;
 
 static sin_freq;
 static sin_vol ;
@@ -12,10 +13,14 @@ static noi_vol ;
 
 static report;
 
+static flip_bit;
+
 static video_field[VIDEO_W*VIDEO_H]: u32;
 
-const VIDEO_W = 400;
-const VIDEO_H = 200;
+const SCREEN_W = 400;
+const SCREEN_H = 320;
+const VIDEO_W = SCREEN_W*2;
+const VIDEO_H = SCREEN_H*2;
 
 const    UP_KEY = 0b00000001;
 const  LEFT_KEY = 0b00000010;
@@ -58,14 +63,14 @@ sleep(tm)
 fn
 dot2(x,y,pixel)
 {
-  video_field[VIDEO_W*y][x] = pixel;
+  offscreen_address[VIDEO_W*y][x] = pixel;
 }
 
 
 fn
 dot(x,y,pixel)
 {
-  (video_field.ptr+(4*VIDEO_W*y)+(4*x)).u32ref = pixel;
+  (offscreen_address+(4*VIDEO_W*y)+(4*x)).u32ref = pixel;
 }
 
 
@@ -84,6 +89,16 @@ draw_rect(x,y,w,h,pixel)
       dot(x    ,y+off,pixel);
       dot(x+w-1,y+off,pixel);
     }
+}
+
+
+fn
+fill_rect(x,y,w,h,pixel)
+{
+    for y_off in h{
+    for x_off in w{
+      dot(x+x_off,y+y_off,pixel);
+    }}
 }
 
 
@@ -178,63 +193,9 @@ print14_unicode_s(s,x,y,pixel)
 
 
 fn
-print_character(dir,anim,dst_x,dst_y)
-{
-  var  src_x = 0;
-  var  src_y = 0;
-  var  rev = 0;
-
-       if (dir == LEFT_DIR) {src_y = CHR_H;}
-  else if (dir == RIGHT_DIR){src_y = CHR_H;  rev = 1;}
-  else if (dir == BACK_DIR) {src_y = CHR_H*2;}
-
-       if anim == 1{src_x = CHR_W;}
-  else if anim == 3{src_x = CHR_W*2;}
-
-  var  dst_ptr_base = video_field.ptr+(4*VIDEO_W*dst_y)+(4*dst_x);
-
-  var  src_pitch = 4*image[0];
-  var  src_ptr_base = image.ptr+8+(src_pitch*src_y)+(4*src_x);
-
-    for y in CHR_H
-    {
-      var  dst_ptr = dst_ptr_base;
-                     dst_ptr_base += 4*VIDEO_W;
-
-      var  src_ptr = src_ptr_base;
-                     src_ptr_base += src_pitch;
-
-        if rev
-        {
-          dst_ptr += 4*CHR_W;
-
-            for x in CHR_W
-            {
-              dst_ptr.u32ref = src_ptr.u32ref;
-
-              dst_ptr -= 4;
-              src_ptr += 4;
-            }
-        }
-
-      else
-        {
-            for x in CHR_W
-            {
-              dst_ptr.u32ref = src_ptr.u32ref;
-
-              dst_ptr += 4;
-              src_ptr += 4;
-            }
-        }
-    }
-}
-
-
-fn
 fill(x,y,w,h,pixel)
 {
-  var  base_ptr = video_field.ptr+(4*VIDEO_W*y)+(4*x);
+  var  base_ptr = offscreen_address+(4*VIDEO_W*y)+(4*x);
 
     for y_off in h
     {
@@ -251,94 +212,267 @@ fill(x,y,w,h,pixel)
 }
 
 
+const
+BASE_SIZE = 6;
+
+const
+MIDDLE_SIZE = BASE_SIZE*BASE_SIZE;
+
+const
+LARGE_SIZE = MIDDLE_SIZE*BASE_SIZE;
+
+static
+table[BASE_SIZE*BASE_SIZE]: u8{
+
+0,0,1,1,1,1,
+0,0,1,1,1,1,
+0,1,1,1,1,1,
+0,1,1,1,1,1,
+1,1,1,1,1,1,
+1,1,1,1,1,1,
+/*
+0,0,0,0,0,1,
+0,0,0,0,1,1,
+0,0,0,1,1,1,
+0,0,1,1,1,1,
+0,1,1,1,1,1,
+1,1,1,1,1,1,
+*/
+};
+
+static
+base[BASE_SIZE*BASE_SIZE]: u32;
+
+static
+middle[MIDDLE_SIZE*MIDDLE_SIZE]: u32;
+
+static
+large[LARGE_SIZE*LARGE_SIZE]: u32;
+
+static
+large_tmp[LARGE_SIZE*LARGE_SIZE]: u32;
+
+
 fn
-test(x,y)
+draw_bmp(ptr,sz,x,y,pix_sz)
 {
-    while x < (VIDEO_W-32)
+    for y_off in sz{
+    for x_off in sz{
+      var  pix = get(ptr,sz,x_off,y_off);
+
+      fill_rect(x+(pix_sz*x_off),y+(pix_sz*y_off),pix_sz,pix_sz,pix);
+    }}
+}
+
+
+fn
+fill_bmp(ptr,sz,pix)
+{
+    for y in sz{
+    for x in sz{
+      ptr.u32ref[(sz*y)+x] = pix;
+    }}
+}
+
+
+fn
+get(ptr,sz,x,y)
+{
+  return ptr.u32ref[(sz*y)+x];
+}
+
+
+fn
+check_zero(x,y)
+{
+    if (x >= 0)
+    && (y >= 0)
+    && (x <  BASE_SIZE)
+    && (y <  BASE_SIZE)
     {
-      draw_rect(x,y,32,32,0xFFFFFFFF);
-
-      x += 8;
-
-      halt;
+      return table[(BASE_SIZE*y)+x] == 0;
     }
-}
 
 
-static  g_dir = 0;
-
-static  g_x = 128;
-static  g_y = 128;
-static  g_anim = 0;
-static  g_x_move_value = 0;
-static  g_y_move_value = 0;
-
-
-fn
-video_proc()
-{
-  loop
-  {
-    fill(0,0,VIDEO_W,VIDEO_H,0);
-
-    print_int(g_x,print14_unicode,16*8, 0,16,0xFFFFFFFF);
-    print_int(g_y,print14_unicode,16*8,16,16,0xFFFFFFFF);
-
-    print_character(g_dir,g_anim>>1&3,g_x,g_y);
-
-    halt;
-  }
+  return false;
 }
 
 
 fn
-object_proc()
+process_table()
 {
-  loop
-  {
-    var  input = sys.input();
+    for y in BASE_SIZE{
+    for x in BASE_SIZE{
+        if check_zero(x,y) == 0
+        {
+          var  v  = check_zero(x-1,y  );
+               v |= check_zero(x+1,y  );
+               v |= check_zero(x  ,y-1);
+               v |= check_zero(x  ,y+1);
 
-      if input&Z_KEY
-      {
-        sys.spawn(test,g_x,g_y);
-      }
-
-
-      if (g_x_move_value == 0) && (g_y_move_value == 0)
-      {
-             if (input&UP_KEY   ){g_dir =  BACK_DIR;  g_y_move_value = 24;}
-        else if (input&DOWN_KEY ){g_dir = FRONT_DIR;  g_y_move_value = 24;}
-             if (input&LEFT_KEY ){g_dir =  LEFT_DIR;  g_x_move_value = 24;}
-        else if (input&RIGHT_KEY){g_dir = RIGHT_DIR;  g_x_move_value = 24;}
-      }
-
-    else
-      {
-          for _ in 2
-          {
-                 if g_dir ==  BACK_DIR{g_y_move_value -= 2;  g_y -= 2;}
-            else if g_dir == FRONT_DIR{g_y_move_value -= 2;  g_y += 2;}
-                 if g_dir ==  LEFT_DIR{g_x_move_value -= 2;  g_x -= 2;}
-            else if g_dir == RIGHT_DIR{g_x_move_value -= 2;  g_x += 2;}
-
-            g_anim += 1;
-          }
-      }
+            if v
+            {
+              table[(BASE_SIZE*y)+x] = 2;
+            }
+        }
+    }}
+}
 
 
-    halt;
-  }
+fn
+table_to_base()
+{
+  process_table();
+
+    for y in BASE_SIZE{
+    for x in BASE_SIZE{
+      var  v = 0;
+
+        if table[(BASE_SIZE*y)+x]
+        {
+          v = 0x00FF0000;
+        }
+
+
+      base[(BASE_SIZE*y)+x] = v;
+    }}
+}
+
+
+fn
+transfer(dst_ptr,dst_sz,src_ptr,src_sz)
+{
+    for y in BASE_SIZE{
+    for x in BASE_SIZE{
+      var  tabval = table[(BASE_SIZE*y)+x];
+
+        if tabval
+        {
+            for yy in src_sz{
+            for xx in src_sz{
+              var  v = get(src_ptr,src_sz,xx,yy);
+
+                if (v == 0) && (tabval == 1)
+                {
+                  v = 0x7FFF7F00;
+                }
+
+
+              dst_ptr.u32ref[(dst_sz*(src_sz*y+yy))+(src_sz*x+xx)] = v;
+            }}
+        }
+    }}
+}
+
+
+fn
+large_to_middle()
+{
+    for y in MIDDLE_SIZE{
+    for x in MIDDLE_SIZE{
+      var  v = 0;
+
+        for yy in MIDDLE_SIZE{
+        for xx in MIDDLE_SIZE{
+          v += get(large.ptr,LARGE_SIZE,MIDDLE_SIZE*x+xx,
+                                        MIDDLE_SIZE*y+yy);
+        }}
+
+
+      middle[(MIDDLE_SIZE*y)+x] = v(MIDDLE_SIZE*MIDDLE_SIZE);
+    }}
+}
+
+
+const
+PIXEL_SIZE = 8;
+
+fn
+update()
+{
+  fill(0,0,SCREEN_W,SCREEN_H,0x0000FFFF);
+
+  draw_bmp(base.ptr,BASE_SIZE,0,0,PIXEL_SIZE);
+
+  draw_rect(PIXEL_SIZE*cursor_x,PIXEL_SIZE*cursor_y,PIXEL_SIZE-1,PIXEL_SIZE-1,0x00000000);
+  draw_rect(PIXEL_SIZE*cursor_x,PIXEL_SIZE*cursor_y,PIXEL_SIZE  ,PIXEL_SIZE  ,0xFFFFFFFF);
+
+  var  x = PIXEL_SIZE*BASE_SIZE;
+
+//  draw_bmp(middle.ptr,MIDDLE_SIZE,x,0,4);
+  draw_bmp(middle.ptr,MIDDLE_SIZE,x,0,2);
+
+  x += MIDDLE_SIZE*2;
+
+  draw_bmp(large.ptr,LARGE_SIZE,x,0,1);
+
+  flip();
+}
+
+
+static cursor_x;
+static cursor_y;
+
+
+fn
+flip()
+{
+  var  tmp = offscreen_address                       ;
+             offscreen_address = screen_address      ;
+                                 screen_address = tmp;
 }
 
 
 fn
 main()
 {
-  video = video_field.ptr;
+     screen_address = video_field.ptr             ;
+  offscreen_address = video_field.ptr+(4*SCREEN_W);
 
-  sys.spawn(video_proc);
-  sys.spawn(object_proc);
+  table_to_base();
+
+  transfer(middle.ptr,MIDDLE_SIZE,base.ptr,BASE_SIZE);
+  transfer(large.ptr,LARGE_SIZE,middle.ptr,MIDDLE_SIZE);
+
+  update();
+
+    loop
+    {
+      var  input = sys.input();
+
+        if input&Z_KEY
+        {
+          var  v = table[(BASE_SIZE*cursor_y)+cursor_x];
+
+          table[(BASE_SIZE*cursor_y)+cursor_x] = !v;
+
+          table_to_base();
+
+          fill_bmp(middle.ptr,MIDDLE_SIZE,0);
+          fill_bmp( large.ptr, LARGE_SIZE,0);
+
+          transfer(middle.ptr,MIDDLE_SIZE,base.ptr,BASE_SIZE);
+          transfer(large.ptr,LARGE_SIZE,middle.ptr,MIDDLE_SIZE);
+        }
+
+
+           if (input& LEFT_KEY) && (cursor_x >             0){cursor_x -= 1;}
+      else if (input&RIGHT_KEY) && (cursor_x < (BASE_SIZE-1)){cursor_x += 1;}
+
+           if (input&  UP_KEY) && (cursor_y >             0){cursor_y -= 1;}
+      else if (input&DOWN_KEY) && (cursor_y < (BASE_SIZE-1)){cursor_y += 1;}
+
+        if input
+        {
+          update();
+        }
+
+
+      halt;
+    }
 }
+
+
 
 
 

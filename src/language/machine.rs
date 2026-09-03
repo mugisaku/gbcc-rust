@@ -791,8 +791,6 @@ pub const   STACK_SIZE: usize = 0x2000;
 pub struct
 CommonData
 {
-  frequency: usize,
-
   free_ptr: *mut Core,
 
   timer: u64,
@@ -812,8 +810,6 @@ pub const fn
 new()-> Self
 {
   Self{
-    frequency: 0,
-
     free_ptr: std::ptr::null_mut(),
 
     timer: 0,
@@ -878,11 +874,9 @@ set_verbose(&mut self)
 
 
 pub fn
-reset(&mut self, freq: usize, exec: &mut Exec, entry_fn_name: &str)
+reset(&mut self, exec: &mut Exec, entry_fn_name: &str)
 {
   self.memory_ptr = exec.get_mut_ptr(0);
-
-  self.common_data.frequency = freq;
 
   let  mut stack_start = exec.find_const("STACK_START").unwrap() as usize;
 
@@ -1019,23 +1013,15 @@ remove(&mut self, ptr: *mut Core)
 
 
 pub fn
-run(&mut self)-> bool
+run(&mut self, freq: usize)-> bool
 {
-    if self.common_data.frequency == 0
-    {
-      println!("machine is set zero frequency");
-
-      return false;
-    }
-
-
   let  mut ptr = self.first_ptr;
 
     while ptr != std::ptr::null_mut()
     {
       let  core = unsafe{&mut *ptr};
 
-      let  mut n = self.common_data.frequency;
+      let  mut n = freq;
 
         while n != 0
         {
@@ -1071,15 +1057,8 @@ run(&mut self)-> bool
 
 
 pub fn
-keep_run(&mut self)
+keep_run(&mut self, freq: usize)
 {
-    if self.common_data.frequency == 0
-    {
-      println!("machine is set zero frequency");
-
-      return;
-    }
-
   use std::time::{Duration,Instant};
   use std::thread::sleep;
 
@@ -1087,7 +1066,7 @@ keep_run(&mut self)
     {
       let  now = Instant::now();
 
-        if !self.run()
+        if !self.run(freq)
         {
           break;
         }

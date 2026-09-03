@@ -82,10 +82,10 @@ get_const(s: &str)-> u32
 
 #[wasm_bindgen]
 pub fn
-process()
+process(freq: u32)
 {
   unsafe{
-    MACHINE.run();
+    MACHINE.run(freq as usize);
   }
 }
 
@@ -163,11 +163,11 @@ compile(s: &str)-> bool
 
 #[wasm_bindgen]
 pub fn
-setup(freq: u32)-> String
+setup()-> String
 {
     unsafe
     {
-      MACHINE.reset(freq as usize,&mut EXEC,"main");
+      MACHINE.reset(&mut EXEC,"main");
 
       let  mut buf = String::new();
 
