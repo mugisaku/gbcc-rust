@@ -47,7 +47,7 @@ compile_and_run(s: &str)
 
               println!("machine runs");
 
-              m.keep_run(800);
+              m.keep_run(800,0);
 
               println!("machine is finished");
 

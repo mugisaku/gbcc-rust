@@ -1,5 +1,17 @@
+
+
 static    screen_address;
 static offscreen_address;
+
+static screen_status;
+
+static video_field[VIDEO_W*VIDEO_H]: u32;
+
+const SCREEN_W = 400;
+const SCREEN_H = 320;
+const VIDEO_W = SCREEN_W*2;
+const VIDEO_H = SCREEN_H*2;
+
 
 static sin_freq;
 static sin_vol ;
@@ -13,14 +25,6 @@ static noi_vol ;
 
 static report;
 
-static flip_bit;
-
-static video_field[VIDEO_W*VIDEO_H]: u32;
-
-const SCREEN_W = 400;
-const SCREEN_H = 320;
-const VIDEO_W = SCREEN_W*2;
-const VIDEO_H = SCREEN_H*2;
 
 const    UP_KEY = 0b00000001;
 const  LEFT_KEY = 0b00000010;
@@ -63,14 +67,14 @@ sleep(tm)
 fn
 dot2(x,y,pixel)
 {
-  offscreen_address[VIDEO_W*y][x] = pixel;
+  screen_address[VIDEO_W*y][x] = pixel;
 }
 
 
 fn
 dot(x,y,pixel)
 {
-  (offscreen_address+(4*VIDEO_W*y)+(4*x)).u32ref = pixel;
+  (screen_address+(4*VIDEO_W*y)+(4*x)).u32ref = pixel;
 }
 
 
@@ -195,7 +199,7 @@ print14_unicode_s(s,x,y,pixel)
 fn
 fill(x,y,w,h,pixel)
 {
-  var  base_ptr = offscreen_address+(4*VIDEO_W*y)+(4*x);
+  var  base_ptr = screen_address+(4*VIDEO_W*y)+(4*x);
 
     for y_off in h
     {
@@ -230,27 +234,17 @@ table[BASE_SIZE*BASE_SIZE]: u8{
 0,1,1,1,1,1,
 1,1,1,1,1,1,
 1,1,1,1,1,1,
-/*
-0,0,0,0,0,1,
-0,0,0,0,1,1,
-0,0,0,1,1,1,
-0,0,1,1,1,1,
-0,1,1,1,1,1,
-1,1,1,1,1,1,
-*/
+
 };
 
 static
-base[BASE_SIZE*BASE_SIZE]: u32;
+base[BASE_SIZE*BASE_SIZE]: u8;
 
 static
-middle[MIDDLE_SIZE*MIDDLE_SIZE]: u32;
+middle[MIDDLE_SIZE*MIDDLE_SIZE]: u8;
 
 static
-large[LARGE_SIZE*LARGE_SIZE]: u32;
-
-static
-large_tmp[LARGE_SIZE*LARGE_SIZE]: u32;
+large[LARGE_SIZE*LARGE_SIZE]: u8;
 
 
 fn
@@ -258,7 +252,13 @@ draw_bmp(ptr,sz,x,y,pix_sz)
 {
     for y_off in sz{
     for x_off in sz{
-      var  pix = get(ptr,sz,x_off,y_off);
+      var  v = get(ptr,sz,x_off,y_off);
+
+      var  pix = BLUE;
+
+           if v == 1{pix = DGREEN;}
+      else if v == 2{pix =  GREEN;}
+      else if v == 3{pix = LGREEN;}
 
       fill_rect(x+(pix_sz*x_off),y+(pix_sz*y_off),pix_sz,pix_sz,pix);
     }}
@@ -266,19 +266,9 @@ draw_bmp(ptr,sz,x,y,pix_sz)
 
 
 fn
-fill_bmp(ptr,sz,pix)
-{
-    for y in sz{
-    for x in sz{
-      ptr.u32ref[(sz*y)+x] = pix;
-    }}
-}
-
-
-fn
 get(ptr,sz,x,y)
 {
-  return ptr.u32ref[(sz*y)+x];
+  return ptr.u8ref[(sz*y)+x];
 }
 
 
@@ -299,38 +289,21 @@ check_zero(x,y)
 
 
 fn
-process_table()
-{
-    for y in BASE_SIZE{
-    for x in BASE_SIZE{
-        if check_zero(x,y) == 0
-        {
-          var  v  = check_zero(x-1,y  );
-               v |= check_zero(x+1,y  );
-               v |= check_zero(x  ,y-1);
-               v |= check_zero(x  ,y+1);
-
-            if v
-            {
-              table[(BASE_SIZE*y)+x] = 2;
-            }
-        }
-    }}
-}
-
-
-fn
 table_to_base()
 {
-  process_table();
-
     for y in BASE_SIZE{
     for x in BASE_SIZE{
-      var  v = 0;
+      var  v = table[(BASE_SIZE*y)+x];
 
-        if table[(BASE_SIZE*y)+x]
+        if v
         {
-          v = 0x00FF0000;
+          var  t  = check_zero(x-1,y  );
+               t |= check_zero(x+1,y  );
+               t |= check_zero(x  ,y-1);
+               t |= check_zero(x  ,y+1);
+
+            if t{v = 2;}
+          else  {v = 1;}
         }
 
 
@@ -344,42 +317,29 @@ transfer(dst_ptr,dst_sz,src_ptr,src_sz)
 {
     for y in BASE_SIZE{
     for x in BASE_SIZE{
-      var  tabval = table[(BASE_SIZE*y)+x];
+      var  basval = base[(BASE_SIZE*y)+x];
 
-        if tabval
-        {
-            for yy in src_sz{
-            for xx in src_sz{
-              var  v = get(src_ptr,src_sz,xx,yy);
+        for yy in src_sz{
+        for xx in src_sz{
+          var  v = get(src_ptr,src_sz,xx,yy);
 
-                if (v == 0) && (tabval == 1)
+            if basval == 0
+            {
+              v = 0;
+            }
+
+          else
+            if basval == 1
+            {
+                if v == 0
                 {
-                  v = 0x7FFF7F00;
+                  v = 1;
                 }
+            }
 
 
-              dst_ptr.u32ref[(dst_sz*(src_sz*y+yy))+(src_sz*x+xx)] = v;
-            }}
-        }
-    }}
-}
-
-
-fn
-large_to_middle()
-{
-    for y in MIDDLE_SIZE{
-    for x in MIDDLE_SIZE{
-      var  v = 0;
-
-        for yy in MIDDLE_SIZE{
-        for xx in MIDDLE_SIZE{
-          v += get(large.ptr,LARGE_SIZE,MIDDLE_SIZE*x+xx,
-                                        MIDDLE_SIZE*y+yy);
+          dst_ptr.u8ref[(dst_sz*(src_sz*y+yy))+(src_sz*x+xx)] = v;
         }}
-
-
-      middle[(MIDDLE_SIZE*y)+x] = v(MIDDLE_SIZE*MIDDLE_SIZE);
     }}
 }
 
@@ -387,26 +347,33 @@ large_to_middle()
 const
 PIXEL_SIZE = 8;
 
-fn
-update()
-{
-  fill(0,0,SCREEN_W,SCREEN_H,0x0000FFFF);
+const    BLUE = 0x0000FF00;
+const   GREEN = 0x00FF0000;
+const  LGREEN = 0x1FFF1F00;
+const  DGREEN = 0x00EF0000;
 
+fn
+update_base()
+{
   draw_bmp(base.ptr,BASE_SIZE,0,0,PIXEL_SIZE);
 
   draw_rect(PIXEL_SIZE*cursor_x,PIXEL_SIZE*cursor_y,PIXEL_SIZE-1,PIXEL_SIZE-1,0x00000000);
   draw_rect(PIXEL_SIZE*cursor_x,PIXEL_SIZE*cursor_y,PIXEL_SIZE  ,PIXEL_SIZE  ,0xFFFFFFFF);
+}
 
-  var  x = PIXEL_SIZE*BASE_SIZE;
 
-//  draw_bmp(middle.ptr,MIDDLE_SIZE,x,0,4);
+fn
+update_all()
+{
+  update_base();
+
+  var  x = PIXEL_SIZE*BASE_SIZE+4;
+
   draw_bmp(middle.ptr,MIDDLE_SIZE,x,0,2);
 
-  x += MIDDLE_SIZE*2;
+  x += MIDDLE_SIZE*2+4;
 
   draw_bmp(large.ptr,LARGE_SIZE,x,0,1);
-
-  flip();
 }
 
 
@@ -420,6 +387,49 @@ flip()
   var  tmp = offscreen_address                       ;
              offscreen_address = screen_address      ;
                                  screen_address = tmp;
+
+  screen_status = 1;
+}
+
+
+fn
+process_input()
+{
+  var  input = sys.input();
+
+    if input&Z_KEY
+    {
+      var  ptr = table[(BASE_SIZE*cursor_y)+cursor_x].ptr;
+
+      ptr.u8ref = !ptr.u8ref;
+
+      table_to_base();
+
+      transfer(middle.ptr,MIDDLE_SIZE,base.ptr,BASE_SIZE);
+      transfer(large.ptr,LARGE_SIZE,middle.ptr,MIDDLE_SIZE);
+
+      update_all();
+
+      screen_status = 1;
+    }
+
+  else
+    {
+      var  flag = 0;
+
+           if (input& LEFT_KEY) && (cursor_x >             0){  cursor_x -= 1;  flag = 1;}
+      else if (input&RIGHT_KEY) && (cursor_x < (BASE_SIZE-1)){  cursor_x += 1;  flag = 1;}
+
+           if (input&  UP_KEY) && (cursor_y >             0){  cursor_y -= 1;  flag = 1;}
+      else if (input&DOWN_KEY) && (cursor_y < (BASE_SIZE-1)){  cursor_y += 1;  flag = 1;}
+
+        if flag
+        {
+          update_base();
+
+          screen_status = 1;
+        }
+    }
 }
 
 
@@ -434,37 +444,21 @@ main()
   transfer(middle.ptr,MIDDLE_SIZE,base.ptr,BASE_SIZE);
   transfer(large.ptr,LARGE_SIZE,middle.ptr,MIDDLE_SIZE);
 
-  update();
+  update_all();
+
+  screen_status = 1;
+
+  var  last;
 
     loop
     {
-      var  input = sys.input();
+      var  now = sys.timer();
 
-        if input&Z_KEY
+        if now > (last+200)
         {
-          var  v = table[(BASE_SIZE*cursor_y)+cursor_x];
+          last = now;
 
-          table[(BASE_SIZE*cursor_y)+cursor_x] = !v;
-
-          table_to_base();
-
-          fill_bmp(middle.ptr,MIDDLE_SIZE,0);
-          fill_bmp( large.ptr, LARGE_SIZE,0);
-
-          transfer(middle.ptr,MIDDLE_SIZE,base.ptr,BASE_SIZE);
-          transfer(large.ptr,LARGE_SIZE,middle.ptr,MIDDLE_SIZE);
-        }
-
-
-           if (input& LEFT_KEY) && (cursor_x >             0){cursor_x -= 1;}
-      else if (input&RIGHT_KEY) && (cursor_x < (BASE_SIZE-1)){cursor_x += 1;}
-
-           if (input&  UP_KEY) && (cursor_y >             0){cursor_y -= 1;}
-      else if (input&DOWN_KEY) && (cursor_y < (BASE_SIZE-1)){cursor_y += 1;}
-
-        if input
-        {
-          update();
+          process_input();
         }
 
 

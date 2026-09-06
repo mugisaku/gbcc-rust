@@ -34,7 +34,7 @@
     <span class="console">
 
       <span>
-        <input id="freq" type="number" max="800" value="16"/>Mhz
+        <input id="freq" type="number" max="800" min="1" value="320"/>Mhz
         <button id="run_btn">run</button>
         <button id="stop_btn">stop</button>
         <button id="resume_btn">resume</button>
@@ -103,7 +103,8 @@
       let  g_timer_id;
       let  g_freq;
 
-      const REFRESH_RATE = 24;
+      const  REFRESH_RATE = 24;
+      const  INTERVAL = 1000/REFRESH_RATE;
 
       let  g_cv;
       let  g_cvctx;
@@ -112,6 +113,9 @@
       let  g_ex_img_cv;
       let  g_ex_img_ctx;
       let  g_video_pitch;
+      let  g_flip_counter;
+      let  g_scr_addr;
+      let  g_scrst_addr;
 
       let  g_actx;
       let  g_sin_osc;
@@ -271,33 +275,36 @@
       {
         set_input(g_key_state|0);
 
-        process(g_freq);
+        process(g_freq,INTERVAL);
 
-
-        const  addr = get_data_address("screen_address");
-
-        const  base = get_word(addr);
-
-        let  i = 0;
-
-          for(let  y = 0;  y < g_imgdat.height;  ++y)
+          if(get_word(g_scrst_addr))
           {
-              for(let  x = 0;  x < g_imgdat.width;  ++x)
+            put_word(g_scrst_addr,0);
+
+            const  base = get_word(g_scr_addr);
+
+            let  i = 0;
+
+              for(let  y = 0;  y < g_imgdat.height;  ++y)
               {
-                const  offset = 4*((g_video_pitch*y)+x);
+                  for(let  x = 0;  x < g_imgdat.width;  ++x)
+                  {
+                    const  offset = 4*((g_video_pitch*y)+x);
 
-                const  pixel = get_word(base+offset);
+                    const  pixel = get_word(base+offset);
 
-                g_imgdat.data[i  ] = (pixel>>24)&0xFF;
-                g_imgdat.data[i+1] = (pixel>>16)&0xFF;
-                g_imgdat.data[i+2] = (pixel>> 8)&0xFF;
+                    g_imgdat.data[i  ] = (pixel>>24)&0xFF;
+                    g_imgdat.data[i+1] = (pixel>>16)&0xFF;
+                    g_imgdat.data[i+2] = (pixel>> 8)&0xFF;
 
-                i += 4;
+                    i += 4;
+                  }
               }
+
+
+            g_cvctx.putImageData(g_imgdat,0,0);
           }
 
-
-        g_cvctx.putImageData(g_imgdat,0,0);
 
         update_audio();
 
@@ -335,6 +342,8 @@
         g_asmtext.value = setup();
 
 
+        g_scr_addr      = get_data_address("screen_address");
+        g_scrst_addr    = get_data_address("screen_status");
         g_sin_freq_addr = get_data_address("sin_freq");
         g_sin_vol_addr  = get_data_address("sin_vol");
         g_squ_freq_addr = get_data_address("squ_freq");
@@ -394,7 +403,7 @@
 
         g_freq /= REFRESH_RATE;
 
-        g_timer_id = setInterval(refresh,1000/REFRESH_RATE);
+        g_timer_id = setInterval(refresh,INTERVAL);
       }
 
 

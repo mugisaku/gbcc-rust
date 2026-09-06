@@ -82,10 +82,10 @@ get_const(s: &str)-> u32
 
 #[wasm_bindgen]
 pub fn
-process(freq: u32)
+process(freq: u32, tm: u32)
 {
   unsafe{
-    MACHINE.run(freq as usize);
+    MACHINE.run(freq as usize, tm as usize);
   }
 }
 

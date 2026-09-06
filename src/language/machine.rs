@@ -793,8 +793,8 @@ CommonData
 {
   free_ptr: *mut Core,
 
-  timer: u64,
-  input: u64,
+  timer: usize,
+  input: usize,
 
   verbose: bool,
 
@@ -918,14 +918,14 @@ reset(&mut self, exec: &mut Exec, entry_fn_name: &str)
 pub fn
 set_input(&mut self, v: u64)
 {
-  self.common_data.input = v;
+  self.common_data.input = v as usize;
 }
 
 
 pub fn
-get_input(&self)->u64
+get_input(&self)-> u64
 {
-  self.common_data.input
+  self.common_data.input as u64
 }
 
 
@@ -1013,7 +1013,7 @@ remove(&mut self, ptr: *mut Core)
 
 
 pub fn
-run(&mut self, freq: usize)-> bool
+run(&mut self, freq: usize, tm: usize)-> bool
 {
   let  mut ptr = self.first_ptr;
 
@@ -1050,14 +1050,14 @@ run(&mut self, freq: usize)-> bool
     }
 
 
-  self.common_data.timer += 1;
+  self.common_data.timer += tm;
 
   self.first_ptr != std::ptr::null_mut()
 }
 
 
 pub fn
-keep_run(&mut self, freq: usize)
+keep_run(&mut self, freq: usize, tm: usize)
 {
   use std::time::{Duration,Instant};
   use std::thread::sleep;
@@ -1066,7 +1066,7 @@ keep_run(&mut self, freq: usize)
     {
       let  now = Instant::now();
 
-        if !self.run(freq)
+        if !self.run(freq,tm)
         {
           break;
         }
