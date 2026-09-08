@@ -39,13 +39,18 @@ put_byte(off: usize, v: u8)
 
 #[wasm_bindgen]
 pub fn
-get_word(off: usize)-> u32
-{unsafe{EXEC.get_u32(off)}}
+get_word_hi(off: usize)-> u32
+{unsafe{(EXEC.get_u64(off)>>32) as u32}}
 
 #[wasm_bindgen]
 pub fn
-put_word(off: usize, v: u32)
-{unsafe{EXEC.put_u32(off,v);}}
+get_word_lo(off: usize)-> u32
+{unsafe{EXEC.get_u64(off) as u32}}
+
+#[wasm_bindgen]
+pub fn
+put_word(off: usize, hi: u32, lo: u32)
+{unsafe{EXEC.put_u64(off,((hi as u64)<<32)|(lo as u64));}}
 
 #[wasm_bindgen]
 pub fn

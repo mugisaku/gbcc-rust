@@ -217,23 +217,22 @@ fill(x,y,w,h,pixel)
 
 
 const
-BASE_SIZE = 6;
+BASE_SIZE = 8;
 
 const
 MIDDLE_SIZE = BASE_SIZE*BASE_SIZE;
 
-const
-LARGE_SIZE = MIDDLE_SIZE*BASE_SIZE;
-
 static
 table[BASE_SIZE*BASE_SIZE]: u8{
 
-0,0,1,1,1,1,
-0,0,1,1,1,1,
-0,1,1,1,1,1,
-0,1,1,1,1,1,
-1,1,1,1,1,1,
-1,1,1,1,1,1,
+0,0,0,0,0,0,1,1,
+0,0,0,0,0,0,1,1,
+0,0,0,0,0,0,1,1,
+0,0,0,0,0,0,1,1,
+0,0,0,0,1,1,1,1,
+0,0,0,0,1,1,1,1,
+0,0,0,0,1,1,1,1,
+0,0,0,0,1,1,1,1,
 
 };
 
@@ -242,9 +241,6 @@ base[BASE_SIZE*BASE_SIZE]: u8;
 
 static
 middle[MIDDLE_SIZE*MIDDLE_SIZE]: u8;
-
-static
-large[LARGE_SIZE*LARGE_SIZE]: u8;
 
 
 fn
@@ -370,10 +366,6 @@ update_all()
   var  x = PIXEL_SIZE*BASE_SIZE+4;
 
   draw_bmp(middle.ptr,MIDDLE_SIZE,x,0,2);
-
-  x += MIDDLE_SIZE*2+4;
-
-  draw_bmp(large.ptr,LARGE_SIZE,x,0,1);
 }
 
 
@@ -406,7 +398,6 @@ process_input()
       table_to_base();
 
       transfer(middle.ptr,MIDDLE_SIZE,base.ptr,BASE_SIZE);
-      transfer(large.ptr,LARGE_SIZE,middle.ptr,MIDDLE_SIZE);
 
       update_all();
 
@@ -442,7 +433,6 @@ main()
   table_to_base();
 
   transfer(middle.ptr,MIDDLE_SIZE,base.ptr,BASE_SIZE);
-  transfer(large.ptr,LARGE_SIZE,middle.ptr,MIDDLE_SIZE);
 
   update_all();
 

@@ -84,7 +84,8 @@
       import init, {
         get_byte,
         put_byte,
-        get_word,
+        get_word_hi,
+        get_word_lo,
         put_word,
         set_input,
         get_input,
@@ -159,7 +160,7 @@
       function
       get_freq(addr)
       {
-        const  n = Math.min(12*6,get_word(addr));
+        const  n = Math.min(12*6,get_word_lo(addr));
 
         return (440.0/4)*Math.pow(2,n/12)
       }
@@ -167,7 +168,7 @@
       function
       get_vol(addr)
       {
-        return g_volume_max/256*Math.min(256,get_word(addr));
+        return g_volume_max/256*Math.min(256,get_word_lo(addr));
       }
 
       function
@@ -277,11 +278,11 @@
 
         process(g_freq,INTERVAL);
 
-          if(get_word(g_scrst_addr))
+          if(get_word_lo(g_scrst_addr))
           {
-            put_word(g_scrst_addr,0);
+            put_word(g_scrst_addr,0,0);
 
-            const  base = get_word(g_scr_addr);
+            const  base = get_word_lo(g_scr_addr);
 
             let  i = 0;
 
@@ -291,7 +292,7 @@
                   {
                     const  offset = 4*((g_video_pitch*y)+x);
 
-                    const  pixel = get_word(base+offset);
+                    const  pixel = get_word_lo(base+offset);
 
                     g_imgdat.data[i  ] = (pixel>>24)&0xFF;
                     g_imgdat.data[i+1] = (pixel>>16)&0xFF;
@@ -308,7 +309,7 @@
 
         update_audio();
 
-        g_report.innerText = ""+get_word(g_report_addr);
+        g_report.innerText = ""+get_word_lo(g_report_addr);
       }
 
 
@@ -354,6 +355,11 @@
         g_tri_vol_addr  = get_data_address("tri_vol");
         g_noi_vol_addr  = get_data_address("noi_vol");
         g_report_addr   = get_data_address("report");
+
+        const  rand_hi = Math.random()*0xFFFFFFFF;
+        const  rand_lo = Math.random()*0xFFFFFFFF;
+
+        put_word(get_data_address("rand_state"),rand_hi,rand_lo);
 
         g_up_key    = get_const("UP_KEY");
         g_left_key  = get_const("LEFT_KEY");
