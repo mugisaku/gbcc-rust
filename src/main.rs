@@ -76,31 +76,13 @@ main()
   let  codes =
 r#"
 
-mod Test{
-
-enum{
-  Apple, Grape, Orange
-
-}
-
-}
-
-
-const  c1 = 24;
-const  c2 = c1+60;
-
-static x_obj[80];
-static y_obj = Test::Grape;
-
 
 fn
 main()
 {
-  var  tmp[5]: u8{0xFFFF};
+  var  r = 6;
 
-  var  ptr = tmp.ptr;
-
-  return tmp[0];
+  return r&0b1111;
 }
 
 

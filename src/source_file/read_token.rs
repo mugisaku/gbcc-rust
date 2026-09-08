@@ -77,33 +77,25 @@ is_id_body(c: char)-> bool
 fn
 read_data_that_begins_from_id_head(&mut self, first_c: char)-> Result<TokenKind,Message>
 {
-  let  mut s = String::new();
-
-  s.push(first_c);
-
     if first_c == 'r'
     {
         if let Some(second_c) = self.get_character()
         {
-          self.advance();
-
             if second_c == '#'
             {
                 match self.read_raw_string()
                 {
-              Ok(s)=>{return Ok(TokenKind::String(s));}
+              Ok(raw_s)=>{return Ok(TokenKind::String(raw_s));}
               Err(e)=>{return Err(e);}
                 }
-            }
-
-          else
-            if Self::is_id_body(second_c)
-            {
-              s.push(second_c);
             }
         }
     }
 
+
+  let  mut s = String::new();
+
+  s.push(first_c);
 
     while let Some(c) = self.get_character()
     {
