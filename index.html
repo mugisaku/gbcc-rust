@@ -47,7 +47,7 @@
         REPORT: <span id="report"></span>
       </span>
 
-      <canvas id="display" width="400" height="320">
+      <canvas id="screen" width="400" height="320">
       </canvas>
 
       <span class="input">
@@ -141,6 +141,11 @@
       let  g_x_key;
       let  g_c_key;
       let  g_v_key;
+
+      let  g_mouse_state_addr;
+      let  g_mouse_x;
+      let  g_mouse_y;
+      let  g_mouse_buttons;
 
       const  g_volume_max = 0.1;
 
@@ -274,6 +279,8 @@
       function
       refresh()
       {
+        put_word(g_mouse_state_addr,g_mouse_buttons,(g_mouse_x<<16)|g_mouse_y);
+
         set_input(g_key_state|0);
 
         process(g_freq,INTERVAL);
@@ -282,23 +289,22 @@
           {
             put_word(g_scrst_addr,0,0);
 
-            const  base = get_word_lo(g_scr_addr);
-
-            let  i = 0;
+            let  base = get_word_lo(g_scr_addr);
+            let  dst_i = 0;
 
               for(let  y = 0;  y < g_imgdat.height;  ++y)
               {
+                let  offset = base                 ;
+                              base += g_video_pitch;
+                        
                   for(let  x = 0;  x < g_imgdat.width;  ++x)
                   {
-                    const  offset = 4*((g_video_pitch*y)+x);
+                    g_imgdat.data[dst_i  ] = get_byte(offset  );
+                    g_imgdat.data[dst_i+1] = get_byte(offset+1);
+                    g_imgdat.data[dst_i+2] = get_byte(offset+2);
 
-                    const  pixel = get_word_lo(base+offset);
-
-                    g_imgdat.data[i  ] = (pixel>>24)&0xFF;
-                    g_imgdat.data[i+1] = (pixel>>16)&0xFF;
-                    g_imgdat.data[i+2] = (pixel>> 8)&0xFF;
-
-                    i += 4;
+                    offset += 4;
+                     dst_i += 4;
                   }
               }
 
@@ -309,13 +315,26 @@
 
         update_audio();
 
-        g_report.innerText = ""+get_word_lo(g_report_addr);
+        const  rep_hi = get_word_hi(g_report_addr);
+        const  rep_lo = get_word_lo(g_report_addr);
+
+        g_report.innerText = String((rep_hi<<32)|rep_lo);
       }
 
 
       function  get_ex_img_w(){return g_ex_img_w;}
       function  get_ex_img_h(){return g_ex_img_h;}
       function  get_ex_img_data(){return g_ex_img_data;}
+
+      function  update_mouse(e)
+      {
+        g_mouse_x = e.offsetX;
+        g_mouse_y = e.offsetY;
+
+        g_mouse_buttons = e.buttons;
+      }
+
+
 
       function
       run()
@@ -345,6 +364,7 @@
 
         g_scr_addr      = get_data_address("screen_address");
         g_scrst_addr    = get_data_address("screen_status");
+        g_mouse_state_addr = get_data_address("mouse_state");
         g_sin_freq_addr = get_data_address("sin_freq");
         g_sin_vol_addr  = get_data_address("sin_vol");
         g_squ_freq_addr = get_data_address("squ_freq");
@@ -372,7 +392,7 @@
 
         g_cv.width  = get_const("SCREEN_W");
         g_cv.height = get_const("SCREEN_H");
-        g_video_pitch = get_const("VIDEO_W");
+        g_video_pitch = 4*get_const("VIDEO_W");
 
         g_imgdat = g_cvctx.createImageData(g_cv.width,g_cv.height);
 
@@ -414,7 +434,12 @@
 
 
       init().then(async () => {
-        g_cv = document.getElementById("display");
+        g_cv = document.getElementById("screen");
+
+        g_cv.addEventListener("contextmenu",function(e){e.preventDefault();});
+        g_cv.addEventListener("mousemove",update_mouse);
+        g_cv.addEventListener(  "mouseup",update_mouse);
+        g_cv.addEventListener("mousedown",update_mouse);
 
         g_cvctx = g_cv.getContext("2d");
 
