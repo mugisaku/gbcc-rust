@@ -94,6 +94,7 @@
         process,
         get_error_message,
         transfer_ex_img,
+        add_source,
         compile,
         setup } from "./pkg/gblib.js";
 
@@ -351,7 +352,7 @@
 
         transfer_ex_img(g_ex_img.width,g_ex_img.height,ex_img_data.data);
 
-          if(!compile(g_text.value))
+          if(!compile())
           {
             g_asmtext.value = get_error_message();
 
@@ -523,7 +524,9 @@
 
 
         const  response = await fetch("./gamebaby_sample.txt");
-        const  result = await response.text();
+        const    result = await response.text();
+
+        add_source("./gamebaby_sample.txt",result);
 
         g_text.value = result;
       });

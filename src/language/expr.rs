@@ -9,6 +9,7 @@ use crate::source_file::{
 
 use super::asm::*;
 use super::decl::*;
+use super::project::*;
 
 
 
@@ -83,7 +84,7 @@ read(s: &str)-> Result<Self,()>
 
   let  dic = super::dictionary::get_dictionary();
 
-    if let Ok(nd) = crate::syntax::parse::parse_from_string(s,dic,"expression")
+    if let Ok(nd) = crate::syntax::parse::parse_from_string("",s,dic,"expression")
     {
       return Ok(read_expr(&nd));
     }
@@ -94,13 +95,13 @@ read(s: &str)-> Result<Self,()>
 
 
 pub fn
-collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
+collect_identifier(&self, pj: &Project, ss: &mut StringSet)
 {
     match &self.kind
     {
   ExprKind::Identifier(s)=>
     {
-        if let Some(decl) = set.search(s)
+        if let Some(decl) = pj.find(s)
         {
           ss.insert(s);
         }
@@ -113,28 +114,28 @@ collect_identifier(&self, set: &DeclSet, ss: &mut StringSet)
   ExprKind::String(_,_)=>{}
   ExprKind::CallOp(f,args)=>
     {
-      f.collect_identifier(set,ss);
+      f.collect_identifier(pj,ss);
 
         for e in args
         {
-          e.collect_identifier(set,ss);
+          e.collect_identifier(pj,ss);
         }
     }
   ExprKind::DotOp(ins,_)=>
     {
-      ins.collect_identifier(set,ss);
+      ins.collect_identifier(pj,ss);
     }
   ExprKind::SubscOp(ref_o,idx_o)=>
     {
-      ref_o.collect_identifier(set,ss);
-      idx_o.collect_identifier(set,ss);
+      ref_o.collect_identifier(pj,ss);
+      idx_o.collect_identifier(pj,ss);
     }
-  ExprKind::Expr(e)=>{e.collect_identifier(set,ss);}
-  ExprKind::UnaryOp(o,op)=>{o.collect_identifier(set,ss);}
+  ExprKind::Expr(e)=>{e.collect_identifier(pj,ss);}
+  ExprKind::UnaryOp(o,op)=>{o.collect_identifier(pj,ss);}
   ExprKind::BinaryOp(l,r,op)=>
     {
-      l.collect_identifier(set,ss);
-      r.collect_identifier(set,ss);
+      l.collect_identifier(pj,ss);
+      r.collect_identifier(pj,ss);
     }
   _=>{}
     }

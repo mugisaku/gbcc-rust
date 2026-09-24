@@ -6,6 +6,7 @@ pub mod expr;
 pub mod stmt;
 pub mod evaluate;
 pub mod decl;
+pub mod project;
 pub mod assemble;
 pub mod scope;
 pub mod exec;

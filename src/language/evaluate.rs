@@ -12,6 +12,7 @@ use super::*;
 use super::scope::*;
 use super::expr::*;
 use super::decl::*;
+use super::project::*;
 use super::asm::*;
 
 
@@ -510,17 +511,17 @@ print(&self)
 
 
 pub fn
-evaluate_call(f: &Expr, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+evaluate_call(f: &Expr, args: &Vec<Expr>, pj: &Project, scp_opt: Option<&Scope>)-> Operand
 {
   let  source_info = f.get_source_info().clone();
 
-  let  o = evaluate(f,set,scp_opt);
+  let  o = evaluate(f,pj,scp_opt);
 
   let  mut buf = Vec::<Operand>::new();
 
     for a in args
     {
-      buf.push(evaluate(a,set,scp_opt))
+      buf.push(evaluate(a,pj,scp_opt))
     }
 
 
@@ -542,11 +543,11 @@ evaluate_call(f: &Expr, args: &Vec<Expr>, set: &DeclSet, scp_opt: Option<&Scope>
 
 
 pub fn
-evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+evaluate_dot(e: &Expr, s: &str, pj: &Project, scp_opt: Option<&Scope>)-> Operand
 {
   let  source_info = e.get_source_info().clone();
 
-  let  o = evaluate(e,set,scp_opt);
+  let  o = evaluate(e,pj,scp_opt);
 
     match o.kind
     {
@@ -607,12 +608,12 @@ evaluate_dot(e: &Expr, s: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operan
 
 
 pub fn
-evaluate_subsc(ref_e: &Expr, idx_e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+evaluate_subsc(ref_e: &Expr, idx_e: &Expr, pj: &Project, scp_opt: Option<&Scope>)-> Operand
 {
   let  source_info = ref_e.get_source_info().clone();
 
-  let  ref_o = evaluate(ref_e,set,scp_opt);
-  let  idx_o = evaluate(idx_e,set,scp_opt);
+  let  ref_o = evaluate(ref_e,pj,scp_opt);
+  let  idx_o = evaluate(idx_e,pj,scp_opt);
 
   let  k = ref_o.clone_ty_kind();
 
@@ -623,7 +624,7 @@ evaluate_subsc(ref_e: &Expr, idx_e: &Expr, set: &DeclSet, scp_opt: Option<&Scope
 
 
 pub fn
-evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+evaluate_identifier(source_info: SourceInfo, name: &str, pj: &Project, scp_opt: Option<&Scope>)-> Operand
 {
     if name == "false"
     {
@@ -667,7 +668,7 @@ evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt:
     }
 
 
-    if let Some(decl) = set.search(name)
+    if let Some(decl) = pj.find(name)
     {
         match decl.get_kind()
         {
@@ -699,11 +700,11 @@ evaluate_identifier(source_info: SourceInfo, name: &str, set: &DeclSet, scp_opt:
 
 
 pub fn
-evaluate_unary(e: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+evaluate_unary(e: &Expr, op: &str, pj: &Project, scp_opt: Option<&Scope>)-> Operand
 {
   let  source_info = e.get_source_info().clone();
 
-  let  o = evaluate(e,set,scp_opt);
+  let  o = evaluate(e,pj,scp_opt);
 
     match op
     {
@@ -716,12 +717,12 @@ evaluate_unary(e: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Ope
 
 
 pub fn
-evaluate_binary(l: &Expr, r: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+evaluate_binary(l: &Expr, r: &Expr, op: &str, pj: &Project, scp_opt: Option<&Scope>)-> Operand
 {
   let  source_info = l.get_source_info().clone();
 
-  let  lo = evaluate(l,set,scp_opt);
-  let  ro = evaluate(r,set,scp_opt);
+  let  lo = evaluate(l,pj,scp_opt);
+  let  ro = evaluate(r,pj,scp_opt);
 
     match op
     {
@@ -749,7 +750,7 @@ evaluate_binary(l: &Expr, r: &Expr, op: &str, set: &DeclSet, scp_opt: Option<&Sc
 
 
 pub fn
-evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
+evaluate(e: &Expr, pj: &Project, scp_opt: Option<&Scope>)-> Operand
 {
   let  source_info = e.get_source_info().clone();
 
@@ -757,7 +758,7 @@ evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
     {
   ExprKind::Identifier(s)=>
     {
-      evaluate_identifier(source_info,s,set,scp_opt)
+      evaluate_identifier(source_info,s,pj,scp_opt)
     }
   ExprKind::Int(i)=>
     {
@@ -765,7 +766,7 @@ evaluate(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Operand
     }
   ExprKind::String(_,name)=>
     {
-        if let Some(decl) = set.get_root().find(&name)
+        if let Some(decl) = pj.find(&name)
         {
 todo!();
         }
@@ -777,36 +778,36 @@ todo!();
     }
   ExprKind::CallOp(f,args)=>
     {
-      evaluate_call(f,args,set,scp_opt)
+      evaluate_call(f,args,pj,scp_opt)
     }
   ExprKind::Expr(e)=>
     {
-      evaluate(e,set,scp_opt)
+      evaluate(e,pj,scp_opt)
     }
   ExprKind::DotOp(ins,s)=>
     {
-      evaluate_dot(ins,s,set,scp_opt)
+      evaluate_dot(ins,s,pj,scp_opt)
     }
   ExprKind::SubscOp(ref_o,idx_o)=>
     {
-      evaluate_subsc(ref_o,idx_o,set,scp_opt)
+      evaluate_subsc(ref_o,idx_o,pj,scp_opt)
     }
   ExprKind::UnaryOp(o,op)=>
     {
-      evaluate_unary(o,op,set,scp_opt)
+      evaluate_unary(o,op,pj,scp_opt)
     }
   ExprKind::BinaryOp(l,r,op)=>
     {
-      evaluate_binary(l,r,op,set,scp_opt)
+      evaluate_binary(l,r,op,pj,scp_opt)
     }
     }
 }
 
 
 pub fn
-evaluate_const(e: &Expr, set: &DeclSet, scp_opt: Option<&Scope>)-> Option<i64>
+evaluate_const(e: &Expr, pj: &Project, scp_opt: Option<&Scope>)-> Option<i64>
 {
-  let  o = evaluate(e,set,scp_opt);
+  let  o = evaluate(e,pj,scp_opt);
 
     match &o.kind
     {

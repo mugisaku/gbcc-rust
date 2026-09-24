@@ -536,9 +536,9 @@ parse<'a>(toks: &Vec<Token>, dic: &'a Dictionary, main_def_name: &str)-> Result<
 
 
 pub fn
-parse_from_string<'a>(s: &str, dic: &'a Dictionary, main_def_name: &str)-> Result<Node,Message>
+parse_from_string<'a>(name: &str, s: &str, dic: &'a Dictionary, main_def_name: &str)-> Result<Node,Message>
 {
-  let  file = std::rc::Rc::new(SourceFile::from_string(s));
+  let  file = std::rc::Rc::new(SourceFile::from_string(name,s));
 
   let  mut r = SourceReader::new(&file);
 

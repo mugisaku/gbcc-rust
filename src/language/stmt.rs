@@ -9,6 +9,7 @@ use crate::source_file::{
 
 use super::expr::*;
 use super::decl::*;
+use super::project::*;
 use super::evaluate::*;
 use super::asm::*;
 use super::scope::*;
@@ -297,7 +298,7 @@ read(s: &str)-> Result<Self,()>
 
   let  dic = super::dictionary::get_dictionary();
 
-    if let Ok(nd) = crate::syntax::parse::parse_from_string(s,dic,"statement")
+    if let Ok(nd) = crate::syntax::parse::parse_from_string("",s,dic,"statement")
     {
       return Ok(read_stmt(&nd));
     }

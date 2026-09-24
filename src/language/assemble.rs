@@ -2,6 +2,7 @@
 
 use super::*;
 use super::decl::*;
+use super::project::*;
 use super::expr::*;
 use super::stmt::*;
 use super::asm::*;
@@ -146,7 +147,7 @@ new(id: usize)-> Self
 
 
 fn
-process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
+process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, pj: &Project, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  mut blh = lid.make_br_label_holder();
 
@@ -156,7 +157,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
     {
       output.push_label(blh.get_label());
 
-      let  o = evaluate(cond,set,Some(scp));
+      let  o = evaluate(cond,pj,Some(scp));
 
       blh.increment();
 
@@ -164,7 +165,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
       output.push_brz(blh.get_label());
 
-      process_block(blk,set,lid,clh_opt,scp,output)?;
+      process_block(blk,pj,lid,clh_opt,scp,output)?;
 
       output.push_jmp(&end_label);
     }
@@ -174,7 +175,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
     if let Some(blk) = ifstmt.get_else_block_opt()
     {
-      process_block(blk,set,lid,clh_opt,scp,output)?;
+      process_block(blk,pj,lid,clh_opt,scp,output)?;
     }
 
 
@@ -185,7 +186,7 @@ process_if(srcinf: &SourceInfo, ifstmt: &IfStmt, set: &DeclSet, lid: &mut LabelI
 
 
 fn
-process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
+process_for(srcinf: &SourceInfo, forstmt: &ForStmt, pj: &Project, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  clh = lid.make_ctrl_label_holder();
 
@@ -201,7 +202,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
 
       let  l = Operand::make_load_local(srcinf.clone(),count_max_off,TyKind::I64);
 
-      let  r = evaluate(forstmt.get_expr(),set,Some(scp));
+      let  r = evaluate(forstmt.get_expr(),pj,Some(scp));
 
       output.try_push_assign(srcinf,l,r,"=")?;
     }
@@ -252,7 +253,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
 
   output.push_brz(&clh.on_break);
 
-  process_block(forstmt.get_block(),set,lid,Some(&clh),&new_scp,output)?;
+  process_block(forstmt.get_block(),pj,lid,Some(&clh),&new_scp,output)?;
 
   output.push_jmp(&clh.on_continue);
 
@@ -263,13 +264,13 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, set: &DeclSet, lid: &mut Lab
 
 
 fn
-process_block(blk: &Block, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
+process_block(blk: &Block, pj: &Project, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  mut new_scp = Scope::new(scp);
 
     for stmt in blk.get_stmt_list()
     {
-      process_stmt(stmt,set,lid,clh_opt,&mut new_scp,output)?;
+      process_stmt(stmt,pj,lid,clh_opt,&mut new_scp,output)?;
     }
 
 
@@ -278,21 +279,21 @@ process_block(blk: &Block, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ct
 
 
 fn
-process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)-> Result<(),Message>
+process_stmt(stmt: &Stmt, pj: &Project, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  srcinf = stmt.get_source_info();
 
     match stmt.get_kind()
     {
   StmtKind::Empty=>{Ok(())}
-  StmtKind::Block(blk)=>{process_block(blk,set,lid,clh_opt,scp,output)}
+  StmtKind::Block(blk)=>{process_block(blk,pj,lid,clh_opt,scp,output)}
   StmtKind::Decl(decl)=>
     {
         match decl.get_kind()
         {
       DeclKind::Const(e,_)=>
         {
-            match evaluate_const(e,set,Some(scp))
+            match evaluate_const(e,pj,Some(scp))
             {
           Some(i)=>
             {
@@ -309,7 +310,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
             if let Some(e) = inf.get_length_expr_opt()
             {
-                match evaluate_const(e,set,Some(scp))
+                match evaluate_const(e,pj,Some(scp))
                 {
               Some(i)=>{len = i as usize;}
               None=>{return Err(srcinf.to_message()+"varの要素数の算出に失敗");}
@@ -332,7 +333,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
 
                   let  l = Operand::make_load_local(srcinf.clone(),off,k.clone());
-                  let  r = evaluate(e,set,Some(scp));
+                  let  r = evaluate(e,pj,Some(scp));
 
                   output.try_push_assign(srcinf,l,r,"=")?;
 
@@ -346,7 +347,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
         }
       DeclKind::LocalStatic(name)=>
         {
-            if let Some(src_decl) = set.get_root().find(name)
+            if let Some(src_decl) = pj.find(name)
             {
                 if let DeclKind::Static(inf) = src_decl.get_kind()
                 {
@@ -371,7 +372,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     }
   StmtKind::Expr(e)=>
     {
-      let  o = evaluate(e,set,Some(scp));
+      let  o = evaluate(e,pj,Some(scp));
 
       o.write_to(false,output)?;
 
@@ -379,14 +380,14 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
       Ok(())
     }
-  StmtKind::If(i)=>{process_if(srcinf,i,set,lid,clh_opt,scp,output)}
+  StmtKind::If(i)=>{process_if(srcinf,i,pj,lid,clh_opt,scp,output)}
   StmtKind::Loop(blk)=>
     {
       let  clh = lid.make_ctrl_label_holder();
 
       output.push_label(&clh.on_continue);
 
-        match process_block(blk,set,lid,Some(&clh),scp,output)
+        match process_block(blk,pj,lid,Some(&clh),scp,output)
         {
       Ok(())=>
         {
@@ -406,13 +407,13 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
       output.push_label(&clh.on_continue);
 
 
-      let  o = evaluate(e,set,Some(scp));
+      let  o = evaluate(e,pj,Some(scp));
 
       o.write_to(true,output)?;
 
       output.push_brz(&clh.on_break);
 
-      process_block(blk,set,lid,Some(&clh),scp,output)?;
+      process_block(blk,pj,lid,Some(&clh),scp,output)?;
 
       output.push_jmp(&clh.on_continue);
 
@@ -420,12 +421,12 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
       Ok(())
     }
-  StmtKind::For(f)=>{process_for(srcinf,f,set,lid,clh_opt,scp,output)}
+  StmtKind::For(f)=>{process_for(srcinf,f,pj,lid,clh_opt,scp,output)}
   StmtKind::Return(e_opt)=>
     {
         if let Some(e) = e_opt
         {
-          let  o = evaluate(e,set,Some(scp));
+          let  o = evaluate(e,pj,Some(scp));
 
           o.write_to(true,output)?;
         }
@@ -442,8 +443,8 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     }
   StmtKind::Assign(l,r,op)=>
     {
-      let  lo = evaluate(l,set,Some(scp));
-      let  ro = evaluate(r,set,Some(scp));
+      let  lo = evaluate(l,pj,Some(scp));
+      let  ro = evaluate(r,pj,Some(scp));
 
       output.try_push_assign(srcinf,lo,ro,op)
     }
@@ -487,7 +488,7 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
     }
   StmtKind::Print(e)=>
     {
-      let  o = evaluate(e,set,Some(scp));
+      let  o = evaluate(e,pj,Some(scp));
 
       o.write_to(true,output)?;
 
@@ -502,14 +503,14 @@ process_stmt(stmt: &Stmt, set: &DeclSet, lid: &mut LabelID, clh_opt: Option<&Ctr
 
 
 pub fn
-assemble(srcinf: &SourceInfo, decl: &FnDecl, set: &DeclSet)-> Result<AsmText,Message>
+assemble(srcinf: &SourceInfo, decl: &FnDecl, pj: &Project)-> Result<AsmText,Message>
 {
   let  mut text = AsmText::new();
   let   mut lid = LabelID::new();
 
   let  scp = Scope::new_root(decl);
 
-  process_block(decl.get_block(),set,&mut lid,None,&scp,&mut text)?;
+  process_block(decl.get_block(),pj,&mut lid,None,&scp,&mut text)?;
 
   text.set_xs(scp.get_offset_max());
   text.terminate();

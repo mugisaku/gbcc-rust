@@ -215,7 +215,7 @@ new()-> Self
 pub fn
 make_from_string(s: &str)-> Result<Self,Message>
 {
-  let  file = Rc::new(crate::source_file::SourceFile::from_string(s));
+  let  file = Rc::new(crate::source_file::SourceFile::from_string("",s));
 
   super::read_dictionary::read_dictionary(&file)
 }

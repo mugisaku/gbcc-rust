@@ -5,6 +5,7 @@ use std::cell::Cell;
 
 use super::*;
 use super::decl::*;
+use super::project::*;
 use super::expr::*;
 use super::stmt::*;
 use super::evaluate::*;

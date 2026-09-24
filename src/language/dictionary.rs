@@ -116,8 +116,6 @@ const : 'const  -> .Identifier & "=" & expression;
 
 enum: 'enum   -> "{" & {.Identifier & [","]} & "}";
 
-mod: 'mod -> .Identifier & "{" & [{declaration}] & "}";
-
 
 declaration: fn
            | static
@@ -125,7 +123,6 @@ declaration: fn
            | const
            | enum
            | static
-           | mod
            | empty;
 
 

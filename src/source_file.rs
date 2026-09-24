@@ -14,7 +14,7 @@ mod read_token;
 pub struct
 SourceFile
 {
-  path: String,
+  name: String,
 
   lines: Vec<Vec<char>>,
 
@@ -29,12 +29,12 @@ SourceFile
 pub fn
 new()-> Self
 {
-  Self{path: String::new(), lines: Vec::new()}
+  Self{name: String::new(), lines: Vec::new()}
 }
 
 
 pub fn
-from_string(s: &str)-> Self
+from_string(name: &str, s: &str)-> Self
 {
   let  mut srcf = Self::new();
 
@@ -59,6 +59,8 @@ from_string(s: &str)-> Self
     }
 
 
+  srcf.name.push_str(name);
+
   srcf
 }
 
@@ -72,9 +74,7 @@ from_file(path: &str)-> Result<Self,()>
 
       let  _ = f.read_to_string(&mut s);
 
-      let  mut srcf = SourceFile::from_string(s.as_str());
-
-      srcf.path = path.to_string();
+      let  mut srcf = SourceFile::from_string(path,s.as_str());
 
       return Ok(srcf);
     }
@@ -85,9 +85,9 @@ from_file(path: &str)-> Result<Self,()>
 
 
 pub fn
-get_path(&self)-> &String
+get_name(&self)-> &String
 {
-  &self.path
+  &self.name
 }
 
 
@@ -204,7 +204,7 @@ get_file(&self)-> &Rc<SourceFile>
 pub fn
 to_string(&self)-> String
 {
-  let  mut s = format!("[file: \"{}\" x: {} y: {}]\n",self.file.get_path(),1+self.x,1+self.y);
+  let  mut s = format!("[file: \"{}\" x: {} y: {}]\n",self.file.get_name(),1+self.x,1+self.y);
 
     if self.y >= 2{self.file.print_line_to(self.y-2,None,&mut s);}
     if self.y >= 1{self.file.print_line_to(self.y-1,None,&mut s);}

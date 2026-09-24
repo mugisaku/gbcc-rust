@@ -10,6 +10,7 @@ mod debug;
 use wasm_bindgen::prelude::*;
 use crate::language::machine::*;
 use crate::language::decl::*;
+use crate::language::project::*;
 use crate::language::exec::*;
 
 
@@ -23,6 +24,7 @@ static mut EX_IMG_W: u32 = 0;
 static mut EX_IMG_H: u32 = 0;
 static mut EX_IMG_DATA: Vec<u8> = Vec::new();
 
+static mut PJ: Project = Project::new();
 static mut EXEC: Exec = Exec::new();
 static mut ERR_MSG: String = String::new();
 static mut MACHINE: Machine = Machine::new();
@@ -117,35 +119,42 @@ transfer_ex_img(w: u32, h: u32, data: Vec<u8>)
 
 #[wasm_bindgen]
 pub fn
-compile(s: &str)-> bool
+add_source(name: &str, s: &str)-> bool
+{
+  unsafe{
+    match PJ.add_source(name,s)
+    {
+  Ok(())=>{true}
+  Err(msg)=>
+    {
+      ERR_MSG = msg.to_string();
+
+      false
+    }
+    }
+  }
+}
+
+
+#[wasm_bindgen]
+pub fn
+compile()-> bool
 {
     unsafe
     {
-        match DeclSet::read(s)
+      PJ.add_ex_img("image",EX_IMG_W,EX_IMG_H,&EX_IMG_DATA);
+
+        match PJ.compile()
         {
-      Ok(mut root)=>
+      Ok(())=>
         {
-          root.add_ex_img("image",EX_IMG_W,EX_IMG_H,&EX_IMG_DATA);
-
-            match root.finalize()
+            match PJ.generate_exec()
             {
-          Ok(())=>
+          Ok(exec)=>
             {
-                match root.generate_exec()
-                {
-              Ok(exec)=>
-                {
-                  EXEC = exec;
+              EXEC = exec;
 
-                  true
-                }
-              Err(msg)=>
-                {
-                  ERR_MSG = msg.to_string();
-
-                  false
-                }
-                }
+              true
             }
           Err(msg)=>
             {
