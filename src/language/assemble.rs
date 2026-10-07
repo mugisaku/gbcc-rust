@@ -200,7 +200,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, pj: &Project, lid: &mut Labe
     {
       count_max_off = new_scp.add_var("<FOR_COUNT_MAX>",1,TyKind::I64);
 
-      let  l = Operand::make_load_local(srcinf.clone(),count_max_off,TyKind::I64);
+      let  l = Operand::make_load_local(srcinf.clone(),count_max_off,TyKind::I64,1);
 
       let  r = evaluate(forstmt.get_expr(),pj,Some(scp));
 
@@ -211,7 +211,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, pj: &Project, lid: &mut Labe
   let  count_cur_off = new_scp.add_var(forstmt.get_var_name(),1,TyKind::I64);
 
     {
-      let  o = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64);
+      let  o = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64,1);
 
       o.write_to(false,output)?;
 
@@ -226,7 +226,7 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, pj: &Project, lid: &mut Labe
   output.push_label(&clh.on_continue);
 
     {
-      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64);
+      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64,1);
 
       lo.write_to(false,output)?;
 
@@ -241,8 +241,8 @@ process_for(srcinf: &SourceInfo, forstmt: &ForStmt, pj: &Project, lid: &mut Labe
   output.push_label(&cmp_label);
 
     {
-      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64);
-      let  ro = Operand::make_load_local(srcinf.clone(),count_max_off,TyKind::I64);
+      let  lo = Operand::make_load_local(srcinf.clone(),count_cur_off,TyKind::I64,1);
+      let  ro = Operand::make_load_local(srcinf.clone(),count_max_off,TyKind::I64,1);
 
       lo.write_to(true,output)?;
       ro.write_to(true,output)?;
@@ -279,7 +279,59 @@ process_block(blk: &Block, pj: &Project, lid: &mut LabelID, clh_opt: Option<&Ctr
 
 
 fn
-process_stmt(stmt: &Stmt, pj: &Project, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder> ,scp: &mut Scope, output: &mut AsmText)-> Result<(),Message>
+process_var(v: &VarDecl, srcinf: &SourceInfo, name: &str, pj: &Project, scp: &mut Scope, output: &mut AsmText)-> Result<(),Message>
+{
+  let  mut len = v.get_length();
+
+    if let Some(e) = v.get_length_expr_opt()
+    {
+        match evaluate_const(e,pj,Some(scp))
+        {
+      Some(i)=>{len = i as usize;}
+      None=>{return Err(srcinf.to_message()+"varの要素数の算出に失敗");}
+        }
+    }
+
+
+  let  k = v.get_ty_kind().clone();
+
+  let  sz = k.get_size() as isize;
+
+  let  base_off = scp.add_var(name,len,k.clone());
+
+    if let Some(inits) = v.get_initializers_opt()
+    {
+      let  mut off = base_off;
+
+        for init in inits
+        {
+            if let Some(e) = init.get_start_expr_opt()
+            {
+                match evaluate_const(e,pj,Some(scp))
+                {
+              Some(i)=>{off = base_off+((sz as isize)*(i as isize));}
+              None=>{return Err(srcinf.to_message()+"varのインデックスの算出に失敗");}
+                }
+            }
+
+
+          let  l = Operand::make_load_local(srcinf.clone(),off,k.clone(),1);
+
+          let  r = evaluate(&init.get_expr(),pj,Some(scp));
+
+          output.try_push_assign(srcinf,l,r,"=")?;
+
+          off += sz as isize;
+        }
+    }
+
+
+  Ok(())
+}
+
+
+fn
+process_stmt(stmt: &Stmt, pj: &Project, lid: &mut LabelID, clh_opt: Option<&CtrlLabelHolder>, scp: &mut Scope, output: &mut AsmText)-> Result<(),Message>
 {
   let  srcinf = stmt.get_source_info();
 
@@ -304,46 +356,9 @@ process_stmt(stmt: &Stmt, pj: &Project, lid: &mut LabelID, clh_opt: Option<&Ctrl
           None=>{Err(srcinf.to_message()+"constの算出に失敗")}
             }
         }
-      DeclKind::Var(inf)=>
+      DeclKind::Var(v)=>
         {
-          let  mut len = inf.get_length();
-
-            if let Some(e) = inf.get_length_expr_opt()
-            {
-                match evaluate_const(e,pj,Some(scp))
-                {
-              Some(i)=>{len = i as usize;}
-              None=>{return Err(srcinf.to_message()+"varの要素数の算出に失敗");}
-                }
-            }
-
-
-          let  k = inf.get_ty_kind().clone();
-
-          let  mut off = scp.add_var(decl.get_name(),len,k.clone());
-
-            if let Some(exprs) = inf.get_init_exprs_opt()
-            {
-                for e in exprs
-                {
-                    if len == 0
-                    {
-                      return Err(e.get_source_info().to_message()+"初期化式が多い");
-                    }
-
-
-                  let  l = Operand::make_load_local(srcinf.clone(),off,k.clone());
-                  let  r = evaluate(e,pj,Some(scp));
-
-                  output.try_push_assign(srcinf,l,r,"=")?;
-
-                  off += k.get_size() as isize;
-                  len -= 1;
-                }
-            }
-
-
-          Ok(())
+          Ok(process_var(v,srcinf,decl.get_name(),pj,scp,output)?)
         }
       DeclKind::LocalStatic(name)=>
         {

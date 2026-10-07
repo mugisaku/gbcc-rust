@@ -12,7 +12,6 @@ pub mod scope;
 pub mod exec;
 pub mod tplg_sort;
 pub mod dictionary;
-pub mod font14;
 pub mod font8;
 
 

@@ -138,6 +138,17 @@ add_source(name: &str, s: &str)-> bool
 
 #[wasm_bindgen]
 pub fn
+clear()
+{
+    unsafe
+    {
+      PJ.clear();
+    }
+}
+
+
+#[wasm_bindgen]
+pub fn
 compile()-> bool
 {
     unsafe

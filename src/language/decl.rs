@@ -22,8 +22,6 @@ use super::stmt::*;
 use super::scope::*;
 use super::assemble::assemble;
 use super::asm::Opcode;
-use super::font14::*;
-use super::font8::*;
 use super::tplg_sort::*;
 use super::evaluate::*;
 use super::project::*;
@@ -134,24 +132,56 @@ print(&self)
 
 
 pub struct
-StorageInfo
+Initializer
+{
+  start_expr_opt: Option<Expr>,
+
+  expr: Expr,
+
+}
+
+
+impl
+Initializer
+{
+
+
+pub fn
+get_start_expr_opt(&self)-> &Option<Expr>
+{
+  &self.start_expr_opt
+}
+
+
+pub fn
+get_expr(&self)-> &Expr
+{
+  &self.expr
+}
+
+
+}
+
+
+
+
+pub struct
+VarDecl
 {
   length: usize,
   length_expr_opt: Option<Expr>,
 
   ty_kind: TyKind,
 
-  init_exprs_opt: Option<Vec<Expr>>,
+  initializers_opt: Option<Vec<Initializer>>,
 
   content: Vec<u8>,
-
-  is_utf8: bool,
 
 }
 
 
 impl
-StorageInfo
+VarDecl
 {
 
 
@@ -162,48 +192,26 @@ new()-> Self
     length: 0,
     length_expr_opt: None,
     ty_kind: TyKind::Void,
-    init_exprs_opt: None,
+    initializers_opt: None,
     content: Vec::new(),
-    is_utf8: false,
   }
 }
 
 
 pub fn
-from_string(s: &str)-> Self
-{
-  let  mut inf = Self::new();
-
-  inf.length = s.len()+1;
-  inf.is_utf8 = true;
-
-    for b in s.as_bytes()
-    {
-      inf.content.push(*b);
-    }
-
-
-  inf.content.push(0);
-
-  inf
-}
-
-
-pub fn
-from_data(data: Vec<u8>, k: TyKind)-> Self
+from_bytes(bytes: Vec<u8>, k: TyKind)-> Self
 {
   let  element_size = k.get_size();
 
-  let  length = if element_size != 0{data.len()/element_size} else{0};
+  let  length = if element_size != 0{bytes.len()/element_size} else{0};
 
 
   Self{
     length,
     length_expr_opt: None,
     ty_kind: k,
-    init_exprs_opt: None,
-    content: data,
-    is_utf8: false,
+    initializers_opt: None,
+    content: bytes,
   }
 }
 
@@ -217,11 +225,17 @@ collect_identifier(&self, pj: &Project, ss: &mut StringSet)
     }
 
 
-    if let Some(exprs) = &self.init_exprs_opt
+    if let Some(inits) = &self.initializers_opt
     {
-        for e in exprs
+        for init in inits
         {
-          e.collect_identifier(pj,ss);
+            if let Some(e) = &init.start_expr_opt
+            {
+              e.collect_identifier(pj,ss);
+            }
+
+
+          init.expr.collect_identifier(pj,ss);
         }
     }
 }
@@ -236,13 +250,113 @@ collect_static(&mut self, ss: &mut StaticSet)
     }
 
 
-    if let Some(exprs) = &mut self.init_exprs_opt
+    if let Some(inits) = &mut self.initializers_opt
     {
-        for e in exprs
+        for init in inits
         {
-          e.collect_static(ss);
+            if let Some(e) = &mut init.start_expr_opt
+            {
+              e.collect_static(ss);
+            }
+
+
+          init.expr.collect_static(ss);
         }
     }
+}
+
+
+fn
+initialize_content(dst: &mut [u8], inits: &[Initializer], n: usize, k: &TyKind, pj: &Project)-> Result<(),Message>
+{
+  let  sz = k.get_size();
+
+  let  mut ptr = dst.as_mut_ptr();
+  let      end = unsafe{ptr.add(sz*n)};
+
+    for init in inits
+    {
+        if let Some(e) = &init.start_expr_opt
+        {
+            if let Some(i) = evaluate_const(e,pj,None)
+            {
+              ptr = unsafe{dst.as_mut_ptr().add(sz*(i as usize))};
+            }
+
+          else
+            {
+              return Err(Message::from("initialize_content error: インデックス値の算出に失敗"));
+            }
+        }
+
+
+        if ptr >= end
+        {
+          return Err(Message::from("initialize_content error: ptr over end"));
+        }
+
+
+        match evaluate_const(&init.expr,pj,None)
+        {
+      Some(i)=>
+        {
+            match k
+            {
+          TyKind::I8 =>{*unsafe{&mut *(ptr as *mut  i8)} = i as  i8;}
+          TyKind::I16=>{*unsafe{&mut *(ptr as *mut i16)} = i as i16;}
+          TyKind::I32=>{*unsafe{&mut *(ptr as *mut i32)} = i as i32;}
+          TyKind::I64=>{*unsafe{&mut *(ptr as *mut i64)} = i       ;}
+          TyKind::U8 =>{*unsafe{&mut *(ptr as *mut  u8)} = i as  u8;}
+          TyKind::U16=>{*unsafe{&mut *(ptr as *mut u16)} = i as u16;}
+          TyKind::U32=>{*unsafe{&mut *(ptr as *mut u32)} = i as u32;}
+          _=>
+            {
+              return Err(Message::from("initialize_content error: maybe void"));
+            }
+            }
+
+
+          ptr = unsafe{ptr.add(sz)};
+        }
+      None=>{return Err(init.expr.get_source_info().to_message()+"initialize_content error: const value eval is failed")}
+        }
+    }
+
+
+  Ok(())
+}
+
+
+pub fn
+build_content(&mut self, srcinf: &SourceInfo, pj: &Project)-> Result<usize,Message>
+{
+    if let Some(e) = &self.length_expr_opt
+    {
+        match evaluate_const(&e,pj,None)
+        {
+      Some(i)=>{self.length = i as usize;}
+      None=>{return Err(srcinf.to_message()+"要素数の算出に失敗");}
+        }
+    }
+
+
+  let  sz = self.get_size();
+
+    if self.content.len() == 0
+    {
+      self.content.resize(sz,0);
+
+        if let Some(inits) = &self.initializers_opt
+        {
+            if let Err(msg) = Self::initialize_content(&mut self.content,inits,self.length,&self.ty_kind,pj)
+            {
+              return Err(srcinf.to_message()+msg);
+            }
+        }
+    }
+
+
+  Ok(sz)
 }
 
 
@@ -268,16 +382,9 @@ get_ty_kind(&self)-> &TyKind
 
 
 pub fn
-get_init_exprs_opt(&self)-> &Option<Vec<Expr>>
+get_initializers_opt(&self)-> &Option<Vec<Initializer>>
 {
-  &self.init_exprs_opt
-}
-
-
-pub fn
-get_size(&self)-> usize
-{
-  self.ty_kind.get_size()*self.length
+  &self.initializers_opt
 }
 
 
@@ -285,6 +392,13 @@ pub fn
 get_content(&self)-> &Vec<u8>
 {
   &self.content
+}
+
+
+pub fn
+get_size(&self)-> usize
+{
+  self.ty_kind.get_size()*self.length
 }
 
 
@@ -308,28 +422,36 @@ print(&self)
 
   self.ty_kind.print();
 
-    if let Some(exprs) = &self.init_exprs_opt
+    if let Some(inits) = &self.initializers_opt
     {
       print!("{{");
 
-        for e in exprs
+      let  mut  n = 3;
+
+        for init in inits
         {
-          e.print();
+            if let Some(e) = &init.start_expr_opt
+            {
+              e.print();
+            }
+
+
+          init.expr.print();
 
           print!(",");
+
+          n -= 1;
+
+            if n == 0
+            {
+              print!(" ...");
+
+              break;
+            }
         }
 
 
       print!("}}");
-    }
-
-  else
-    if self.is_utf8
-    {
-        if let Ok(s) = str::from_utf8(&self.content)
-        {
-          print!("\"{}\"",s);
-        }
     }
 }
 
@@ -345,10 +467,14 @@ DeclKind
   Undef,
 
   Const(Expr,i64),
-  Static(StorageInfo),
-     Var(StorageInfo),
+  Static(VarDecl),
+     Var(VarDecl),
 
   LocalStatic(String),
+
+     String(String),
+  U16String(Vec<u16>),
+  U32String(Vec<u32>),
 
   Enum(Vec<String>),
 
@@ -367,8 +493,8 @@ print(&self, name: &str)
 {
     match self
     {
-  DeclKind::Undef=>{print!("undef {}",name);}
-  DeclKind::Const(e,i)=>
+  Self::Undef=>{print!("undef {}",name);}
+  Self::Const(e,i)=>
     {
       print!("const {}",name);
 
@@ -378,23 +504,48 @@ print(&self, name: &str)
 
       print!(" = {}",*i);
     }
-  DeclKind::Static(inf)=>
+  Self::Static(v)=>
     {
       print!("static {}",name);
 
-      inf.print();
+      v.print();
     }
-  DeclKind::Var(inf)=>
+  Self::Var(v)=>
     {
       print!("var {}",name);
 
-      inf.print();
+      v.print();
     }
-  DeclKind::LocalStatic(name)=>
+  Self::LocalStatic(name)=>
     {
       print!("local static {}",name);
     }
-  DeclKind::Enum(ls)=>
+  Self::String(s)=>{print!("static  {}: u8\"{}\"",name,s);}
+  Self::U16String(s)=>
+    {
+      print!("static  {}: u16\"",name);
+
+        for c in s
+        {
+          print!("{}",char::from_u32(*c as u32).unwrap());
+        }
+
+
+      print!("\"");
+    }
+  Self::U32String(s)=>
+    {
+      print!("static  {}: u32\"",name);
+
+        for c in s
+        {
+          print!("{}",char::from_u32(*c).unwrap());
+        }
+
+
+      print!("\"");
+    }
+  Self::Enum(ls)=>
     {
       print!("enum{{");
 
@@ -406,7 +557,7 @@ print(&self, name: &str)
 
       print!("}}");
     }
-  DeclKind::Fn(f)=>
+  Self::Fn(f)=>
     {
       print!("fn {}",name);
 
@@ -475,7 +626,7 @@ new_const(name: &str, v: i64)-> Self
 
 
 pub fn
-new_static(srcinf: SourceInfo, name: String, si: StorageInfo)-> Self
+new_static(srcinf: SourceInfo, name: String, v: VarDecl)-> Self
 {
   let  mut decl = Decl::new();
 
@@ -483,7 +634,68 @@ new_static(srcinf: SourceInfo, name: String, si: StorageInfo)-> Self
 
   decl.name = name;
 
-  decl.kind = DeclKind::Static(si);
+  decl.kind = DeclKind::Static(v);
+
+  decl
+}
+
+
+pub fn
+new_string(srcinf: SourceInfo, name: String, s: String)-> Self
+{
+  let  mut decl = Decl::new();
+
+  decl.source_info = srcinf;
+
+  decl.name = name;
+
+  decl.kind = DeclKind::String(s);
+
+  decl
+}
+
+
+pub fn
+new_u16string(srcinf: SourceInfo, name: String, s: &str)-> Self
+{
+  let  mut decl = Decl::new();
+
+  decl.source_info = srcinf;
+
+  decl.name = name.to_string();
+
+  let  mut buf = Vec::<u16>::new();
+
+    for c in s.chars()
+    {
+      buf.push(c as u16);
+    }
+
+
+  decl.kind = DeclKind::U16String(buf);
+
+  decl
+}
+
+
+pub fn
+new_u32string(srcinf: SourceInfo, name: String, s: &str)-> Self
+{
+  let  mut decl = Decl::new();
+
+  decl.source_info = srcinf;
+
+  decl.name = name;
+
+  let  mut buf = Vec::<u32>::new();
+
+    for c in s.chars()
+    {
+      buf.push(c as u32);
+    }
+
+
+  decl.kind = DeclKind::U32String(buf);
 
   decl
 }
@@ -532,6 +744,19 @@ set_offset(&mut self, off: usize)
 
 
 pub fn
+get_size(&self)-> usize
+{
+    match &self.kind
+    {
+  DeclKind::Static(inf)=>{inf.get_size()}
+  DeclKind::Var(_)=>{panic!();}
+  DeclKind::Fn(_)=>{WORD_SIZE}
+  _=>{0}
+    }
+}
+
+
+pub fn
 get_deps_parent_names(&self)-> &Vec<String>
 {
   &self.deps_parent_names
@@ -565,8 +790,8 @@ collect_identifier(&self, pj: &Project, ss: &mut StringSet)
     match &self.kind
     {
   DeclKind::Const(e,_)=>{e.collect_identifier(pj,ss);}
-  DeclKind::Static(inf)=>{inf.collect_identifier(pj,ss);}
-  DeclKind::Var(inf)=>{inf.collect_identifier(pj,ss);}
+  DeclKind::Static(v) =>{v.collect_identifier(pj,ss);}
+  DeclKind::Var(v)    =>{v.collect_identifier(pj,ss);}
   _=>{}
     }
 }
@@ -578,64 +803,16 @@ collect_static(&mut self, ss: &mut StaticSet)
     match &mut self.kind
     {
   DeclKind::Const(e,_)=>{e.collect_static(ss);}
-  DeclKind::Static(inf)=>{inf.collect_static(ss);}
-  DeclKind::Var(inf)=>{inf.collect_static(ss);}
+  DeclKind::Static(v) =>{v.collect_static(ss);}
+  DeclKind::Var(v)    =>{v.collect_static(ss);}
+  DeclKind::Fn(f)     =>{f.block.collect_static(ss);}
   _=>{}
     }
 }
 
 
 pub fn
-initialize_content(dst: &mut [u8], exprs: &[Expr], mut n: usize, k: &TyKind, pj: &Project)-> Result<(),Message>
-{
-  let  mut ptr = dst.as_mut_ptr();
-
-  let  sz = k.get_size();
-
-    for e in exprs
-    {
-        if n == 0
-        {
-          break;
-        }
-
-
-        match evaluate_const(e,pj,None)
-        {
-      Some(i)=>
-        {
-            match k
-            {
-          TyKind::I8 =>{*unsafe{&mut *(ptr as *mut  i8)} = i as  i8;}
-          TyKind::I16=>{*unsafe{&mut *(ptr as *mut i16)} = i as i16;}
-          TyKind::I32=>{*unsafe{&mut *(ptr as *mut i32)} = i as i32;}
-          TyKind::I64=>{*unsafe{&mut *(ptr as *mut i64)} = i       ;}
-          TyKind::U8 =>{*unsafe{&mut *(ptr as *mut  u8)} = i as  u8;}
-          TyKind::U16=>{*unsafe{&mut *(ptr as *mut u16)} = i as u16;}
-          TyKind::U32=>{*unsafe{&mut *(ptr as *mut u32)} = i as u32;}
-          _=>
-            {
-              return Err(Message::from("initialize_content error: maybe void"));
-            }
-            }
-
-
-          ptr = unsafe{ptr.add(sz)};
-        }
-      None=>{return Err(e.get_source_info().to_message()+"initialize_content error: const value eval is failed")}
-        }
-
-
-      n -= 1;
-    }
-
-
-  Ok(())
-}
-
-
-pub fn
-build_const_data(&mut self, pj: &Project)-> Result<(),Message>
+build_const_data(&mut self, pj: &Project)-> Result<usize,Message>
 {
   let  srcinf = &self.source_info;
 
@@ -645,46 +822,32 @@ build_const_data(&mut self, pj: &Project)-> Result<(),Message>
     {
         match evaluate_const(&e,pj,None)
         {
-      Some(i)=>{*v = i;}
-      None=>{return Err(srcinf.to_message()+"constの初期化に失敗");}
+      Some(i)=>
+        {
+          *v = i;
+
+          Ok(0)
+        }
+      None=>{Err(srcinf.to_message()+"constの初期化に失敗")}
         }
     }
-  DeclKind::Static(inf)=>
+  DeclKind::Static(v)=>
     {
-        if let Some(e) = &inf.length_expr_opt
-        {
-            match evaluate_const(&e,pj,None)
-            {
-          Some(i)=>{inf.length = i as usize;}
-          None=>{return Err(srcinf.to_message()+"staticの要素数の算出に失敗");}
-            }
-        }
-
-
-        if inf.content.len() == 0
-        {
-          let  sz = inf.get_size();
-
-          inf.content.resize(sz,0);
-
-            if let Some(exprs) = &inf.init_exprs_opt
-            {
-                if let Err(msg) = Self::initialize_content(&mut inf.content,exprs,inf.length,&inf.ty_kind,pj)
-                {
-                  return Err(srcinf.to_message()+msg);
-                }
-            }
-        }
+      Ok(v.build_content(srcinf,pj)?)
     }
   DeclKind::Var(_)=>
     {
-      return Err(srcinf.to_message()+"グローバル変数の宣言はvarではなくstaticを使ってください");
+      Err(srcinf.to_message()+"グローバル変数の宣言はvarではなくstaticを使ってください")
     }
-  _=>{}
+  DeclKind::Fn(_)=>
+    {
+      Ok(WORD_SIZE)
     }
-
-
-  Ok(())
+  DeclKind::String(s)   =>{Ok(  s.len())}
+  DeclKind::U16String(s)=>{Ok(2*s.len())}
+  DeclKind::U32String(s)=>{Ok(4*s.len())}
+  _=>{Ok(0)}
+    }
 }
 
 
@@ -794,17 +957,25 @@ read_const(start_nd: &Node)-> (String,Expr)
 
 
 pub fn
-read_number_of_elements(start_nd: &Node)-> Expr
+read_initializer(start_nd: &Node)-> Initializer
 {
   let  mut cur = start_nd.cursor();
 
-  cur.advance(1);
+  let  mut start_expr_opt = Option::<Expr>::None;
+
+    if let Some(nd) = cur.select_node("subsc")
+    {
+      let  e = read_subsc(nd);
+
+      start_expr_opt = Some(e);
+
+      cur.advance(2);
+    }
+
 
     if let Some(nd) = cur.select_node("expression")
     {
-      let  e = read_expr(nd);
-
-      return e;
+      return Initializer{start_expr_opt, expr: read_expr(nd)};
     }
 
 
@@ -813,64 +984,69 @@ read_number_of_elements(start_nd: &Node)-> Expr
 
 
 pub fn
-read_storage_info(start_nd: &Node)-> StorageInfo
+read_initializer_list(start_nd: &Node)-> Vec<Initializer>
 {
   let  mut cur = start_nd.cursor();
 
-  let  mut inf = StorageInfo::new();
+  let  mut buf = Vec::<Initializer>::new();
 
-    if let Some(nd) = cur.select_node("number_of_elements")
+  cur.advance(1);
+
+    while let Some(nd) = cur.select_node("initializer")
     {
-      inf.length_expr_opt = Some(read_number_of_elements(nd));
+      buf.push(read_initializer(nd));
 
       cur.advance(1);
-    }
 
-  else
-    {
-      inf.length = 1;
-    }
-
-
-    if let Some(_) = cur.get_semi_string()
-    {
-      cur.advance(1);
-
-        if let Some(s) = cur.get_keyword()
+        if cur.is_semi_string()
         {
-          inf.ty_kind =
-                 if s ==   "i8"{TyKind::I8  }
-            else if s ==  "i16"{TyKind::I16 }
-            else if s ==  "i32"{TyKind::I32 }
-            else if s ==  "i64"{TyKind::I64 }
-            else if s ==   "u8"{TyKind::U8  }
-            else if s ==  "u16"{TyKind::U16 }
-            else if s ==  "u32"{TyKind::U32 }
-            else{panic!();}
-          ;
-
-
           cur.advance(1);
-
-            if let Some(nd) = cur.select_node("expression_list")
-            {
-              inf.init_exprs_opt = Some(read_expr_list(nd));
-            }
         }
     }
 
-  else
-    {
-      inf.ty_kind = TyKind::I64;
-    }
 
-
-  inf
+  buf
 }
 
 
 pub fn
-read_var(start_nd: &Node)-> (String,StorageInfo)
+read_storage_info(start_nd: &Node)-> (TyKind,Option<Vec<Initializer>>)
+{
+  let  mut cur = start_nd.cursor();
+
+  let  mut k = TyKind::I64;
+  let  mut inits_opt = Option::<Vec<Initializer>>::None;
+
+  cur.advance(1);
+
+    if let Some(s) = cur.get_keyword()
+    {
+      k =    if s ==   "i8"{TyKind::I8  }
+        else if s ==  "i16"{TyKind::I16 }
+        else if s ==  "i32"{TyKind::I32 }
+        else if s ==  "i64"{TyKind::I64 }
+        else if s ==   "u8"{TyKind::U8  }
+        else if s ==  "u16"{TyKind::U16 }
+        else if s ==  "u32"{TyKind::U32 }
+        else{panic!();}
+      ;
+    }
+
+
+  cur.advance(1);
+
+    if let Some(nd) = cur.select_node("initializer_list")
+    {
+      inits_opt = Some(read_initializer_list(nd));
+    }
+
+
+  (k,inits_opt)
+}
+
+
+pub fn
+read_var(start_nd: &Node)-> (String,VarDecl)
 {
   let  mut cur = start_nd.cursor();
 
@@ -882,43 +1058,54 @@ read_var(start_nd: &Node)-> (String,StorageInfo)
 
       cur.advance(1);
 
-        if let Some(nd) = cur.select_node("storage_info")
-        {
-          let  inf = read_storage_info(nd);
+      let  mut v = VarDecl::new();
 
-          return (name,inf);
+      v.ty_kind = TyKind::I64;
+
+        if let Some(nd) = cur.select_node("subsc")
+        {
+          v.length_expr_opt = Some(read_subsc(nd));
+
+          cur.advance(1);
         }
 
       else
         {
-          let  mut inf = StorageInfo::new();
-
-          inf.length  = 1;
-          inf.ty_kind = TyKind::I64;
-
-            if cur.is_semi_string()
-            {
-              cur.advance(1);
-
-                if let Some(nd) = cur.select_node("expression")
-                {
-                  let  e = read_expr(nd);
-
-                  inf.init_exprs_opt = Some(vec![e]);
-                }
-            }
-
-          else
-            {
-                for _ in 0..8
-                {
-                  inf.content.push(0);
-                }
-            }
-
-
-          return (name,inf);
+          v.length = 1;
         }
+
+
+        if cur.is_semi_string()
+        {
+          cur.advance(1);
+
+            if let Some(nd) = cur.select_node("expression")
+            {
+              let  init = Initializer{start_expr_opt: None, expr: read_expr(nd)};
+
+              v.initializers_opt = Some(vec![init]);
+            }
+        }
+
+      else
+        if let Some(nd) = cur.select_node("storage_info")
+        {
+          let  (k,inits_opt) = read_storage_info(nd);
+
+          v.ty_kind = k;
+          v.initializers_opt = inits_opt;
+        }
+
+      else
+        {
+            for _ in 0..8
+            {
+              v.content.push(0);
+            }
+        }
+
+
+      return (name,v);
     }
 
 
@@ -1026,19 +1213,19 @@ read_decl(start_nd: &Node)-> Result<Decl,Message>
       else
         if nd_name == "var"
         {
-          let  (name,inf) = read_var(nd);
+          let  (name,v) = read_var(nd);
 
           decl.name = name;
-          decl.kind = DeclKind::Var(inf);
+          decl.kind = DeclKind::Var(v);
         }
 
       else
         if nd_name == "static"
         {
-          let  (name,inf) = read_var(nd);
+          let  (name,v) = read_var(nd);
 
           decl.name = name;
-          decl.kind = DeclKind::Static(inf);
+          decl.kind = DeclKind::Static(v);
         }
 
       else

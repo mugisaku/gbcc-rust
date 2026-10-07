@@ -20,7 +20,9 @@ ExprKind
 {
   Identifier(String),
 
-  String(String,String),
+     String(String,String),
+  U16String(String,String),
+  U32String(String,String),
 
   Int(i64),
 
@@ -112,6 +114,8 @@ collect_identifier(&self, pj: &Project, ss: &mut StringSet)
         }
     }
   ExprKind::String(_,_)=>{}
+  ExprKind::U16String(_,_)=>{}
+  ExprKind::U32String(_,_)=>{}
   ExprKind::CallOp(f,args)=>
     {
       f.collect_identifier(pj,ss);
@@ -153,6 +157,14 @@ collect_static(&mut self, ss: &mut StaticSet)
   ExprKind::String(s,name)=>
     {
       *name = ss.insert_string(&self.source_info,s);
+    }
+  ExprKind::U16String(s,name)=>
+    {
+      *name = ss.insert_u16string(&self.source_info,s);
+    }
+  ExprKind::U32String(s,name)=>
+    {
+      *name = ss.insert_u32string(&self.source_info,s);
     }
   ExprKind::CallOp(f,args)=>
     {
@@ -207,6 +219,18 @@ print_to(&self, buf: &mut String)
   ExprKind::String(s,_)=>
     {
       buf.push('\"');
+      buf.push_str(s);
+      buf.push('\"');
+    }
+  ExprKind::U16String(s,_)=>
+    {
+      buf.push_str("u16\"");
+      buf.push_str(s);
+      buf.push('\"');
+    }
+  ExprKind::U32String(s,_)=>
+    {
+      buf.push_str("u32\"");
       buf.push_str(s);
       buf.push('\"');
     }
@@ -385,8 +409,16 @@ read_postfix_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
        if name ==  "call"{return read_call_op(nd,o);}
   else if name ==   "dot"{return read_dot_op(nd,o);}
-  else if name == "subsc"{return read_subsc_op(nd,o);}
-  else{panic!();}
+  else if name == "subsc"
+    {
+      let  subsc_e = Box::new(read_subsc(nd));
+
+      let  kind = ExprKind::SubscOp(o,subsc_e);
+
+      return Expr{source_info: start_nd.get_source_info().clone(), kind};
+    }
+  else
+    {panic!();}
 }
 
 
@@ -440,19 +472,15 @@ read_dot_op(start_nd: &Node, o: Box<Expr>)-> Expr
 
 
 pub fn
-read_subsc_op(start_nd: &Node, o: Box<Expr>)-> Expr
+read_subsc(start_nd: &Node)-> Expr
 {
-  let  source_info = start_nd.get_source_info().clone();
-
   let  mut cur = start_nd.cursor();
 
   cur.advance(1);
 
     if let Some(nd) = cur.get_node()
     {
-      let  e = read_expr(nd);
-
-      return Expr{source_info, kind: ExprKind::SubscOp(o,Box::new(e))};
+      return read_expr(nd);
     }
 
 
@@ -500,6 +528,44 @@ read_qualified_identifier(start_nd: &Node)-> String
 
 
 pub fn
+read_string(start_nd: &Node, source_info: SourceInfo)-> Expr
+{
+  let  mut cur = start_nd.cursor();
+
+    if let Some(k) = cur.get_keyword()
+    {
+        if k == "u32"
+        {
+          cur.advance(1);
+
+          let  s = cur.get_string().unwrap().clone();
+
+          return Expr{source_info, kind: ExprKind::U32String(s,String::new())};
+        }
+
+      else
+        if k == "u16"
+        {
+          cur.advance(1);
+
+          let  s = cur.get_string().unwrap().clone();
+
+          return Expr{source_info, kind: ExprKind::U16String(s,String::new())};
+        }
+    }
+
+  else
+    if let Some(s) = cur.get_string()
+    {
+      return Expr{source_info, kind: ExprKind::String(s.clone(),String::new())};
+    }
+
+
+  panic!();
+}
+
+
+pub fn
 read_operand_core(start_nd: &Node)-> Expr
 {
   let  source_info = start_nd.get_source_info().clone();
@@ -517,6 +583,12 @@ read_operand_core(start_nd: &Node)-> Expr
               let  buf = read_qualified_identifier(&*nd);
 
               return Expr{source_info, kind: ExprKind::Identifier(buf)};
+            }
+
+          else
+            if nd.get_name() == "string"
+            {
+              return read_string(nd,source_info);
             }
 
 

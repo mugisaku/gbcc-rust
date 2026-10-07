@@ -95,6 +95,7 @@
         get_error_message,
         transfer_ex_img,
         add_source,
+        clear,
         compile,
         setup } from "./pkg/gblib.js";
 
@@ -107,6 +108,8 @@
 
       const  REFRESH_RATE = 24;
       const  INTERVAL = 1000/REFRESH_RATE;
+
+      let  g_font14_txt;
 
       let  g_cv;
       let  g_cvctx;
@@ -348,6 +351,12 @@
           }
 
 
+        clear();
+
+        add_source("main source",g_text.value);
+        add_source("./gamebaby_font14.txt",g_font14_txt);
+
+
         const  ex_img_data = g_ex_img_ctx.getImageData(0,0,g_ex_img_cv.width,g_ex_img_cv.height);
 
         transfer_ex_img(g_ex_img.width,g_ex_img.height,ex_img_data.data);
@@ -526,8 +535,9 @@
         const  response = await fetch("./gamebaby_sample.txt");
         const    result = await response.text();
 
-        add_source("./gamebaby_sample.txt",result);
+        const  response2 = await fetch("./gamebaby_font14.txt");
 
+        g_font14_txt = await response2.text();
         g_text.value = result;
       });
     </script>

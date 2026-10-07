@@ -336,13 +336,13 @@ collect_static(&mut self, ss: &mut StaticSet)
 
       let  mut name_opt = Option::<String>::None;
 
-        if let DeclKind::Static(inf) = decl.get_kind_mut()
+        if let DeclKind::Static(v) = decl.get_kind_mut()
         {
-          let  mut tmp = StorageInfo::new();
+          let  mut tmp = VarDecl::new();
 
-          std::mem::swap(inf,&mut tmp);
+          std::mem::swap(v,&mut tmp);
 
-          name_opt = Some(ss.insert_storage(&self.source_info,tmp));
+          name_opt = Some(ss.insert_var(&self.source_info,tmp));
         }
 
 

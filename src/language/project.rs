@@ -22,8 +22,6 @@ use super::stmt::*;
 use super::scope::*;
 use super::assemble::assemble;
 use super::asm::Opcode;
-use super::font14::*;
-use super::font8::*;
 use super::tplg_sort::*;
 use super::evaluate::*;
 use super::decl::*;
@@ -82,10 +80,22 @@ record_fail(&mut self, srcinf: &SourceInfo, s: &str)
 
 
 
+pub enum
+StaticObjectKind
+{
+     String(String),
+  U16String(String),
+  U32String(String),
+
+  Var(VarDecl),
+
+}
+
+
 pub struct
 StaticSet
 {
-  set: Vec<(SourceInfo,String,StorageInfo)>,
+  set: Vec<(SourceInfo,String,StaticObjectKind)>,
 
 }
 
@@ -105,35 +115,86 @@ new()-> Self
 pub fn
 insert_string(&mut self, srcinf: &SourceInfo, new_s: &str)-> String
 {
-    for (_,name,inf) in &self.set
+    for (_,name,k) in &self.set
     {
-        if inf.get_content() == new_s.as_bytes()
+        if let StaticObjectKind::String(s) = k
         {
-          return name.clone();
+            if s == new_s
+            {
+              return name.clone();
+            }
         }
     }
 
 
-  let  inf = StorageInfo::from_string(new_s);
+  let  name = format!(".STATIC{}",self.set.len());
 
-  let  n = self.set.len();
+  let  k = StaticObjectKind::String(new_s.to_string());
 
-  let  name = format!(".STATIC{}",n);
-
-  self.set.push((srcinf.clone(),name.clone(),inf));
+  self.set.push((srcinf.clone(),name.clone(),k));
 
   name
 }
 
 
 pub fn
-insert_storage(&mut self, srcinf: &SourceInfo, inf: StorageInfo)-> String
+insert_u16string(&mut self, srcinf: &SourceInfo, new_s: &str)-> String
 {
-  let  n = self.set.len();
+    for (_,name,k) in &self.set
+    {
+        if let StaticObjectKind::U16String(s) = k
+        {
+            if s == new_s
+            {
+              return name.clone();
+            }
+        }
+    }
 
-  let  name = format!(".STATIC{}",n);
 
-  self.set.push((srcinf.clone(),name.clone(),inf));
+  let  name = format!(".STATIC{}",self.set.len());
+
+  let  k = StaticObjectKind::U16String(new_s.to_string());
+
+  self.set.push((srcinf.clone(),name.clone(),k));
+
+  name
+}
+
+
+pub fn
+insert_u32string(&mut self, srcinf: &SourceInfo, new_s: &str)-> String
+{
+    for (_,name,k) in &self.set
+    {
+        if let StaticObjectKind::U32String(s) = k
+        {
+            if s == new_s
+            {
+              return name.clone();
+            }
+        }
+    }
+
+
+  let  name = format!(".STATIC{}",self.set.len());
+
+  let  k = StaticObjectKind::U32String(new_s.to_string());
+
+  self.set.push((srcinf.clone(),name.clone(),k));
+
+  name
+}
+
+
+pub fn
+insert_var(&mut self, srcinf: &SourceInfo, v: VarDecl)-> String
+{
+  let  name = format!(".STATIC{}",self.set.len());
+
+  let  k = StaticObjectKind::Var(v);
+
+  self.set.push((srcinf.clone(),name.clone(),k));
 
   name
 }
@@ -149,6 +210,8 @@ Project
 {
   decls: Vec<Decl>,
 
+  size: usize,
+
 }
 
 
@@ -162,8 +225,16 @@ new()-> Self
 {
   Self{
     decls: Vec::new(),
+    size: 0,
 
   }
+}
+
+
+pub fn
+clear(&mut self)
+{
+  self.decls.clear();
 }
 
 
@@ -367,44 +438,6 @@ process_deps_relationship(&mut self)-> Result<(),Message>
 
 
 fn
-process_data_offset(&mut self, start: usize)-> usize
-{
-  let  mut pos = get_word_aligned(start);
-
-    for decl in &mut self.decls
-    {
-      let  mut sz = 0usize;
-
-        match decl.get_kind()
-        {
-      DeclKind::Static(inf)=>
-        {
-          sz = inf.get_size();
-        }
-      DeclKind::Var(k)=>
-        {
-          panic!();
-        }
-      DeclKind::Fn(_)=>
-        {
-          sz = WORD_SIZE;
-        }
-      _=>{}
-        }
-
-
-      decl.set_offset(pos)     ;
-                      pos += sz;
-
-      pos = get_word_aligned(pos);
-    }
-
-
-  get_word_aligned(pos)
-}
-
-
-fn
 get_const_or(&mut self, s: &str, defval: usize)-> usize
 {
     if let Some(v) = self.find_const(s)
@@ -428,11 +461,35 @@ compile(&mut self)-> Result<(),Message>
 
   self.collect_static(&mut ss);
 
-    for (srcinf,name,si) in ss.set
+    for (srcinf,name,k) in ss.set
     {
-      let  decl = Decl::new_static(srcinf,name,si);
+        match k
+        {
+      StaticObjectKind::String(s)=>
+        {
+          let  decl = Decl::new_string(srcinf,name,s);
 
-      let  _ = self.insert(decl)?;
+          let  _ = self.insert(decl)?;
+        }
+      StaticObjectKind::U16String(s)=>
+        {
+          let  decl = Decl::new_u16string(srcinf,name,&s);
+
+          let  _ = self.insert(decl)?;
+        }
+      StaticObjectKind::U32String(s)=>
+        {
+          let  decl = Decl::new_u32string(srcinf,name,&s);
+
+          let  _ = self.insert(decl)?;
+        }
+      StaticObjectKind::Var(v)=>
+        {
+          let  decl = Decl::new_static(srcinf,name,v);
+
+          let  _ = self.insert(decl)?;
+        }
+        }
     }
 
 
@@ -444,13 +501,23 @@ compile(&mut self)-> Result<(),Message>
 
   let  sorted_values = tplg_sort(tplg_nodes)?;
 
+  let  mut off = 256usize;
+
     for v in sorted_values
     {
       let  decl = unsafe{&mut *(v as *mut Decl)};
 
-      let  _ = decl.build_const_data(self)?;
+      let  sz = decl.build_const_data(self)?;
+
+      off = get_word_aligned(off);
+
+      decl.set_offset(off);
+
+      off += sz;
     }
 
+
+  self.size = get_word_aligned(off);
 
   Ok(())
 }
@@ -514,6 +581,30 @@ write_to_exec(&self, exec: &mut Exec, pos: &mut usize)-> Result<(),Message>
         {
           panic!();
         }
+      DeclKind::String(s)=>
+        {
+          exec.put_bytes(decl.get_offset(),s.as_bytes());
+
+          let  sym = Symbol::new_static(decl.get_name(),decl.get_offset() as isize,s.len(),TyKind::U8);
+
+          exec.add_symbol(sym);
+        }
+      DeclKind::U16String(s)=>
+        {
+          exec.put_u16s(decl.get_offset(),s);
+
+          let  sym = Symbol::new_static(decl.get_name(),decl.get_offset() as isize,2*s.len(),TyKind::U16);
+
+          exec.add_symbol(sym);
+        }
+      DeclKind::U32String(s)=>
+        {
+          exec.put_u32s(decl.get_offset(),s);
+
+          let  sym = Symbol::new_static(decl.get_name(),decl.get_offset() as isize,4*s.len(),TyKind::U32);
+
+          exec.add_symbol(sym);
+        }
       _=>{}
         }
     }
@@ -528,19 +619,13 @@ generate_exec(&mut self)-> Result<Exec,Message>
 {
   let  mut exec = Exec::new_with_memory();
 
-  let   font8_start = self.process_data_offset(256);
-  let  combi8_start = get_word_aligned( font8_start+(   8*0x10000));
-  let  font14_start = get_word_aligned(combi8_start+(2* 3*0x10000));
-  let   stack_start = get_word_aligned(font14_start+(2*14*0x10000));
+  let   stack_start = self.size;
 
   let  stack_size = self.get_const_or("STACK_SIZE",STACK_SIZE*CORE_NUMBER);
 
   let  text_start = get_word_aligned(stack_start+stack_size);
 
 
-  self.add_const( "FONT8_START", font8_start as i64);
-  self.add_const("COMBI8_START",combi8_start as i64);
-  self.add_const("FONT14_START",font14_start as i64);
   self.add_const( "STACK_START", stack_start as i64);
 
   let  mut pos = text_start;
@@ -549,10 +634,6 @@ generate_exec(&mut self)-> Result<Exec,Message>
 
 
   exec.add_symbol(Symbol::new_const_int("HEAP_START",pos as i64));
-
-  Self::install_font8( exec.get_memory_slice_mut(font8_start ));
-  Self::install_combi8(exec.get_memory_slice_mut(combi8_start));
-  Self::install_font14(exec.get_memory_slice_mut(font14_start));
 
 
   Ok(exec)
@@ -589,91 +670,13 @@ add_ex_img(&mut self, name: &str, w: u32, h: u32, data: &Vec<u8>)
     }
 
 
-  let  inf = StorageInfo::from_data(new_data,TyKind::U32);
+  let  v = VarDecl::from_bytes(new_data,TyKind::U32);
 
-  let  decl = Decl::new_static(SourceInfo::new(),name.to_string(),inf);
+  let  decl = Decl::new_static(SourceInfo::new(),name.to_string(),v);
 
   self.insert(decl);
 }
 
-
-
-
-fn
-install_font8(dst: &mut [u8])
-{
-  let  mut  iter = FONT8.iter();
-
-    while let Some(unicode) = iter.next()
-    {
-      let  base = (8*((*unicode) as usize));
-
-        for i in 0..8
-        {
-          let  bits = (*iter.next().unwrap()) as u8;
-
-          dst[base+i] = bits;
-        }
-    }
-}
-
-
-fn
-install_combi8(dst: &mut [u8])
-{
-  let  mut  iter = COMBI8.iter();
-
-    while let Some(unicode) = iter.next()
-    {
-      let  base = (2*((*unicode) as usize));
-
-      let  upper = (*iter.next().unwrap()) as u16;
-      let  lower = (*iter.next().unwrap()) as u16;
-
-      let  u_bytes = upper.to_ne_bytes();
-      let  l_bytes = lower.to_ne_bytes();
-
-      dst[base  ] = u_bytes[0];
-      dst[base+1] = u_bytes[1];
-      dst[base+2] = l_bytes[0];
-      dst[base+3] = l_bytes[1];
-    }
-}
-
-
-fn
-install_font14(dst: &mut [u8])
-{
-  let  mut  iter = FONT14.iter();
-
-    while let Some(unicode) = iter.next()
-    {
-      const  FULLWIDTH_FIRST: usize = 0xFF01;
-      const  FULLWIDTH_LAST: usize  = 0xFF5E;
-
-      let  u = *unicode as usize;
-
-      let  base = 2*14*u;
-
-      let  is_fullwidth_ascii = (u >= FULLWIDTH_FIRST) && (u <= FULLWIDTH_LAST);
-
-        for i in 0..14
-        {
-          let  bytes = iter.next().unwrap().to_ne_bytes();
-
-          dst[base+(2*i)  ] = bytes[0];
-          dst[base+(2*i)+1] = bytes[1];
-
-            if is_fullwidth_ascii
-            {
-              let  ascii_base = 2*14*(('!' as usize)+u-FULLWIDTH_FIRST);
-
-              dst[ascii_base+(2*i)  ] = bytes[0];
-              dst[ascii_base+(2*i)+1] = bytes[1];
-            }
-        }
-    }
-}
 
 
 

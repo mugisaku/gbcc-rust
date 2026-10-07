@@ -666,7 +666,7 @@ push_brnz(&mut self, s: &str)
 pub fn
 try_push_assign(&mut self, srcinf: &SourceInfo, l: Operand, r: Operand, op: &str)-> Result<(),Message>
 {
-  let  k = l.clone_ty_kind();
+  let  k = l.clone_ty_kind_and_length().0;
 
   l.write_to(false,self)?;
 

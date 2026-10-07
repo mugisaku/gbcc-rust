@@ -195,6 +195,36 @@ put_bytes(&mut self, mut off: usize, bytes: &[u8])
 
 
 pub fn
+put_u16s(&mut self, mut off: usize, s: &[u16])
+{
+    for c in s
+    {
+        for b in c.to_ne_bytes()
+        {
+          self.memory[off] = b;
+
+          off += 1;
+        }
+    }
+}
+
+
+pub fn
+put_u32s(&mut self, mut off: usize, s: &[u32])
+{
+    for c in s
+    {
+        for b in c.to_ne_bytes()
+        {
+          self.memory[off] = b;
+
+          off += 1;
+        }
+    }
+}
+
+
+pub fn
 add_text(&mut self, txt: (String,usize,AsmText))
 {
   self.texts.push(txt);
@@ -259,6 +289,50 @@ find_entry_point(&self, name: &str)-> Option<usize>
 
 
 pub fn
+print_detail(&self, name: &str, index: usize, count: usize)
+{
+    for sym in &self.symbols
+    {
+        if let SymbolKind::Static(_,k) = sym.get_kind()
+        {
+            if sym.get_name() == name
+            {
+              let  mut off = sym.get_offset() as usize;
+
+              let  sz = k.get_size();
+
+              off += sz*index;
+
+              print!("[{}(0x{:04X})]{{\n",index,index);
+
+                for _ in 0..count
+                {
+                    match sz
+                    {
+                  1=>{print!("0x{:02X}" ,self.get_u8( off));}
+                  2=>{print!("{:016b},0x{:04X}" ,self.get_u16(off),self.get_u16(off));}
+                  4=>{print!("0x{:08X}" ,self.get_u32(off));}
+                  8=>{print!("0x{:016X}",self.get_u64(off));}
+                  _=>{panic!();}
+                    }
+
+
+                  print!(",\n");
+
+                  off += sz;
+                }
+              
+
+              print!("}}");
+
+              return;
+            }
+        }
+    }
+}
+
+
+pub fn
 print_memory_to(&self, buf: &mut String)
 {
     for sym in &self.symbols
@@ -271,9 +345,9 @@ print_memory_to(&self, buf: &mut String)
         {
       SymbolKind::Static(len,k)=>
         {
-          buf.push_str(&format!("(addr: {}): ",off));
+          let  sz = k.get_size()**len;
 
-          k.print();
+          buf.push_str(&format!("({} - {}): ",off,off+sz));
         }
       SymbolKind::Const(v)=>{buf.push_str(&format!(": {}",v));}
       _=>{}

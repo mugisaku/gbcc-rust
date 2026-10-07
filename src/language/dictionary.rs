@@ -9,7 +9,11 @@ r##"
 
 qualified_identifier: .Identifier & [{"::" & .Identifier}];
 
-operand_core: qualified_identifier | .Number | .Character | .String | ("(" & expression & ")");
+string: ('u32 & .String)
+       |('u16 & .String)
+       | .String;
+
+operand_core: .Number | .Character | string | qualified_identifier | ("(" & expression & ")");
 
 unary_operator: "!" | "-" | "~";
 
@@ -104,14 +108,16 @@ fn: 'fn -> .Identifier & parameter_list & block;
 
 expression_list: "{" & [{expression & [","]}] & "}";
 
-number_of_elements: "[" & expression & "]";
+initializer: [subsc & ":"] & expression;
 
-storage_info: number_of_elements -> [":" -> ('i8 | 'i16 | 'i32 | 'i64 | 'u8 | 'u16 | 'u32) & [expression_list]];
+initializer_list: "{" & [{initializer & [","]}] & "}";
+
+storage_info: ":" -> ('i8 | 'i16 | 'i32 | 'i64 | 'u8 | 'u16 | 'u32) & [initializer_list];
 
 
 empty : ";";
-static: 'static -> .Identifier & [("=" & expression) | storage_info];
-var   : 'var    -> .Identifier & [("=" & expression) | storage_info];
+static: 'static -> .Identifier & [subsc] & [("=" & expression) | storage_info];
+var   : 'var    -> .Identifier & [subsc] & [("=" & expression) | storage_info];
 const : 'const  -> .Identifier & "=" & expression;
 
 enum: 'enum   -> "{" & {.Identifier & [","]} & "}";

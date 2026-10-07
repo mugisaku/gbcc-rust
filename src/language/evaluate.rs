@@ -114,11 +114,11 @@ try_get_const(&self)-> Result<i64,Message>
         }
     }
   Self::LoadInt(i)=>{Ok(*i)}
-  Self::LoadPosFromFp(_)=>{Err(Message::from("try_get_const error: load_pos_from_fp"))}
-  Self::LoadValue(o)=>{Err(o.source_info.to_message()+"try_get_const error: load_value")}
-  Self::Call(f,_) =>{Err(f.source_info.to_message()+"try_get_const error: call")}
-  Self::SymCall(srcinf,_,_) =>{Err(srcinf.to_message()+"try_get_const error: sym call")}
-  Self::Subsc(ref_o,_)=>{Err(ref_o.source_info.to_message()+"try_get_const error: subsc")}
+  Self::LoadPosFromFp(_)   =>{Err(Message::from("try_get_const error: load_pos_from_fp"))}
+  Self::LoadValue(o)       =>{Err(o.source_info.to_message()+"try_get_const error: load_value")}
+  Self::Call(f,_)          =>{Err(f.source_info.to_message()+"try_get_const error: call")}
+  Self::SymCall(srcinf,_,_)=>{Err(srcinf.to_message()+"try_get_const error: sym call")}
+  Self::Subsc(ref_o,_)     =>{Err(ref_o.source_info.to_message()+"try_get_const error: subsc")}
     }
 }
 
@@ -209,7 +209,7 @@ write_to(&self, txt: &mut AsmText)-> Result<(),Message>
     }
   Self::Subsc(ref_o,idx_o)=>
     {
-        if let OperandKind::Deref(_,k) = &ref_o.kind
+        if let OperandKind::Deref(_,k,_) = &ref_o.kind
         {
           let  sz = k.get_size();
 
@@ -325,7 +325,7 @@ OperandKind
   Symbol(&'static str),
 
   Value(Box<Operation>),
-  Deref(Box<Operation>,TyKind),
+  Deref(Box<Operation>,TyKind,usize),
 
 }
 
@@ -375,20 +375,20 @@ from_int(source_info: SourceInfo, i: i64)-> Self
 
 
 pub fn
-make_load_global(source_info: SourceInfo, offset: usize, k: TyKind)-> Self
+make_load_global(source_info: SourceInfo, offset: usize, k: TyKind, l: usize)-> Self
 {
   let  op = Operation::LoadInt(offset as i64);
 
-  Operand{source_info, kind: OperandKind::Deref(Box::new(op),k)}
+  Operand{source_info, kind: OperandKind::Deref(Box::new(op),k,l)}
 }
 
 
 pub fn
-make_load_local(source_info: SourceInfo, offset: isize, k: TyKind)-> Self
+make_load_local(source_info: SourceInfo, offset: isize, k: TyKind, l: usize)-> Self
 {
   let  op = Operation::LoadPosFromFp(offset as i64);
 
-  Operand{source_info, kind: OperandKind::Deref(Box::new(op),k)}
+  Operand{source_info, kind: OperandKind::Deref(Box::new(op),k,l)}
 }
 
 
@@ -417,22 +417,22 @@ try_get_const(&self)-> Result<i64,Message>
     {
   OperandKind::Undef(s)=>{Err(self.source_info.to_message()+format!("{}",s))}
   OperandKind::Symbol(s)=>{Err(self.source_info.to_message()+format!("{}",s))}
-  OperandKind::Value(o)=>{o.try_get_const()}
-  OperandKind::Deref(_,_)=>{Err(self.source_info.to_message()+"deref")}
+  OperandKind::Value(o)    =>{o.try_get_const()}
+  OperandKind::Deref(o,_,_)=>{o.try_get_const()}
     }
 }
 
 
 pub fn
-clone_ty_kind(&self)-> TyKind
+clone_ty_kind_and_length(&self)-> (TyKind,usize)
 {
-    if let OperandKind::Deref(_,k) = &self.kind
+    if let OperandKind::Deref(_,k,l) = &self.kind
     {
-      return k.clone();
+      return (k.clone(),*l);
     }
 
 
-  TyKind::Void
+  (TyKind::Void,0)
 }
 
 
@@ -461,7 +461,7 @@ write_to(&self, loading: bool, txt: &mut AsmText)-> Result<(),Message>
   OperandKind::Undef(s)=>{return Err(self.source_info.to_message()+format!("write_to error: undef {}",s));}
   OperandKind::Symbol(s)=>{return Err(self.source_info.to_message()+format!("write_to error: symbol {}",s));}
   OperandKind::Value(o)=>{o.write_to(txt)?}
-  OperandKind::Deref(o,k)=>
+  OperandKind::Deref(o,k,_)=>
     {
       o.write_to(txt)?;
 
@@ -495,7 +495,7 @@ print(&self)
       print!(")");
 
     }
-  OperandKind::Deref(o,_)=>
+  OperandKind::Deref(o,_,_)=>
     {
       print!("(");
       o.print();
@@ -570,33 +570,38 @@ evaluate_dot(e: &Expr, s: &str, pj: &Project, scp_opt: Option<&Scope>)-> Operand
     }
   OperandKind::Value(op)=>
     {
-           if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I8 )}}
-      else if s == "i16ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I16)}}
-      else if s == "i32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I32)}}
-      else if s == "i64ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I64)}}
-      else if s ==  "u8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U8 )}}
-      else if s == "u16ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U16)}}
-      else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U32)}}
+           if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I8 ,0)}}
+      else if s == "i16ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I16,0)}}
+      else if s == "i32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I32,0)}}
+      else if s == "i64ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::I64,0)}}
+      else if s ==  "u8ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U8 ,0)}}
+      else if s == "u16ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U16,0)}}
+      else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(op,TyKind::U32,0)}}
       else
         {
           Operand::make_undef(source_info,format!("evaluate_dot case Value: {}",s))
         }
     }
-  OperandKind::Deref(op,k)=>
+  OperandKind::Deref(op,k,l)=>
     {
         if s == "ptr"{Operand{source_info, kind: OperandKind::Value(op)}}
       else
+        if s == "len"
         {
-          let  new_o = Operand{source_info: source_info.clone(), kind: OperandKind::Deref(op,k)};
+          Operand::from_int(source_info,l as i64)
+        }
+      else
+        {
+          let  new_o = Operand{source_info: source_info.clone(), kind: OperandKind::Deref(op,k,l)};
           let  new_op = Box::new(Operation::LoadValue(new_o));
 
-               if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I8 )}}
-          else if s == "i16ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I16)}}
-          else if s == "i32ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I32)}}
-          else if s == "i64ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I64)}}
-          else if s ==  "u8ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U8 )}}
-          else if s == "u16ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U16)}}
-          else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U32)}}
+               if s ==  "i8ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I8 ,0)}}
+          else if s == "i16ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I16,0)}}
+          else if s == "i32ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I32,0)}}
+          else if s == "i64ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::I64,0)}}
+          else if s ==  "u8ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U8 ,0)}}
+          else if s == "u16ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U16,0)}}
+          else if s == "u32ref"{Operand{source_info, kind: OperandKind::Deref(new_op,TyKind::U32,0)}}
           else
             {
               Operand::make_undef(source_info,format!("evaluate_dot case deref: {}",s))
@@ -615,11 +620,11 @@ evaluate_subsc(ref_e: &Expr, idx_e: &Expr, pj: &Project, scp_opt: Option<&Scope>
   let  ref_o = evaluate(ref_e,pj,scp_opt);
   let  idx_o = evaluate(idx_e,pj,scp_opt);
 
-  let  k = ref_o.clone_ty_kind();
+  let  (k,l) = ref_o.clone_ty_kind_and_length();
 
   let  subsc = Operation::Subsc(ref_o,idx_o);
 
-  Operand{source_info, kind: OperandKind::Deref(Box::new(subsc),k)}
+  Operand{source_info, kind: OperandKind::Deref(Box::new(subsc),k,l)}
 }
 
 
@@ -656,11 +661,11 @@ evaluate_identifier(source_info: SourceInfo, name: &str, pj: &Project, scp_opt: 
             }
           SymbolKind::Static(_,k)=>
             {
-              Operand::make_load_global(source_info,sym.get_offset() as usize,k.clone())
+              Operand::make_load_global(source_info,sym.get_offset() as usize,k.clone(),1)
             }
           SymbolKind::Var(_,k)=>
             {
-              Operand::make_load_local(source_info,sym.get_offset(),k.clone())
+              Operand::make_load_local(source_info,sym.get_offset(),k.clone(),1)
             }
           _=>{Operand::make_undef(source_info,format!("evaluate_identifier case local: {} is found in scope, but invalid",name))}
             };
@@ -676,17 +681,29 @@ evaluate_identifier(source_info: SourceInfo, name: &str, pj: &Project, scp_opt: 
         {
           Operand::from_int(source_info,*i)
         }
-      DeclKind::Static(inf)=>
+      DeclKind::Static(v)=>
         {
-          Operand::make_load_global(source_info,decl.get_offset(),inf.get_ty_kind().clone())
+          Operand::make_load_global(source_info,decl.get_offset(),v.get_ty_kind().clone(),v.get_length())
         }
-      DeclKind::Var(inf)=>
+      DeclKind::Var(_)=>
         {
           panic!();
         }
+      DeclKind::String(s)=>
+        {
+          Operand::make_load_global(source_info,decl.get_offset(),TyKind::U8,s.len())
+        }
+      DeclKind::U16String(s)=>
+        {
+          Operand::make_load_global(source_info,decl.get_offset(),TyKind::U16,s.len())
+        }
+      DeclKind::U32String(s)=>
+        {
+          Operand::make_load_global(source_info,decl.get_offset(),TyKind::U32,s.len())
+        }
       DeclKind::Fn(_)=>
         {
-          Operand::make_load_global(source_info,decl.get_offset(),TyKind::I64)
+          Operand::make_load_global(source_info,decl.get_offset(),TyKind::I64,1)
         }
       _=>{Operand::make_undef(source_info,format!("evaluate_identifier case global: {} is found in global, but invalid",name))}
         }
@@ -766,15 +783,15 @@ evaluate(e: &Expr, pj: &Project, scp_opt: Option<&Scope>)-> Operand
     }
   ExprKind::String(_,name)=>
     {
-        if let Some(decl) = pj.find(&name)
-        {
-todo!();
-        }
-
-      else
-        {
-          Operand::make_undef(source_info,format!("evaluate case string"))
-        }
+      evaluate_identifier(source_info,name,pj,scp_opt)
+    }
+  ExprKind::U16String(_,name)=>
+    {
+      evaluate_identifier(source_info,name,pj,scp_opt)
+    }
+  ExprKind::U32String(_,name)=>
+    {
+      evaluate_identifier(source_info,name,pj,scp_opt)
     }
   ExprKind::CallOp(f,args)=>
     {
@@ -809,17 +826,10 @@ evaluate_const(e: &Expr, pj: &Project, scp_opt: Option<&Scope>)-> Option<i64>
 {
   let  o = evaluate(e,pj,scp_opt);
 
-    match &o.kind
+    match o.try_get_const()
     {
-  OperandKind::Value(_)=>
-    {
-        match o.try_get_const()
-        {
-      Ok(i)=>{Some(i)}
-      Err(_)=>{None}
-        }
-    }
-  _=>{None}
+  Ok(i)=>{Some(i)}
+  Err(msg)=>{msg.print();None}
     }
 }
 
