@@ -78,7 +78,8 @@ fn
 main()
 {
   let  a = include_str!("../gamebaby_font14.txt");
-  let  b = 
+  let  b = include_str!("../gamebaby_font8x12.txt");
+  let  c = 
 r#"
 
 static
@@ -102,7 +103,7 @@ main()
 "#;
 
 
-  let  codes = format!("{}{}",a,b);
+  let  codes = format!("{}{}{}",a,b,c);
 
   compile_and_run(&codes);
 }

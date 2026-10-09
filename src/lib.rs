@@ -20,10 +20,6 @@ pub fn  check(s: &str);
 }
 
 
-static mut EX_IMG_W: u32 = 0;
-static mut EX_IMG_H: u32 = 0;
-static mut EX_IMG_DATA: Vec<u8> = Vec::new();
-
 static mut PJ: Project = Project::new();
 static mut EXEC: Exec = Exec::new();
 static mut ERR_MSG: String = String::new();
@@ -38,6 +34,16 @@ get_byte(off: usize)-> u8
 pub fn
 put_byte(off: usize, v: u8)
 {unsafe{EXEC.put_u8(off,v);}}
+
+#[wasm_bindgen]
+pub fn
+get_u16(off: usize)-> u16
+{unsafe{EXEC.get_u16(off)}}
+
+#[wasm_bindgen]
+pub fn
+put_u16(off: usize, v: u16)
+{unsafe{EXEC.put_u16(off,v);}}
 
 #[wasm_bindgen]
 pub fn
@@ -107,18 +113,6 @@ get_error_message()-> String
 
 #[wasm_bindgen]
 pub fn
-transfer_ex_img(w: u32, h: u32, data: Vec<u8>)
-{
-  unsafe{
-    EX_IMG_W    = w;
-    EX_IMG_H    = h;
-    EX_IMG_DATA = data;
-  }
-}
-
-
-#[wasm_bindgen]
-pub fn
 add_source(name: &str, s: &str)-> bool
 {
   unsafe{
@@ -153,8 +147,6 @@ compile()-> bool
 {
     unsafe
     {
-      PJ.add_ex_img("image",EX_IMG_W,EX_IMG_H,&EX_IMG_DATA);
-
         match PJ.compile()
         {
       Ok(())=>
@@ -195,8 +187,6 @@ setup()-> String
       MACHINE.reset(&mut EXEC,"main");
 
       let  mut buf = String::new();
-
-      buf.push_str(&format!("ex_img w: {}, h: {}, len: {}\n",EX_IMG_W,EX_IMG_H,EX_IMG_DATA.len()));
 
       buf.push_str("\n  [data]  \n");
 

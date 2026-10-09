@@ -641,13 +641,15 @@ new_static(srcinf: SourceInfo, name: String, v: VarDecl)-> Self
 
 
 pub fn
-new_string(srcinf: SourceInfo, name: String, s: String)-> Self
+new_string(srcinf: SourceInfo, name: String, mut s: String)-> Self
 {
   let  mut decl = Decl::new();
 
   decl.source_info = srcinf;
 
   decl.name = name;
+
+  s.push('\0');
 
   decl.kind = DeclKind::String(s);
 
@@ -672,6 +674,8 @@ new_u16string(srcinf: SourceInfo, name: String, s: &str)-> Self
     }
 
 
+  buf.push(0);
+
   decl.kind = DeclKind::U16String(buf);
 
   decl
@@ -694,6 +698,8 @@ new_u32string(srcinf: SourceInfo, name: String, s: &str)-> Self
       buf.push(c as u32);
     }
 
+
+  buf.push(0);
 
   decl.kind = DeclKind::U32String(buf);
 

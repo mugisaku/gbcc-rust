@@ -1,0 +1,238 @@
+
+
+static    screen_address;
+static offscreen_address;
+
+static screen_status;
+
+const SCREEN_W = 400;
+const SCREEN_H = 320;
+const VIDEO_W = SCREEN_W*2;
+const VIDEO_H = SCREEN_H*2;
+const BYTES_PER_PIXEL = 2;
+const VIDEO_PITCH = BYTES_PER_PIXEL*VIDEO_W;
+
+const WHITE = 0x7FFF;
+const BLACK = 0x0000;
+const RED    = 31<<10;
+const  GREEN = 31<< 5;
+const LGREEN = (15<<10)|(31<<5)|(15);
+const BLUE   = 31    ;
+
+static video_field[VIDEO_W*VIDEO_H]: u16;
+
+static  mouse_state;
+
+fn  mouse_get_x(){return mouse_state>>16&0xFFFF;}
+fn  mouse_get_y(){return mouse_state&0xFFFF;}
+fn  mouse_is_pressing_l(){return mouse_state>>32&1;}
+fn  mouse_is_pressing_r(){return mouse_state>>32&2;}
+
+
+static rand_state;
+
+fn
+xorshift()
+{
+  rand_state ^= rand_state<<7;
+  rand_state ^= rand_state>>9;
+
+  return rand_state;
+}
+
+
+
+
+static sin_freq;
+static sin_vol ;
+static squ_freq;
+static squ_vol ;
+static saw_freq;
+static saw_vol ;
+static tri_freq;
+static tri_vol ;
+static noi_vol ;
+
+static report;
+
+
+const    UP_KEY = 0b00000001;
+const  LEFT_KEY = 0b00000010;
+const RIGHT_KEY = 0b00000100;
+const  DOWN_KEY = 0b00001000;
+const     Z_KEY = 0b00010000;
+const     X_KEY = 0b00100000;
+const     C_KEY = 0b01000000;
+const     V_KEY = 0b10000000;
+
+
+
+
+fn
+dot(x,y,pixel)
+{
+  (screen_address+(VIDEO_PITCH*y)+(BYTES_PER_PIXEL*x)).u16ref = pixel;
+}
+
+
+fn
+draw_rect(x,y,w,h,pixel)
+{
+    for off in w
+    {
+      dot(x+off,y    ,pixel);
+      dot(x+off,y+h-1,pixel);
+    }
+
+
+    for off in h
+    {
+      dot(x    ,y+off,pixel);
+      dot(x+w-1,y+off,pixel);
+    }
+}
+
+
+fn
+fill_rect(x,y,w,h,pixel)
+{
+    for y_off in h{
+    for x_off in w{
+      dot(x+x_off,y+y_off,pixel);
+    }}
+}
+
+
+fn
+print_int(i,f,x,y,w,pixel)
+{
+    if i == 0
+    {
+      f('0',x,y,pixel);
+
+      return;
+    }
+
+
+    while i
+    {
+      f('0'+(i%10),x,y,pixel);
+
+      x -=  w;
+      i /= 10;
+    }
+}
+
+
+fn
+print8_unicode(u,x,y,pixel)
+{
+  var  ptr = FONT8x12.ptr+(8*12*u);
+
+    for y_off in 12
+    {
+      var  bits = ptr.u8ref;
+                  ptr += 1;
+
+        for x_off in 8
+        {
+            if bits&0x80
+            {
+              dot(x+x_off,y+y_off,pixel);
+            }
+
+
+          bits <<= 1;
+        }
+    }
+}
+
+
+fn
+print8_unicode_s(s,x,y,pixel)
+{
+    loop
+    {
+      var  u = s.u16ref;
+               s += 2;
+
+        if u == 0
+        {
+          break;
+        }
+
+
+      print8_unicode(u,x,y,pixel);
+
+      x += 8;
+    }
+}
+
+
+fn
+print14_unicode(u,x,y,pixel)
+{
+  var  ptr = FONT14.ptr+(2*14*u);
+
+    for y_off in 14
+    {
+      var  bits = ptr.u16ref;
+                  ptr += 2;
+
+        for x_off in 14
+        {
+            if bits&0x8000
+            {
+              dot(x+x_off,y+y_off,pixel);
+            }
+
+
+          bits <<= 1;
+        }
+    }
+}
+
+
+fn
+print14_unicode_s(s,x,y,pixel)
+{
+    loop
+    {
+      var  u = s.u16ref;
+               s += 2;
+
+        if u == 0
+        {
+          break;
+        }
+
+
+      print14_unicode(u,x,y,pixel);
+
+      x += 16;
+    }
+}
+
+
+fn
+fill(x,y,w,h,pixel)
+{
+  var  base_ptr = screen_address+(VIDEO_PITCH*y)+(BYTES_PER_PIXEL*x);
+
+    for y_off in h
+    {
+      var  ptr = base_ptr               ;
+                 base_ptr += VIDEO_PITCH;
+
+        for x_off in w
+        {
+          ptr.u16ref = pixel;
+
+          ptr += BYTES_PER_PIXEL;
+        }
+    }
+}
+
+
+
+

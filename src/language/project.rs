@@ -643,44 +643,6 @@ generate_exec(&mut self)-> Result<Exec,Message>
 
 
 pub fn
-add_ex_img(&mut self, name: &str, w: u32, h: u32, data: &Vec<u8>)
-{
-  let  mut new_data = Vec::<u8>::new();
-
-    for b in w.to_ne_bytes(){new_data.push(b);}
-    for b in h.to_ne_bytes(){new_data.push(b);}
-
-  let  mut iter = data.iter();
-
-    while let Some(r_ref) = iter.next()
-    {
-      let  r = *r_ref as u32;
-      let  g = *iter.next().unwrap() as u32;
-      let  b = *iter.next().unwrap() as u32;
-      let  _ = *iter.next().unwrap() as u32;
-
-      let  pix = (r<<24)
-                |(g<<16)
-                |(b<< 8);
-
-        for b in pix.to_ne_bytes()
-        {
-          new_data.push(b);
-        }
-    }
-
-
-  let  v = VarDecl::from_bytes(new_data,TyKind::U32);
-
-  let  decl = Decl::new_static(SourceInfo::new(),name.to_string(),v);
-
-  self.insert(decl);
-}
-
-
-
-
-pub fn
 print(&self)
 {
     for decl in &self.decls
