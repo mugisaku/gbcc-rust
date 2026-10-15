@@ -874,7 +874,7 @@ read(s: &str)-> Result<Self,Message>
     }
 
   else
-    {Err(Message::new(format!("no decl")))}
+    {Err(Message::from(format!("no decl")))}
 }
 
 

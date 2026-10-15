@@ -156,7 +156,7 @@ to_unicode(a: char, b: char, c: char, d: char)-> Result<char,Message>
     }}}}
 
 
-  Err(Message::new(format!("１６進数ではない文字")))
+  Err(Message::from(format!("１６進数ではない文字")))
 }
 
 

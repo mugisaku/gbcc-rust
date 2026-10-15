@@ -253,7 +253,7 @@ add_source(&mut self, name: &str, s: &str)-> Result<(),Message>
     {
       let  decl = read_decl(decl_nd)?;
 
-      let  _ = self.insert(decl)?;
+      self.insert(decl);
 
       cur.advance(1);
     }
@@ -319,38 +319,21 @@ add_const(&mut self, name: &str, v: i64)
 
 
 pub fn
-insert(&mut self, mut decl: Decl)-> Result<(),Message>
+insert(&mut self, mut decl: Decl)
 {
-    if let DeclKind::Undef = decl.get_kind()
-    {
-      Ok(())
-    }
-
-  else
     if let DeclKind::Enum(ls) = decl.get_kind()
     {
          for (i,s) in ls.iter().enumerate()
          {
            let  const_decl = Decl::new_const(s,i as i64);
 
-           let  _ = self.insert(const_decl)?;
+           self.insert(const_decl);
          }
-
-
-      Ok(())
-    }
-
-  else
-   if self.find(decl.get_name()).is_some()
-    {
-      Err(decl.get_source_info().to_message()+format!("{}という名前は既に存在している",decl.get_name()))
     }
 
   else
     {
       self.decls.push(decl);
-
-      Ok(())
     }
 }
 
@@ -403,15 +386,15 @@ process_deps_relationship(&mut self)-> Result<(),Message>
 
         if ss.fail_records.len() != 0
         {
-          let  mut msg = String::new();
+          let  mut msg_s = String::new();
 
             for ((srcinf,s)) in ss.fail_records
             {
-              msg.push_str(&format!("{} {} not found\n",&srcinf.to_string(),&s));
+              msg_s.push_str(&format!("{} {} not found\n",&srcinf.to_string(),&s));
             }
 
 
-          return Err(Message::new(msg));
+          return Err(Message::from(msg_s));
         }
 
 
@@ -454,6 +437,86 @@ get_const_or(&mut self, s: &str, defval: usize)-> usize
 }
 
 
+fn
+push_to_buf<'a>(buf: &mut Vec<(&'a str,Vec<&'a SourceInfo>)>, decl: &'a Decl)
+{
+  let  decl_name = decl.get_name();
+
+    if decl_name.is_empty()
+    {
+      return;
+    }
+
+
+    for (name,ls) in buf.iter_mut()
+    {
+        if name == decl_name
+        {
+          ls.push(decl.get_source_info());
+
+          return;
+        }
+    }
+
+
+  buf.push((decl_name,vec![decl.get_source_info()]));
+}
+
+
+pub fn
+check_name(&self)-> Result<(),Message>
+{
+  let  mut msg_buf = Vec::<Message>::new();
+
+  let  mut buf = Vec::<(&str,Vec<&SourceInfo>)>::new();
+
+    for decl in &self.decls
+    {
+      Self::push_to_buf(&mut buf,decl);
+    }
+
+
+    for (name,ls) in buf
+    {
+        if ls.len() > 1
+        {
+          let  mut s = format!("{}が複数定義されている\n",name);
+
+            for si in ls
+            {
+              let  msg_s = si.to_message().to_string();
+
+              s.push_str("  ");
+
+              s.push_str(&msg_s);
+
+              s.push('\n');
+            }
+
+
+          msg_buf.push(Message::from(s));
+        }
+    }
+
+
+    if msg_buf.len() != 0
+    {
+      let  mut final_msg = Message::new();
+
+        for msg in msg_buf
+        {
+          final_msg = final_msg+msg;
+        }
+
+
+      return Err(final_msg);
+    }
+
+
+  Ok(())
+}
+
+
 pub fn
 compile(&mut self)-> Result<(),Message>
 {
@@ -469,29 +532,31 @@ compile(&mut self)-> Result<(),Message>
         {
           let  decl = Decl::new_string(srcinf,name,s);
 
-          let  _ = self.insert(decl)?;
+          self.insert(decl);
         }
       StaticObjectKind::U16String(s)=>
         {
           let  decl = Decl::new_u16string(srcinf,name,&s);
 
-          let  _ = self.insert(decl)?;
+          self.insert(decl);
         }
       StaticObjectKind::U32String(s)=>
         {
           let  decl = Decl::new_u32string(srcinf,name,&s);
 
-          let  _ = self.insert(decl)?;
+          self.insert(decl);
         }
       StaticObjectKind::Var(v)=>
         {
           let  decl = Decl::new_static(srcinf,name,v);
 
-          let  _ = self.insert(decl)?;
+          self.insert(decl);
         }
         }
     }
 
+
+  let  _ = self.check_name()?;
 
   let  _ = self.process_deps_relationship()?;
 

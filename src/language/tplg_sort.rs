@@ -115,7 +115,7 @@ tplg_sort(mut nodes: Vec<TplgNode>)-> Result<Vec<usize>,Message>
 
           s.push_str("\nが残った");
 
-          return Err(Message::new(s));
+          return Err(Message::from(s));
         }
 
 

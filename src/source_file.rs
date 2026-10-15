@@ -221,7 +221,7 @@ to_string(&self)-> String
 pub fn
 to_message(&self)-> Message
 {
-  Message::new(self.to_string())
+  Message::from(self.to_string())
 }
 
 
@@ -396,10 +396,10 @@ Message
 
 
 pub fn
-new(s: String)-> Self
+new()-> Self
 {
   Self{
-    strings: vec![s],
+    strings: Vec::new(),
   }
 }
 
@@ -498,7 +498,30 @@ std::convert::From<&str> for Message
 fn
 from(s: &str)-> Self
 {
-  Self::new(s.to_string())
+  let  mut msg = Self::new();
+
+  msg.strings.push(s.to_string());
+
+  msg
+}
+
+
+}
+
+
+impl
+std::convert::From<String> for Message
+{
+
+
+fn
+from(s: String)-> Self
+{
+  let  mut msg = Self::new();
+
+  msg.strings.push(s);
+
+  msg
 }
 
 

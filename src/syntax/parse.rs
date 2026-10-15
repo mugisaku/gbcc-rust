@@ -232,7 +232,7 @@ read_by_identifier(&mut self, s: &str)-> ParseResult
     }
 
   else
-    {ParseResult::Err(Message::new(format!("read_by_identifier: {}という定義はない",s)),self.position)}
+    {ParseResult::Err(Message::from(format!("read_by_identifier: {}という定義はない",s)),self.position)}
 }
 
 
@@ -332,7 +332,7 @@ read_by_binary_operation(&mut self, l: &Expression, r: &Expression, op: &str)-> 
   (s) if s == "&" =>{self.read_and(  l,r)}
   (s) if s == "|" =>{self.read_or(   l,r)}
   (s) if s == "->"=>{self.read_arrow(l,r)}
-  _=>{ParseResult::Err(Message::new(format!("不明な演算子 {}",op)),self.position)}
+  _=>{ParseResult::Err(Message::from(format!("不明な演算子 {}",op)),self.position)}
     }
 }
 

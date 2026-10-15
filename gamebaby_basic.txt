@@ -235,4 +235,79 @@ fill(x,y,w,h,pixel)
 
 
 
+static
+scene_stack_buffer[2*32];
+
+
+static
+scene_stack_pointer;
+
+
+static
+scene_current_update;
+
+
+static
+scene_current_draw;
+
+
+static
+scene_is_modified;
+
+
+fn
+scene_push(update,draw)
+{
+  var  i = scene_stack_pointer     ;
+           scene_stack_pointer += 2;
+
+  scene_stack_buffer[i  ] = update;
+  scene_stack_buffer[i+1] =   draw;
+
+  scene_current_update = update;
+  scene_current_draw   =   draw;
+
+  scene_is_modified = true;
+}
+
+
+fn
+scene_pop()
+{
+    if scene_stack_pointer
+    {
+               scene_stack_pointer -= 2;
+      var  i = scene_stack_pointer     ;
+
+      scene_current_update = scene_stack_buffer[i  ];
+      scene_current_draw   = scene_stack_buffer[i+1];
+    }
+
+
+  scene_is_modified = true;
+}
+
+
+fn
+scene_reset()
+{
+  scene_stack_pointer = 0;
+}
+
+
+fn
+scene_move()
+{
+  scene_current_update();
+
+    if scene_is_modified
+    {
+      scene_current_draw();
+
+      scene_is_modified = false;
+    }
+}
+
+
+
 

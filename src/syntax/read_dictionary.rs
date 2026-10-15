@@ -38,7 +38,7 @@ to_literal(s: &str)-> Result<Expression,Message>
   else if s ==  "Character"{Ok(Expression::CharacterLiteral )}
   else if s ==     "String"{Ok(Expression::StringLiteral    )}
   else
-    {Err(Message::new(format!("{} is unknown literal keyword",s)))}
+    {Err(Message::from(format!("{} is unknown literal keyword",s)))}
 }
 
 
@@ -162,7 +162,7 @@ read_binary_string(toks: &Vec<Token>, pos: &mut usize, closer: &'static str)-> R
           else
             if (op == ")") || (op == "]") || (op == "}") || (op == ";")
             {
-              return Err(Message::new(format!("wrong closer {}",closer)));
+              return Err(Message::from(format!("wrong closer {}",closer)));
             }
 
           else
